@@ -1,0 +1,5 @@
+{
+  "name": "Community Hub",
+  "description": "A modern community management application inspired by MyGate and Adda. It provides a central platform for residents to manage visitors, view notices, and raise help desk requests, fostering a more connected and secure community living experience.",
+  "requestFramePermissions": []
+}
