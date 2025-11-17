@@ -1,16 +1,15 @@
-
 import { createClient } from '@supabase/supabase-js';
 
-// Environment variables are exposed via process.env in this environment.
-// Variables prefixed with VITE_ are commonly used for client-side exposure on platforms like Vercel.
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_KEY;
+// Access environment variables safely, assuming the platform provides `process.env`.
+// This prevents a "process is not defined" ReferenceError in environments without it.
+const supabaseUrl = (typeof process !== 'undefined' && process.env) ? process.env.VITE_SUPABASE_URL : undefined;
+const supabaseKey = (typeof process !== 'undefined' && process.env) ? process.env.VITE_SUPABASE_KEY : undefined;
 
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseKey);
 
 // Provide dummy values if the environment variables are not set.
 // This prevents the app from crashing on startup.
-// API calls will fail until the variables are configured correctly.
+// The App component will show a configuration error message.
 export const supabase = createClient(
   supabaseUrl || 'http://localhost', 
   supabaseKey || 'dummykey'
