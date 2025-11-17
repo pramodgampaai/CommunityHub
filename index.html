@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Community Hub</title>
+    <script>
+      // This object will be populated by the deployment platform.
+      // It safely exposes environment variables to the client-side code.
+      window.__env = {
+        VITE_SUPABASE_URL: '__VITE_SUPABASE_URL__',
+        VITE_SUPABASE_KEY: '__VITE_SUPABASE_KEY__',
+      };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -93,5 +101,6 @@
 </head>
   <body class="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

@@ -1,16 +1,24 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-// Access environment variables safely, assuming the platform provides `process.env`.
-// This prevents a "process is not defined" ReferenceError in environments without it.
-const supabaseUrl = (typeof process !== 'undefined' && process.env) ? process.env.VITE_SUPABASE_URL : undefined;
-const supabaseKey = (typeof process !== 'undefined' && process.env) ? process.env.VITE_SUPABASE_KEY : undefined;
+// Read the environment variables from the global object defined in index.html
+// This is a safe way to access configuration in the browser without crashing.
+const env = (window as any).__env;
 
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseKey);
+const supabaseUrl = env?.VITE_SUPABASE_URL;
+const supabaseKey = env?.VITE_SUPABASE_KEY;
 
-// Provide dummy values if the environment variables are not set.
-// This prevents the app from crashing on startup.
-// The App component will show a configuration error message.
+// Check if the variables are present and are not the placeholder values.
+export const isSupabaseConfigured = 
+  !!supabaseUrl && 
+  !!supabaseKey &&
+  supabaseUrl !== '__VITE_SUPABASE_URL__' &&
+  supabaseKey !== '__VITE_SUPABASE_KEY__';
+
+// Initialize the Supabase client.
+// If the configuration is missing, use dummy values to prevent the client
+// from throwing an error, allowing the app to show a friendly error message.
 export const supabase = createClient(
-  supabaseUrl || 'http://localhost', 
-  supabaseKey || 'dummykey'
+  isSupabaseConfigured ? supabaseUrl : 'http://localhost', 
+  isSupabaseConfigured ? supabaseKey : 'dummykey'
 );
