@@ -18,37 +18,67 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const appUser: User = {
-          id: session.user.id,
-          name: session.user.user_metadata.name || 'Resident',
-          email: session.user.email || '',
-          avatarUrl: session.user.user_metadata.avatar_url || `https://i.pravatar.cc/150?u=${session.user.id}`,
-          flatNumber: session.user.user_metadata.flat_number || 'N/A'
-        };
-        setUser(appUser);
-      }
-      setLoading(false);
-    };
-
-    getSession();
-
+    setLoading(true);
+    
+    // The onAuthStateChange listener is the single source of truth for the user's session.
+    // It fires once on initial load, and again whenever the session changes (e.g., login, logout).
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event: AuthChangeEvent, session: Session | null) => {
+      async (event: AuthChangeEvent, session: Session | null) => {
         if (session) {
-           const appUser: User = {
-              id: session.user.id,
-              name: session.user.user_metadata.name || 'Resident',
-              email: session.user.email || '',
-              avatarUrl: session.user.user_metadata.avatar_url || `https://i.pravatar.cc/150?u=${session.user.id}`,
-              flatNumber: session.user.user_metadata.flat_number || 'N/A'
+          // When a session is detected, fetch the user's profile from the database.
+          // We use an RPC call to a custom database function `get_user_profile` for this.
+          const { data: profileData, error } = await supabase.rpc('get_user_profile');
+
+          if (error) {
+            console.error('Error fetching user profile:', error);
+            setUser(null);
+          } else if (profileData && profileData.length > 0) {
+            // Profile found, map it to our User type
+            const profile = profileData[0];
+            const appUser: User = {
+              id: profile.id,
+              name: profile.name || 'Resident',
+              email: profile.email || '',
+              avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
+              flatNumber: profile.flat_number || 'N/A'
             };
             setUser(appUser);
+          } else if (session.user) {
+            // No profile found for an authenticated user, let's create one.
+            console.log('User profile not found, creating a new one.');
+            const { data: newUserProfile, error: insertError } = await supabase
+              .from('users')
+              .insert({
+                id: session.user.id, // The UUID from the authenticated user
+                email: session.user.email,
+                name: session.user.email?.split('@')[0] || 'New User',
+                flat_number: 'N/A'
+              })
+              .select()
+              .single();
+            
+            if (insertError) {
+              console.error('Failed to create user profile:', insertError);
+              // As a fallback, sign out to prevent a broken state
+              await supabase.auth.signOut();
+              setUser(null);
+            } else if (newUserProfile) {
+              // New profile created successfully, map it to our User type
+              const appUser: User = {
+                id: newUserProfile.id,
+                name: newUserProfile.name || 'Resident',
+                email: newUserProfile.email || '',
+                avatarUrl: newUserProfile.avatar_url || `https://i.pravatar.cc/150?u=${newUserProfile.id}`,
+                flatNumber: newUserProfile.flat_number || 'N/A'
+              };
+              setUser(appUser);
+            }
+          }
         } else {
+            // If there's no session, ensure user is null.
             setUser(null);
         }
+        setLoading(false);
       }
     );
 
