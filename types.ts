@@ -1,9 +1,16 @@
+export enum UserRole {
+  Admin = 'Admin',
+  Resident = 'Resident',
+  Security = 'Security',
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   avatarUrl: string;
   flatNumber: string;
+  role: UserRole;
 }
 
 export enum NoticeType {
@@ -45,6 +52,7 @@ export interface Complaint {
   status: ComplaintStatus;
   createdAt: string;
   category: ComplaintCategory;
+  userId: string;
 }
 
 export enum VisitorStatus {
@@ -81,17 +89,3 @@ export interface Booking {
 }
 
 export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities';
-
-// Add global type definition for import.meta.env to support Vite env variables
-// This prevents TypeScript errors without needing a direct reference to Vite's types.
-// FIX: Wrap the interfaces in `declare global` to make them available project-wide.
-declare global {
-  interface ImportMetaEnv {
-      readonly VITE_SUPABASE_URL: string;
-      readonly VITE_SUPABASE_KEY: string;
-  }
-
-  interface ImportMeta {
-      readonly env: ImportMetaEnv;
-  }
-}

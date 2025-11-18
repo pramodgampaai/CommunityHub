@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createNotice, getNotices } from '../services/api';
 import type { Notice } from '../types';
-import { NoticeType } from '../types';
+import { NoticeType, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -87,10 +87,12 @@ const NoticeBoard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
         <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Notice Board</h2>
-        <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Create New Notice" variant="fab">
-            <span className="hidden sm:inline">New Notice</span>
-            <span className="sm:hidden">New</span>
-        </Button>
+        {user?.role === UserRole.Admin && (
+            <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Create New Notice" variant="fab">
+                <span className="hidden sm:inline">New Notice</span>
+                <span className="sm:hidden">New</span>
+            </Button>
+        )}
       </div>
       
       <div className="space-y-4">

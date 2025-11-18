@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import type { User } from '../types';
+import { UserRole } from '../types';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 
@@ -40,7 +41,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
               name: profile.name || 'Resident',
               email: profile.email || '',
               avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
-              flatNumber: profile.flat_number || 'N/A'
+              flatNumber: profile.flat_number || 'N/A',
+              role: profile.role as UserRole || UserRole.Resident,
             };
             setUser(appUser);
           } else if (session.user) {
@@ -52,7 +54,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
                 id: session.user.id, // The UUID from the authenticated user
                 email: session.user.email,
                 name: session.user.email?.split('@')[0] || 'New User',
-                flat_number: 'N/A'
+                flat_number: 'N/A',
+                role: UserRole.Resident, // Default role for new users
               })
               .select()
               .single();
@@ -69,7 +72,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
                 name: newUserProfile.name || 'Resident',
                 email: newUserProfile.email || '',
                 avatarUrl: newUserProfile.avatar_url || `https://i.pravatar.cc/150?u=${newUserProfile.id}`,
-                flatNumber: newUserProfile.flat_number || 'N/A'
+                flatNumber: newUserProfile.flat_number || 'N/A',
+                role: newUserProfile.role as UserRole || UserRole.Resident,
               };
               setUser(appUser);
             }

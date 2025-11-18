@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { createComplaint, getComplaints } from '../services/api';
+import { createComplaint, getComplaints, updateComplaintStatus } from '../services/api';
 import type { Complaint } from '../types';
-import { ComplaintStatus, ComplaintCategory } from '../types';
+import { ComplaintStatus, ComplaintCategory, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon } from '../components/icons';
+import { PlusIcon, ChevronDownIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const StatusBadge: React.FC<{ status: ComplaintStatus }> = ({ status }) => {
@@ -39,6 +39,7 @@ const HelpDesk: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { user } = useAuth();
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   
   // Form state
   const [title, setTitle] = useState('');
@@ -81,14 +82,29 @@ const HelpDesk: React.FC = () => {
     }
   };
 
+  const handleStatusChange = async (complaintId: string, newStatus: ComplaintStatus) => {
+    setUpdatingId(complaintId);
+    try {
+        const updatedComplaint = await updateComplaintStatus(complaintId, newStatus);
+        setComplaints(prev => prev.map(c => c.id === complaintId ? updatedComplaint : c));
+    } catch (error) {
+        console.error("Failed to update status", error);
+        alert("Failed to update complaint status.");
+    } finally {
+        setUpdatingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
         <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Help Desk</h2>
-        <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Raise New Complaint" variant="fab">
-            <span className="hidden sm:inline">New Complaint</span>
-            <span className="sm:hidden">New</span>
-        </Button>
+        {user?.role === UserRole.Resident && (
+            <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Raise New Complaint" variant="fab">
+                <span className="hidden sm:inline">New Complaint</span>
+                <span className="sm:hidden">New</span>
+            </Button>
+        )}
       </div>
       
       <div className="space-y-4">
@@ -104,8 +120,30 @@ const HelpDesk: React.FC = () => {
                                 From {complaint.flatNumber} on {new Date(complaint.createdAt).toLocaleDateString()}
                             </p>
                         </div>
-                        <div className="mt-3 sm:mt-0">
+                        <div className="mt-3 sm:mt-0 flex items-center gap-4">
                             <StatusBadge status={complaint.status} />
+                            {user?.role === UserRole.Admin && (
+                                <div className="relative">
+                                    <select
+                                        value={complaint.status}
+                                        onChange={(e) => handleStatusChange(complaint.id, e.target.value as ComplaintStatus)}
+                                        disabled={updatingId === complaint.id}
+                                        className="text-sm appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
+                                        aria-label={`Update status for complaint: ${complaint.title}`}
+                                    >
+                                        {Object.values(ComplaintStatus).map(status => (
+                                            <option key={status} value={status}>{status}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                        {updatingId === complaint.id ? (
+                                            <div className="w-4 h-4 border-2 border-[var(--accent)] border-b-transparent rounded-full animate-spin" style={{ animationDuration: '0.75s' }}></div>
+                                        ) : (
+                                            <ChevronDownIcon className="w-4 h-4" />
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{complaint.description}</p>

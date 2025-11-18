@@ -1,12 +1,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Vercel's build process will replace `import.meta.env.VITE_...`
-// with the actual values from the project's environment variables.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
+// Safely access the env object to prevent a crash if import.meta.env is undefined.
+// This is the key fix for the "blank screen" error.
+const env = (import.meta as any)?.env || {};
 
-// Check if the variables were provided during the build.
+const supabaseUrl = env.VITE_SUPABASE_URL;
+const supabaseKey = env.VITE_SUPABASE_KEY;
+
+// Check if the variables were provided.
 export const isSupabaseConfigured = !!supabaseUrl && !!supabaseKey;
 
 // Initialize the Supabase client.

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory } from '../types';
+import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus } from '../types';
 
 // READ operations
 export const getNotices = async (): Promise<Notice[]> => {
@@ -45,6 +45,7 @@ export const createComplaint = async (complaintData: { title: string; descriptio
         residentName: user.name,
         flatNumber: user.flatNumber,
         status: 'Pending',
+        user_id: user.id,
     };
     const { data, error } = await supabase.from('complaints').insert(newComplaint).select();
     if (error) throw error;
@@ -72,4 +73,16 @@ export const createBooking = async (bookingData: { amenityId: string; startTime:
     const { data, error } = await supabase.from('bookings').insert(newBooking).select();
     if (error) throw error;
     return data[0];
+};
+
+// UPDATE operations
+export const updateComplaintStatus = async (id: string, status: ComplaintStatus): Promise<Complaint> => {
+    const { data, error } = await supabase
+        .from('complaints')
+        .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
 };
