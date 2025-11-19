@@ -9,14 +9,19 @@ import Modal from '../components/ui/Modal';
 import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
-const DirectorySkeleton: React.FC = () => (
-    <div className="flex items-center p-4 bg-black/5 dark:bg-white/5 rounded-xl animate-pulse">
-        <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-        <div className="ml-4 flex-1 space-y-2">
-            <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-        </div>
-    </div>
+const DirectoryRowSkeleton: React.FC = () => (
+    <tr className="animate-pulse">
+        <td className="p-4">
+            <div className="flex items-center">
+                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                <div className="ml-3 h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+        </td>
+        <td className="p-4"><div className="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+        <td className="p-4"><div className="h-4 w-40 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
+        <td className="p-4"><div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded-full"></div></td>
+        <td className="p-4"><div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div></td>
+    </tr>
 );
 
 const Directory: React.FC = () => {
@@ -156,40 +161,66 @@ const Directory: React.FC = () => {
         return acc;
     }, {} as Record<string, User[]>);
 
-    const renderResidentCard = (resident: User, index: number) => (
-        <Card key={resident.id} className="p-4 flex items-center animated-card hover:shadow-md transition-shadow" style={{ animationDelay: `${(index % 10) * 50}ms` }}>
-            <div className="relative">
-                <img className="w-12 h-12 rounded-full ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)] object-cover" src={resident.avatarUrl} alt={resident.name} />
-                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${resident.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-            </div>
-            <div className="ml-4 overflow-hidden flex-1">
-                <h3 className="font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)] truncate" title={resident.name}>{resident.name}</h3>
-                <div className="flex gap-2 items-center mt-1">
-                    <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] truncate">Flat: <span className="font-medium">{resident.flatNumber || 'N/A'}</span></p>
-                    {(resident.block || resident.floor) && (
-                        <span className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-black/5 dark:bg-white/5 px-1.5 rounded">
-                            {resident.block ? `Blk ${resident.block}` : ''} {resident.floor ? `Flr ${resident.floor}` : ''}
-                        </span>
-                    )}
-                </div>
-                 <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] truncate">{resident.email}</p>
-                {resident.role !== UserRole.Resident && (
-                    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full mt-1 inline-block font-medium ${
-                        resident.role === UserRole.Admin 
-                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
-                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                    }`}>
-                        {resident.role}
-                    </span>
-                )}
-            </div>
+    const renderTable = (users: User[]) => (
+        <Card className="overflow-x-auto animated-card">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
+                <thead className="bg-black/5 dark:bg-white/5">
+                    <tr>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Resident</th>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Unit Details</th>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                    {users.map((resident) => (
+                        <tr key={resident.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                            <td className="p-4">
+                                <div className="flex items-center">
+                                    <div className="relative flex-shrink-0">
+                                        <img className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)]" src={resident.avatarUrl} alt={resident.name} />
+                                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${resident.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                    </div>
+                                    <div className="ml-3">
+                                        <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{resident.name}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="p-4">
+                                <div className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                    {resident.flatNumber || 'N/A'}
+                                </div>
+                                {(resident.block || resident.floor) && (
+                                    <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-0.5">
+                                        {resident.block ? `Block ${resident.block}` : ''}
+                                        {resident.block && resident.floor ? ' • ' : ''}
+                                        {resident.floor ? `Floor ${resident.floor}` : ''}
+                                    </div>
+                                )}
+                            </td>
+                            <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                {resident.email}
+                            </td>
+                            <td className="p-4">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
+                                      resident.role === UserRole.Security ? 'bg-gray-100 text-gray-800 dark:bg-gray-700/40 dark:text-gray-300' :
+                                      'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
+                                    {resident.role}
+                                </span>
+                            </td>
+                            <td className="p-4">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    ${resident.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                    {resident.status}
+                                </span>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </Card>
-    );
-
-    const renderGrid = (users: User[]) => (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {users.map((resident, index) => renderResidentCard(resident, index))}
-        </div>
     );
 
     return (
@@ -268,9 +299,22 @@ const Directory: React.FC = () => {
             </div>
 
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                     {Array.from({ length: 6 }).map((_, i) => <DirectorySkeleton key={i} />)}
-                </div>
+                <Card className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-black/5 dark:bg-white/5">
+                            <tr>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Resident</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Unit Details</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                            {Array.from({ length: 5 }).map((_, i) => <DirectoryRowSkeleton key={i} />)}
+                        </tbody>
+                    </table>
+                </Card>
             ) : (
                 <>
                     {filteredResidents.length === 0 && (
@@ -290,7 +334,7 @@ const Directory: React.FC = () => {
                                         <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
                                         Admins ({groupedResidents[UserRole.Admin].length})
                                     </h3>
-                                    {renderGrid(groupedResidents[UserRole.Admin])}
+                                    {renderTable(groupedResidents[UserRole.Admin])}
                                 </div>
                             )}
                             
@@ -301,7 +345,7 @@ const Directory: React.FC = () => {
                                         <span className="w-2 h-6 bg-[var(--accent)] rounded-full"></span>
                                         Residents ({groupedResidents[UserRole.Resident].length})
                                     </h3>
-                                    {renderGrid(groupedResidents[UserRole.Resident])}
+                                    {renderTable(groupedResidents[UserRole.Resident])}
                                 </div>
                             )}
 
@@ -312,12 +356,12 @@ const Directory: React.FC = () => {
                                         <span className="w-2 h-6 bg-gray-500 rounded-full"></span>
                                         Security ({groupedResidents[UserRole.Security].length})
                                     </h3>
-                                    {renderGrid(groupedResidents[UserRole.Security])}
+                                    {renderTable(groupedResidents[UserRole.Security])}
                                 </div>
                             )}
                         </div>
                     ) : (
-                        renderGrid(filteredResidents)
+                        renderTable(filteredResidents)
                     )}
                 </>
             )}
