@@ -4,7 +4,6 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { useAuth } from '../hooks/useAuth';
 import { updateUserPassword } from '../services/api';
-import { supabase } from '../services/supabase';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -12,7 +11,7 @@ interface ProfileModalProps {
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -49,31 +48,31 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
         setIsSubmitting(true);
 
         try {
+            // 1. Update password in Supabase
             await updateUserPassword(newPassword);
-            setSuccess("Password updated successfully. Logging out in 2 seconds...");
             
-            // Clear fields
+            // 2. Show success message
+            setSuccess("Password updated successfully. You will be logged out shortly.");
+            
+            // 3. Clear form
             setNewPassword('');
             setConfirmPassword('');
 
-            // Wait for 2 seconds to show the success message
+            // 4. Wait 2 seconds then force logout
             setTimeout(async () => {
-                onClose();
-                // Force a hard sign-out and reload to clear any stale session state
-                // This prevents the "hanging" issue where the app thinks it has a session but the token is invalid.
                 try {
-                    await supabase.auth.signOut();
-                } catch (e) {
-                    console.warn("Sign out cleanup error:", e);
-                } finally {
-                    window.location.href = '/';
+                    onClose();
+                    await logout();
+                } catch (logoutError) {
+                    console.error("Logout failed, forcing reload", logoutError);
+                    window.location.reload();
                 }
             }, 2000);
 
         } catch (err: any) {
-            console.error("Profile password update failed:", err);
-            setError(err.message || "Failed to update password.");
-            setIsSubmitting(false); // Reset on error so user can try again
+            console.error("Password update failed:", err);
+            setError(err.message || "Failed to update password. Please try again.");
+            setIsSubmitting(false);
         }
     };
 
@@ -104,10 +103,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
 
                 <div>
                     <h4 className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)] mb-3">Change Password</h4>
-                    {error && <div className="mb-3 p-2 text-sm text-red-600 bg-red-100 dark:bg-red-900/20 rounded">{error}</div>}
-                    {success && <div className="mb-3 p-2 text-sm text-green-600 bg-green-100 dark:bg-green-900/20 rounded">{success}</div>}
+                    {error && <div className="mb-3 p-3 text-sm text-red-600 bg-red-100 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">{error}</div>}
+                    {success && <div className="mb-3 p-3 text-sm text-green-600 bg-green-100 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">{success}</div>}
                     
-                    <form onSubmit={handleSubmit} className="space-y-3">
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">New Password</label>
                             <input 
@@ -132,8 +131,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                             />
                         </div>
                         <div className="pt-2 flex justify-end">
-                             <Button type="submit" disabled={isSubmitting || (!newPassword && !success) || (!confirmPassword && !success)}>
-                                {success ? 'Success!' : (isSubmitting ? 'Updating...' : 'Update Password')}
+                             <Button type="submit" disabled={isSubmitting || success !== null}>
+                                {isSubmitting ? 'Updating...' : (success ? 'Done' : 'Update Password')}
                              </Button>
                         </div>
                     </form>

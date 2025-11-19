@@ -20,60 +20,67 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
+    const fetchProfile = async (session: Session) => {
+      try {
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!mounted) return;
+
+        if (profile) {
+          const appUser: User = {
+            id: profile.id,
+            name: profile.name || 'User',
+            email: profile.email || session.user.email || '',
+            avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
+            flatNumber: profile.flat_number,
+            role: profile.role as UserRole || UserRole.Resident,
+            communityId: profile.community_id,
+            status: profile.status || 'active',
+          };
+          setUser(appUser);
+        } else {
+          console.warn('Profile missing for authenticated user.');
+          // Do NOT auto-logout here to avoid loops. Just set user to null or limited state.
+          setUser(null); 
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        if (mounted) setUser(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
     // Initial loading state
     setLoading(true);
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
-        try {
-          if (session) {
-            // If we have a session, try to fetch the user profile
-            const { data: profile, error } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
+        if (!mounted) return;
 
-            if (profile) {
-              const appUser: User = {
-                id: profile.id,
-                name: profile.name || 'User',
-                email: profile.email || session.user.email || '',
-                avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
-                flatNumber: profile.flat_number,
-                role: profile.role as UserRole || UserRole.Resident,
-                communityId: profile.community_id,
-                status: profile.status || 'active',
-              };
-              setUser(appUser);
-            } else {
-              // Profile missing or error occurred
-              console.error(
-                'Profile fetch error or profile missing.', 
-                error ? error.message : 'No profile found'
-              );
-              
-              // If the error indicates the session is actually invalid (e.g. JWT expired/bad), 
-              // we should clear the session to prevent a refresh loop.
-              // We catch the signOut error to ensure we don't crash here.
-              await supabase.auth.signOut().catch(err => console.warn("Safe signout failed", err));
-              setUser(null);
-            }
-          } else {
-            // No session (SIGNED_OUT)
-            setUser(null);
+        if (session) {
+          // If we already have the user loaded and IDs match, don't re-fetch
+          // This prevents thrashing on token refreshes
+          if (user && user.id === session.user.id) {
+             setLoading(false);
+             return;
           }
-        } catch (err) {
-          console.error("Unexpected error in AuthProvider:", err);
+          await fetchProfile(session);
+        } else {
           setUser(null);
-        } finally {
-          // CRITICAL: Always set loading to false, otherwise the app hangs on the spinner.
           setLoading(false);
         }
       }
     );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -87,15 +94,21 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   };
 
   const logout = async () => {
+    // 1. IMMMEDIATELY clear local state to update UI and stop any hooks
+    setUser(null);
+    
     try {
+        // 2. Attempt server-side sign out
         await supabase.auth.signOut();
+        
+        // 3. Force clear local storage keys for Supabase to ensure clean slate
+        // This handles cases where signOut might fail due to network or invalid tokens
+        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+        if (supabaseUrl) {
+            localStorage.removeItem(`sb-${supabaseUrl}-auth-token`);
+        }
     } catch (error) {
-        console.error("Logout error:", error);
-    } finally {
-        // Ensure local state is cleared even if the server request fails
-        setUser(null);
-        // Optional: Clear local storage manually if needed, though supabase client handles it.
-        // localStorage.removeItem('sb-<your-project-id>-auth-token'); 
+        console.error("Logout warning (usually harmless):", error);
     }
   };
 
