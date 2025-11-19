@@ -20,7 +20,13 @@ export type Theme = 'light' | 'dark';
 function App() {
   const { user, loading } = useAuth();
   const [activePage, setActivePage] = useState<Page>('Dashboard');
+  
+  // Initialize theme from localStorage or fallback to system preference
   const [theme, setTheme] = useState<Theme>(() => {
+    const savedTheme = localStorage.getItem('theme') as Theme;
+    if (savedTheme) {
+      return savedTheme;
+    }
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
         return 'dark';
     }
@@ -29,8 +35,10 @@ function App() {
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove(theme === 'dark' ? 'light' : 'dark');
+    // Remove both potential classes to ensure a clean state before adding the current one
+    root.classList.remove('light', 'dark');
     root.classList.add(theme);
+    localStorage.setItem('theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
