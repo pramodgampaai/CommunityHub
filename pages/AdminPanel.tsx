@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { getCommunityStats, createCommunity, updateCommunity, deleteCommunity, createAdminUser } from '../services/api';
-import type { CommunityStat, User, Community } from '../types';
+import type { CommunityStat, User, Community, Block, CommunityType } from '../types';
 import { UserRole } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import type { Theme } from '../App';
-import { LogOutIcon, MoonIcon, SunIcon, PlusIcon, ChevronDownIcon, AlertTriangleIcon } from '../components/icons';
+import { LogOutIcon, MoonIcon, SunIcon, PlusIcon, ChevronDownIcon, AlertTriangleIcon, PencilIcon, TrashIcon } from '../components/icons';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
@@ -57,13 +57,17 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
     const [error, setError] = useState<string | null>(null);
 
     // Modal States
-    const [isCreateCommunityModalOpen, setCreateCommunityModalOpen] = useState(false);
+    const [isCommunityModalOpen, setCommunityModalOpen] = useState(false);
     const [isAddAdminModalOpen, setAddAdminModalOpen] = useState(false);
     const [selectedCommunity, setSelectedCommunity] = useState<CommunityStat | null>(null);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // Community Form States
     const [communityName, setCommunityName] = useState('');
     const [communityAddress, setCommunityAddress] = useState('');
+    const [communityType, setCommunityType] = useState<CommunityType>('Gated');
+    const [blocks, setBlocks] = useState<Block[]>([{ name: '', floorCount: 0 }]);
+    const [standaloneFloorCount, setStandaloneFloorCount] = useState<number>(1);
     
     // Admin User Form States
     const [newAdminName, setNewAdminName] = useState('');
@@ -89,14 +93,78 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
         fetchData();
     }, []);
 
-    const handleCreateCommunity = async (e: React.FormEvent) => {
+    // Reset and Open Community Modal for Create
+    const openCreateCommunityModal = () => {
+        setIsEditMode(false);
+        setSelectedCommunity(null);
+        setCommunityName('');
+        setCommunityAddress('');
+        setCommunityType('Gated');
+        setBlocks([{ name: '', floorCount: 0 }]);
+        setStandaloneFloorCount(1);
+        setCommunityModalOpen(true);
+    };
+
+    // Reset and Open Community Modal for Edit
+    const openEditCommunityModal = (community: CommunityStat) => {
+        setIsEditMode(true);
+        setSelectedCommunity(community);
+        setCommunityName(community.name);
+        setCommunityAddress(community.address);
+        setCommunityType(community.communityType || 'Gated');
+        
+        if (community.blocks && community.blocks.length > 0) {
+            if (community.communityType === 'Standalone') {
+                 setStandaloneFloorCount(community.blocks[0].floorCount);
+                 setBlocks([{ name: 'Main', floorCount: 0 }]); // reset blocks state just in case
+            } else {
+                 setBlocks(community.blocks);
+            }
+        } else {
+            setBlocks([{ name: '', floorCount: 0 }]);
+            setStandaloneFloorCount(1);
+        }
+        setCommunityModalOpen(true);
+    };
+
+    const handleBlockChange = (index: number, field: keyof Block, value: string | number) => {
+        const newBlocks = [...blocks];
+        newBlocks[index] = { ...newBlocks[index], [field]: value };
+        setBlocks(newBlocks);
+    };
+
+    const addBlock = () => {
+        setBlocks([...blocks, { name: '', floorCount: 0 }]);
+    };
+
+    const removeBlock = (index: number) => {
+        const newBlocks = blocks.filter((_, i) => i !== index);
+        setBlocks(newBlocks);
+    };
+
+    const handleSubmitCommunity = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
+
+        // Prepare payload
+        const finalBlocks = communityType === 'Standalone' 
+            ? [{ name: 'Main Building', floorCount: standaloneFloorCount }]
+            : blocks.filter(b => b.name.trim() !== ''); // Filter empty blocks
+
+        const payload = {
+            name: communityName,
+            address: communityAddress,
+            communityType,
+            blocks: finalBlocks
+        };
+
         try {
-            await createCommunity({ name: communityName, address: communityAddress });
-            setCommunityName('');
-            setCommunityAddress('');
-            setCreateCommunityModalOpen(false);
+            if (isEditMode && selectedCommunity) {
+                await updateCommunity(selectedCommunity.id, payload);
+            } else {
+                await createCommunity(payload);
+            }
+            setCommunityModalOpen(false);
             await fetchData();
         } catch (err: any) {
             alert(`Error: ${err.message}`);
@@ -142,7 +210,7 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                 <div className="max-w-7xl mx-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-3xl font-bold">Platform Overview</h2>
-                        <Button onClick={() => setCreateCommunityModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />}>
+                        <Button onClick={openCreateCommunityModal} leftIcon={<PlusIcon className="w-5 h-5" />}>
                             Create Community
                         </Button>
                     </div>
@@ -156,6 +224,7 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                                 <thead className="bg-black/5 dark:bg-white/5">
                                     <tr>
                                         <th className="p-4 font-semibold">Community</th>
+                                        <th className="p-4 font-semibold">Type</th>
                                         <th className="p-4 font-semibold">Residents</th>
                                         <th className="p-4 font-semibold">Income</th>
                                         <th className="p-4 font-semibold">Status</th>
@@ -169,6 +238,19 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                                                 <div className="font-medium">{stat.name}</div>
                                                 <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{stat.address}</div>
                                             </td>
+                                            <td className="p-4">
+                                                {stat.communityType || 'N/A'}
+                                                {stat.communityType === 'Gated' && stat.blocks && (
+                                                    <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                        {stat.blocks.length} Blocks
+                                                    </div>
+                                                )}
+                                                {stat.communityType === 'Standalone' && stat.blocks && stat.blocks[0] && (
+                                                    <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                        {stat.blocks[0].floorCount} Floors
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="p-4">{stat.resident_count}</td>
                                             <td className="p-4">${stat.income_generated.toLocaleString()}</td>
                                             <td className="p-4">
@@ -176,7 +258,14 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                                                     {stat.status}
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-right space-x-2">
+                                                <button 
+                                                    onClick={() => openEditCommunityModal(stat)}
+                                                    className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] transition-colors p-1"
+                                                    title="Edit Details"
+                                                >
+                                                    <PencilIcon className="w-5 h-5" />
+                                                </button>
                                                 <Button size="sm" onClick={() => openAddAdminModal(stat)}>Add Admin</Button>
                                             </td>
                                         </tr>
@@ -188,8 +277,8 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                 </div>
             </main>
 
-             <Modal isOpen={isCreateCommunityModalOpen} onClose={() => setCreateCommunityModalOpen(false)} title="Create Community">
-                <form className="space-y-4" onSubmit={handleCreateCommunity}>
+             <Modal isOpen={isCommunityModalOpen} onClose={() => setCommunityModalOpen(false)} title={isEditMode ? "Edit Community" : "Create Community"}>
+                <form className="space-y-4" onSubmit={handleSubmitCommunity}>
                     <div>
                         <label htmlFor="communityName" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Name</label>
                         <input type="text" id="communityName" value={communityName} onChange={e => setCommunityName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
@@ -198,9 +287,96 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                         <label htmlFor="communityAddress" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Address</label>
                         <input type="text" id="communityAddress" value={communityAddress} onChange={e => setCommunityAddress(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                     </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Community Type</label>
+                        <div className="flex gap-4 mt-1">
+                            <label className="flex items-center">
+                                <input 
+                                    type="radio" 
+                                    name="communityType" 
+                                    value="Gated" 
+                                    checked={communityType === 'Gated'} 
+                                    onChange={() => setCommunityType('Gated')}
+                                    className="mr-2"
+                                />
+                                Gated Community
+                            </label>
+                            <label className="flex items-center">
+                                <input 
+                                    type="radio" 
+                                    name="communityType" 
+                                    value="Standalone" 
+                                    checked={communityType === 'Standalone'} 
+                                    onChange={() => setCommunityType('Standalone')}
+                                    className="mr-2"
+                                />
+                                Standalone Apartment
+                            </label>
+                        </div>
+                    </div>
+
+                    {communityType === 'Standalone' ? (
+                        <div>
+                            <label htmlFor="standaloneFloors" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Number of Floors</label>
+                            <input 
+                                type="number" 
+                                id="standaloneFloors" 
+                                value={standaloneFloorCount} 
+                                onChange={e => setStandaloneFloorCount(parseInt(e.target.value) || 0)} 
+                                min="1"
+                                required 
+                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                            />
+                        </div>
+                    ) : (
+                        <div className="border-t border-[var(--border-light)] dark:border-[var(--border-dark)] pt-4 mt-2">
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Blocks / Towers</label>
+                                <button type="button" onClick={addBlock} className="text-xs text-[var(--accent)] hover:underline flex items-center">
+                                    <PlusIcon className="w-3 h-3 mr-1"/> Add Block
+                                </button>
+                            </div>
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                                {blocks.map((block, index) => (
+                                    <div key={index} className="flex gap-2 items-center">
+                                        <div className="flex-1">
+                                            <input 
+                                                type="text" 
+                                                placeholder="Block Name (e.g. A)" 
+                                                value={block.name} 
+                                                onChange={e => handleBlockChange(index, 'name', e.target.value)}
+                                                className="block w-full px-3 py-1.5 text-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                            />
+                                        </div>
+                                        <div className="w-24">
+                                            <input 
+                                                type="number" 
+                                                placeholder="Floors" 
+                                                value={block.floorCount} 
+                                                onChange={e => handleBlockChange(index, 'floorCount', parseInt(e.target.value) || 0)}
+                                                min="1"
+                                                className="block w-full px-3 py-1.5 text-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                            />
+                                        </div>
+                                        {blocks.length > 1 && (
+                                            <button 
+                                                type="button" 
+                                                onClick={() => removeBlock(index)}
+                                                className="text-red-500 hover:text-red-700 p-1"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex justify-end pt-4 space-x-2">
-                        <Button type="button" variant="outlined" onClick={() => setCreateCommunityModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>Create</Button>
+                        <Button type="button" variant="outlined" onClick={() => setCommunityModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isEditMode ? 'Update' : 'Create'}</Button>
                     </div>
                 </form>
             </Modal>

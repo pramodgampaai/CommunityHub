@@ -1,6 +1,6 @@
 
 import { supabase, supabaseKey } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole } from '../types';
+import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block } from '../types';
 
 // =================================================================
 // USER / ADMIN / RESIDENT-FACING API
@@ -73,10 +73,12 @@ export const createNotice = async (noticeData: { title: string; content: string;
 
 export const createComplaint = async (complaintData: { title: string; description: string; category: ComplaintCategory; }, user: User): Promise<Complaint> => {
     const newComplaint = {
-        ...complaintData,
-        residentName: user.name,
-        flatNumber: user.flatNumber,
-        status: 'Pending',
+        title: complaintData.title,
+        description: complaintData.description,
+        category: complaintData.category,
+        status: ComplaintStatus.Pending,
+        resident_name: user.name,
+        flat_number: user.flatNumber,
         user_id: user.id,
         community_id: user.communityId,
     };
@@ -85,14 +87,14 @@ export const createComplaint = async (complaintData: { title: string; descriptio
     return data as Complaint;
 };
 
-export const createVisitor = async (visitorData: { name: string; purpose: string; expectedAt: string; }, user: User): Promise<Visitor> => {
-     const newVisitor = {
+export const createVisitor = async (visitorData: { name: string; purpose: string; expectedAt: string }, user: User): Promise<Visitor> => {
+    const newVisitor = {
         name: visitorData.name,
         purpose: visitorData.purpose,
         expected_at: visitorData.expectedAt,
-        residentName: user.name,
-        flatNumber: user.flatNumber,
         status: 'Expected',
+        resident_name: user.name,
+        flat_number: user.flatNumber,
         user_id: user.id,
         community_id: user.communityId,
     };
@@ -106,9 +108,9 @@ export const createBooking = async (bookingData: { amenityId: string; startTime:
         amenity_id: bookingData.amenityId,
         start_time: bookingData.startTime,
         end_time: bookingData.endTime,
+        resident_name: user.name,
+        flat_number: user.flatNumber,
         user_id: user.id,
-        residentName: user.name,
-        flatNumber: user.flatNumber,
         community_id: user.communityId,
     };
     const { data, error } = await supabase.from('bookings').insert(newBooking).select().single();
@@ -129,29 +131,135 @@ export const createAmenity = async (amenityData: { name: string; description: st
     return data as Amenity;
 };
 
-
 // UPDATE operations
 export const updateComplaintStatus = async (id: string, status: ComplaintStatus): Promise<Complaint> => {
-    const { data, error } = await supabase
-        .from('complaints')
-        .update({ status })
-        .eq('id', id)
-        .select()
-        .single();
+    const { data, error } = await supabase.from('complaints').update({ status }).eq('id', id).select().single();
     if (error) throw error;
     return data as Complaint;
 };
 
-export const updateUserPassword = async (password: string): Promise<void> => {
-    // 1. Verify Session locally first
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session) {
-        throw new Error("No active session. Please log in again.");
-    }
 
-    // 2. Call Edge Function to handle the update.
-    // This decouples the update logic from the client-side session state, preventing infinite loops.
+// =================================================================
+// SUPER ADMIN API
+// =================================================================
+
+export const getCommunityStats = async (): Promise<CommunityStat[]> => {
+    const { data: communities, error } = await supabase
+        .from('communities')
+        .select('*')
+        .order('name');
+    
+    if (error) throw error;
+
+    const stats: CommunityStat[] = [];
+    for (const c of communities) {
+        // Fetch resident count
+        const { count } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('community_id', c.id)
+            .eq('role', 'Resident');
+            
+        stats.push({
+            id: c.id,
+            name: c.name,
+            address: c.address,
+            status: c.status,
+            communityType: c.community_type,
+            blocks: c.blocks,
+            resident_count: count || 0,
+            income_generated: 0 // Placeholder
+        });
+    }
+    return stats;
+};
+
+export const createCommunity = async (data: Partial<Community>): Promise<Community> => {
+    const { data: newCommunity, error } = await supabase.from('communities').insert({
+        name: data.name,
+        address: data.address,
+        community_type: data.communityType,
+        blocks: data.blocks,
+        status: 'active'
+    }).select().single();
+    
+    if (error) throw error;
+    
+    return {
+        ...newCommunity,
+        communityType: newCommunity.community_type
+    };
+};
+
+export const updateCommunity = async (id: string, data: Partial<Community>): Promise<Community> => {
+    const { data: updated, error } = await supabase.from('communities').update({
+        name: data.name,
+        address: data.address,
+        community_type: data.communityType,
+        blocks: data.blocks
+    }).eq('id', id).select().single();
+    
+    if (error) throw error;
+     return {
+        ...updated,
+        communityType: updated.community_type
+    };
+};
+
+export const deleteCommunity = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('communities').delete().eq('id', id);
+    if (error) throw error;
+};
+
+
+// EDGE FUNCTIONS
+
+export const createAdminUser = async (userData: any) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session");
+
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-admin-user', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseKey
+        },
+        body: JSON.stringify(userData)
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to create admin');
+    }
+    return response.json();
+};
+
+export const createCommunityUser = async (userData: any) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session");
+
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-community-user', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseKey
+        },
+        body: JSON.stringify(userData)
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to create user');
+    }
+    return response.json();
+};
+
+export const updateUserPassword = async (password: string): Promise<void> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session. Please log in again.");
+
     const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-user-password', {
         method: 'POST',
         headers: {
@@ -162,99 +270,15 @@ export const updateUserPassword = async (password: string): Promise<void> => {
         body: JSON.stringify({ password })
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-        const message = data.error || data.message || "Failed to update password";
-        throw new Error(message);
+     if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to update password');
     }
 };
 
 export const requestPasswordReset = async (email: string): Promise<void> => {
-    // redirectTo should point to the app URL. In development localhost, in prod the hosted URL.
-    // window.location.origin works well for SPAs.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin,
     });
     if (error) throw error;
-};
-
-
-// =================================================================
-// SUPER ADMIN API
-// =================================================================
-
-export const getCommunityStats = async (): Promise<CommunityStat[]> => {
-    const { data, error } = await supabase.from('community_stats').select('*');
-    if (error) throw error;
-    return data as CommunityStat[];
-};
-
-export const createCommunity = async (communityData: { name: string, address: string }): Promise<Community> => {
-    const { data, error } = await supabase.from('communities').insert(communityData).select().single();
-    if (error) throw error;
-    return data as Community;
-};
-
-export const updateCommunity = async (id: string, updates: Partial<Community>): Promise<Community> => {
-    const { data, error } = await supabase.from('communities').update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    return data as Community;
-};
-
-export const deleteCommunity = async (id: string): Promise<void> => {
-    const { error } = await supabase.from('communities').delete().eq('id', id);
-    if (error) throw error;
-};
-
-/**
- * Securely creates a new Admin user for a specific community.
- */
-export const createAdminUser = async (adminData: { name: string, email: string, password: string, community_id: string }) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-admin-user', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey': supabaseKey
-        },
-        body: JSON.stringify(adminData)
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        const message = data.error || data.message || "Failed to create admin user";
-        throw new Error(message);
-    }
-
-    return data;
-};
-
-/**
- * Securely creates a new Resident/Security user for a community.
- */
-export const createCommunityUser = async (userData: { name: string, email: string, password: string, community_id: string, role: UserRole, flat_number?: string }) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-community-user', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey': supabaseKey
-        },
-        body: JSON.stringify(userData)
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-        const message = data.error || data.message || "Failed to create user";
-        throw new Error(message);
-    }
-
-    return data;
 };

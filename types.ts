@@ -6,11 +6,20 @@ export enum UserRole {
   Security = 'Security',
 }
 
+export interface Block {
+    name: string;
+    floorCount: number;
+}
+
+export type CommunityType = 'Standalone' | 'Gated';
+
 export interface Community {
   id: string;
   name: string;
   address: string;
   status: 'active' | 'disabled';
+  communityType?: CommunityType;
+  blocks?: Block[];
 }
 
 export interface CommunityStat extends Community {
