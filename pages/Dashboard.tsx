@@ -3,6 +3,8 @@ import { getNotices, getComplaints, getVisitors } from '../services/api';
 import type { Notice, Complaint, Visitor } from '../types';
 import { ComplaintStatus, VisitorStatus } from '../types';
 import Card from '../components/ui/Card';
+import ErrorCard from '../components/ui/ErrorCard';
+import { useAuth } from '../hooks/useAuth';
 
 const useCountUp = (end: number, duration: number = 1.5) => {
     const [count, setCount] = useState(0);
@@ -53,31 +55,43 @@ const Dashboard: React.FC = () => {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
+    if (!user?.communityId) {
+      if (!loading) setLoading(true);
+      return;
+    };
+
     const fetchData = async () => {
       try {
         setLoading(true);
+        setError(null);
         const [noticesData, complaintsData, visitorsData] = await Promise.all([
-          getNotices(),
-          getComplaints(),
-          getVisitors(),
+          getNotices(user.communityId),
+          getComplaints(user.communityId),
+          getVisitors(user.communityId),
         ]);
         setNotices(noticesData);
         setComplaints(complaintsData);
         setVisitors(visitorsData);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
+      } catch (err: any) {
+        console.error("Failed to fetch dashboard data:", err);
+        // Robustly extract the error message from the Supabase error object
+        let errorMessage = 'An unknown error occurred. This might be due to database security policies.';
+        if (err && typeof err === 'object' && 'message' in err) {
+            errorMessage = err.message as string;
+        } else if (typeof err === 'string') {
+            errorMessage = err;
+        }
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
-
-  const latestNotice = notices[0];
-  const pendingComplaints = complaints.filter(c => c.status !== ComplaintStatus.Resolved);
-  const expectedVisitors = visitors.filter(v => v.status === VisitorStatus.Expected);
+  }, [user]);
 
   if (loading) {
       return (
@@ -95,6 +109,20 @@ const Dashboard: React.FC = () => {
           </div>
       )
   }
+  
+  if (error) {
+    return (
+        <div className="space-y-6">
+            <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Dashboard</h2>
+            <ErrorCard title="Failed to Load Dashboard Data" message={error} />
+        </div>
+    );
+  }
+
+  const latestNotice = notices[0];
+  const pendingComplaints = complaints.filter(c => c.status !== ComplaintStatus.Resolved);
+  const expectedVisitors = visitors.filter(v => v.status === VisitorStatus.Expected);
+
 
   return (
     <div className="space-y-8">

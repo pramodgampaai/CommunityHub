@@ -57,10 +57,10 @@ const Visitors: React.FC = () => {
     const [expectedTime, setExpectedTime] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const fetchVisitors = async () => {
+    const fetchVisitors = async (communityId: string) => {
         try {
             setLoading(true);
-            const data = await getVisitors();
+            const data = await getVisitors(communityId);
             setVisitors(data);
         } catch (error) {
             console.error("Failed to fetch visitors", error);
@@ -70,8 +70,10 @@ const Visitors: React.FC = () => {
     };
     
     useEffect(() => {
-        fetchVisitors();
-    }, []);
+        if (user?.communityId) {
+            fetchVisitors(user.communityId);
+        }
+    }, [user]);
     
     const handleFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,7 +85,7 @@ const Visitors: React.FC = () => {
             setVisitorName('');
             setPurpose('');
             setExpectedTime('');
-            await fetchVisitors(); // Refresh list
+            await fetchVisitors(user.communityId); // Refresh list
         } catch (error) {
             console.error("Failed to create visitor:", error);
             alert("Failed to add visitor. Please try again.");

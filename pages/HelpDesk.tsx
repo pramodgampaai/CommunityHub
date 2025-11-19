@@ -47,10 +47,10 @@ const HelpDesk: React.FC = () => {
   const [category, setCategory] = useState<ComplaintCategory>(ComplaintCategory.Other);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const fetchComplaints = async () => {
+  const fetchComplaints = async (communityId: string) => {
     try {
       setLoading(true);
-      const data = await getComplaints();
+      const data = await getComplaints(communityId);
       setComplaints(data);
     } catch (error) {
       console.error("Failed to fetch complaints", error);
@@ -60,8 +60,10 @@ const HelpDesk: React.FC = () => {
   };
   
   useEffect(() => {
-    fetchComplaints();
-  }, []);
+    if (user?.communityId) {
+        fetchComplaints(user.communityId);
+    }
+  }, [user]);
   
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +75,7 @@ const HelpDesk: React.FC = () => {
         setTitle('');
         setDescription('');
         setCategory(ComplaintCategory.Other);
-        await fetchComplaints(); // Refresh list
+        await fetchComplaints(user.communityId); // Refresh list
     } catch (error) {
         console.error("Failed to create complaint:", error);
         alert("Failed to create complaint. Please try again.");

@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon } from '../icons';
 import type { Page } from '../../types';
 
 interface SidebarProps {
@@ -13,6 +14,7 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
   { name: 'Help Desk', icon: ShieldCheckIcon },
   { name: 'Visitors', icon: UsersIcon },
   { name: 'Amenities', icon: SparklesIcon },
+  { name: 'Directory', icon: UserGroupIcon },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {

@@ -48,10 +48,10 @@ const NoticeBoard: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
 
-  const fetchNotices = async () => {
+  const fetchNotices = async (communityId: string) => {
     try {
       setLoading(true);
-      const data = await getNotices();
+      const data = await getNotices(communityId);
       setNotices(data);
     } catch (error) {
       console.error("Failed to fetch notices", error);
@@ -61,20 +61,22 @@ const NoticeBoard: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchNotices();
-  }, []);
+    if (user?.communityId) {
+      fetchNotices(user.communityId);
+    }
+  }, [user]);
   
   const handleFormSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user) return;
       setIsSubmitting(true);
       try {
-          await createNotice({ title, content, type: noticeType, author: user.name });
+          await createNotice({ title, content, type: noticeType, author: user.name }, user);
           setIsModalOpen(false);
           setTitle('');
           setContent('');
           setNoticeType(NoticeType.General);
-          await fetchNotices(); // Refresh list
+          await fetchNotices(user.communityId); // Refresh list
       } catch (error) {
           console.error("Failed to create notice:", error);
           alert("Failed to create notice. Please try again.");

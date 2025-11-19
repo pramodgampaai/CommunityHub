@@ -1,21 +1,31 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-// In different build environments, public environment variables can be exposed
-// in different ways. To make the app more robust, we'll try to read from
-// both `process.env` (common in tools like Create React App or Next.js) and
-// `import.meta.env` (the standard for Vite). Vercel's build system should
-// populate one of these based on the project type it detects.
-
-// We check `typeof process` to avoid a ReferenceError in browser environments
-// where `process` is not defined at runtime.
-// FIX: Cast `import.meta` to `any` to bypass TypeScript error when Vite types are not present.
-const supabaseUrl = (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : undefined) || (import.meta as any).env?.VITE_SUPABASE_URL;
-// FIX: Cast `import.meta` to `any` to bypass TypeScript error when Vite types are not present.
-const supabaseKey = (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_KEY : undefined) || (import.meta as any).env?.VITE_SUPABASE_KEY;
+// --- Vercel/Production Environment ---
+// The app will first attempt to use environment variables, which is the
+// secure, standard way for deployments on Vercel, Netlify, etc.
+const supabaseUrlFromEnv = (import.meta as any).env?.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+const supabaseKeyFromEnv = (import.meta as any).env?.VITE_SUPABASE_KEY ?? process.env.VITE_SUPABASE_KEY;
 
 
-// Check if the variables were provided.
-export const isSupabaseConfigured = !!supabaseUrl && !!supabaseKey;
+// --- AI Studio Preview / Local Fallback ---
+// If environment variables are not found, it falls back to these placeholders.
+// This allows the AI Studio preview to work after you manually edit them.
+//
+// 1. Replace "YOUR_SUPABASE_URL" with your actual Supabase project URL.
+// 2. Replace "YOUR_SUPABASE_KEY" with your Supabase public anon key.
+//
+// WARNING: Do not commit your keys to a public repository.
+const supabaseUrlPlaceholder = "YOUR_SUPABASE_URL";
+const supabaseKeyPlaceholder = "YOUR_SUPABASE_KEY";
+
+
+const supabaseUrl = supabaseUrlFromEnv || supabaseUrlPlaceholder;
+export const supabaseKey = supabaseKeyFromEnv || supabaseKeyPlaceholder;
+
+// Check if the configuration is valid. It's configured if we have keys from the environment
+// OR if the placeholder values have been changed from their default.
+export const isSupabaseConfigured = (supabaseUrl && supabaseKey && supabaseUrl !== "YOUR_SUPABASE_URL" && supabaseKey !== "YOUR_SUPABASE_KEY");
 
 // Initialize the Supabase client.
 // If the configuration is missing, use dummy values to prevent the client

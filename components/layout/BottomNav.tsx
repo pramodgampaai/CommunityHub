@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon } from '../icons';
 import type { Page } from '../../types';
 
 interface BottomNavProps {
@@ -13,24 +14,25 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
     { name: 'Help Desk', icon: ShieldCheckIcon },
     { name: 'Visitors', icon: UsersIcon },
     { name: 'Amenities', icon: SparklesIcon },
+    { name: 'Directory', icon: UserGroupIcon },
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-t border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-      <div className="flex justify-around items-center h-16">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-t border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20 overflow-x-auto">
+      <div className="flex justify-around items-center h-16 min-w-max px-2">
         {navItems.map((item) => (
           <button
             key={item.name}
             onClick={() => setActivePage(item.name)}
-            className={`flex flex-col items-center justify-center w-full h-full transition-colors duration-200 ${
+            className={`flex flex-col items-center justify-center w-16 h-full transition-colors duration-200 ${
               activePage === item.name ? 'text-[var(--accent)]' : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]'
             }`}
           >
-            <div className={`flex items-center justify-center rounded-full px-5 py-1 ${activePage === item.name ? 'bg-blue-100 dark:bg-blue-500/20' : ''}`}>
+            <div className={`flex items-center justify-center rounded-full px-3 py-1 ${activePage === item.name ? 'bg-blue-100 dark:bg-blue-500/20' : ''}`}>
                 <item.icon className="w-6 h-6" />
             </div>
-            <span className="text-xs font-medium mt-1">{item.name}</span>
+            <span className="text-[10px] font-medium mt-1 truncate w-full text-center">{item.name}</span>
           </button>
         ))}
       </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
@@ -7,7 +8,10 @@ import NoticeBoard from './pages/NoticeBoard';
 import HelpDesk from './pages/HelpDesk';
 import Visitors from './pages/Visitors';
 import Amenities from './pages/Amenities';
+import AdminPanel from './pages/AdminPanel';
+import Directory from './pages/Directory';
 import type { Page } from './types';
+import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
 import { isSupabaseConfigured } from './services/supabase';
 
@@ -36,14 +40,27 @@ function App() {
   if (!isSupabaseConfigured) {
     return (
       <div className="flex items-center justify-center h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] p-4">
-        <div className="w-full max-w-lg p-8 text-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-lg">
-          <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">Configuration Error</h1>
+        <div className="w-full max-w-2xl p-8 text-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-lg">
+          <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">Configuration Required</h1>
           <p className="mt-4 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-            Supabase URL and Key are not configured. The application cannot connect to the backend.
+            Your Supabase URL and Key are needed to connect to the backend.
           </p>
-          <p className="mt-2 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-            Please add VITE_SUPABASE_URL and VITE_SUPABASE_KEY to your environment variables or Vercel project settings.
-          </p>
+           <div className="mt-4 text-sm text-left bg-black/5 dark:bg-white/5 p-4 rounded-md space-y-3">
+            <div>
+              <strong className="font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">For Vercel/Netlify Deployment:</strong>
+              <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Set these environment variables in your project settings:</p>
+              <ul className="list-disc list-inside mt-1 pl-2 font-mono">
+                <li>VITE_SUPABASE_URL</li>
+                <li>VITE_SUPABASE_KEY</li>
+              </ul>
+            </div>
+             <div>
+              <strong className="font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">For AI Studio Preview:</strong>
+               <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                Open <code className="font-mono bg-gray-200 dark:bg-gray-700 p-1 rounded">services/supabase.ts</code> and replace the placeholder values.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -61,6 +78,11 @@ function App() {
     return <LoginPage />;
   }
 
+  // Role-based routing
+  if (user.role === UserRole.SuperAdmin) {
+    return <AdminPanel theme={theme} toggleTheme={toggleTheme} />;
+  }
+
   const renderContent = () => {
     switch (activePage) {
       case 'Dashboard':
@@ -73,6 +95,8 @@ function App() {
         return <Visitors />;
       case 'Amenities':
         return <Amenities />;
+      case 'Directory':
+        return <Directory />;
       default:
         return <Dashboard />;
     }

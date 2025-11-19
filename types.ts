@@ -1,16 +1,32 @@
+
 export enum UserRole {
+  SuperAdmin = 'SuperAdmin',
   Admin = 'Admin',
   Resident = 'Resident',
   Security = 'Security',
 }
 
-export interface User {
+export interface Community {
   id: string;
+  name: string;
+  address: string;
+  status: 'active' | 'disabled';
+}
+
+export interface CommunityStat extends Community {
+    resident_count: number;
+    income_generated: number;
+}
+
+export interface User {
+  id:string;
   name: string;
   email: string;
   avatarUrl: string;
-  flatNumber: string;
+  flatNumber?: string;
   role: UserRole;
+  communityId?: string;
+  status: 'active' | 'disabled';
 }
 
 export enum NoticeType {
@@ -27,6 +43,7 @@ export interface Notice {
   author: string;
   createdAt: string;
   type: NoticeType;
+  communityId: string;
 }
 
 export enum ComplaintStatus {
@@ -53,6 +70,7 @@ export interface Complaint {
   createdAt: string;
   category: ComplaintCategory;
   userId: string;
+  communityId: string;
 }
 
 export enum VisitorStatus {
@@ -69,6 +87,7 @@ export interface Visitor {
   status: VisitorStatus;
   residentName: string;
   flatNumber: string;
+  communityId: string;
 }
 
 export interface Amenity {
@@ -77,6 +96,7 @@ export interface Amenity {
   description: string;
   imageUrl: string;
   capacity: number;
+  communityId: string;
 }
 
 export interface Booking {
@@ -86,6 +106,7 @@ export interface Booking {
   flatNumber: string;
   startTime: string;
   endTime: string;
+  communityId: string;
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities';
+export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory';

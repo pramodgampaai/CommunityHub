@@ -21,62 +21,41 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   useEffect(() => {
     setLoading(true);
     
-    // The onAuthStateChange listener is the single source of truth for the user's session.
-    // It fires once on initial load, and again whenever the session changes (e.g., login, logout).
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
         if (session) {
-          // When a session is detected, fetch the user's profile from the database.
-          // We use an RPC call to a custom database function `get_user_profile` for this.
-          const { data: profileData, error } = await supabase.rpc('get_user_profile');
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-          if (error) {
-            console.error('Error fetching user profile:', error);
-            setUser(null);
-          } else if (profileData && profileData.length > 0) {
-            // Profile found, map it to our User type
-            const profile = profileData[0];
+          if (profile) {
             const appUser: User = {
               id: profile.id,
-              name: profile.name || 'Resident',
-              email: profile.email || '',
+              name: profile.name || 'User',
+              email: profile.email || session.user.email || '',
               avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
-              flatNumber: profile.flat_number || 'N/A',
+              flatNumber: profile.flat_number,
               role: profile.role as UserRole || UserRole.Resident,
+              communityId: profile.community_id,
+              status: profile.status || 'active',
             };
             setUser(appUser);
-          } else if (session.user) {
-            // No profile found for an authenticated user, let's create one.
-            console.log('User profile not found, creating a new one.');
-            const { data: newUserProfile, error: insertError } = await supabase
-              .from('users')
-              .insert({
-                id: session.user.id, // The UUID from the authenticated user
-                email: session.user.email,
-                name: session.user.email?.split('@')[0] || 'New User',
-                flat_number: 'N/A',
-                role: UserRole.Resident, // Default role for new users
-              })
-              .select()
-              .single();
-            
-            if (insertError) {
-              console.error('Failed to create user profile:', insertError);
-              // As a fallback, sign out to prevent a broken state
-              await supabase.auth.signOut();
-              setUser(null);
-            } else if (newUserProfile) {
-              // New profile created successfully, map it to our User type
-              const appUser: User = {
-                id: newUserProfile.id,
-                name: newUserProfile.name || 'Resident',
-                email: newUserProfile.email || '',
-                avatarUrl: newUserProfile.avatar_url || `https://i.pravatar.cc/150?u=${newUserProfile.id}`,
-                flatNumber: newUserProfile.flat_number || 'N/A',
-                role: newUserProfile.role as UserRole || UserRole.Resident,
-              };
-              setUser(appUser);
-            }
+          } else if (error && error.code === 'PGRST116') {
+            // This error means no profile was found for the authenticated user.
+            console.error(
+              'CRITICAL: User is authenticated but profile was not found. ' +
+              'This could be due to replication delay or a failed backend trigger (`handle_new_user`). Signing out for security.',
+              { userId: session.user.id }
+            );
+            await supabase.auth.signOut();
+            setUser(null);
+          } else if (error) {
+            // A different, unexpected error occurred during profile fetch.
+             console.error('Error fetching user profile:', error.message || error);
+             await supabase.auth.signOut();
+             setUser(null);
           }
         } else {
             // If there's no session, ensure user is null.
