@@ -143,17 +143,30 @@ export const updateComplaintStatus = async (id: string, status: ComplaintStatus)
 };
 
 export const updateUserPassword = async (password: string): Promise<void> => {
-    // Explicitly check session first to avoid hanging requests if session is invalid
+    // 1. Verify Session locally first
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
         throw new Error("No active session. Please log in again.");
     }
 
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) {
-        console.error("Update password error:", error);
-        throw error;
+    // 2. Call Edge Function to handle the update.
+    // This decouples the update logic from the client-side session state, preventing infinite loops.
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-user-password', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseKey
+        },
+        body: JSON.stringify({ password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        const message = data.error || data.message || "Failed to update password";
+        throw new Error(message);
     }
 };
 

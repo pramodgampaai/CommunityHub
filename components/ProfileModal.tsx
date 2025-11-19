@@ -48,26 +48,28 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
         setIsSubmitting(true);
 
         try {
-            // 1. Update password in Supabase
+            // 1. Update password via Edge Function (Server Side)
+            // This returns success if the server updated the record.
+            // The client session state is NOT touched here, preventing the loop.
             await updateUserPassword(newPassword);
             
             // 2. Show success message
-            setSuccess("Password updated successfully. Logging out...");
+            setSuccess("Password updated successfully. You will be logged out.");
             
-            // 3. NUCLEAR LOGOUT SEQUENCE
+            // 3. FORCE CLEANUP & RELOAD
+            // We wait 2 seconds to let the user read the message, then destroy the session and reload.
             setTimeout(() => {
-                // A. Manually clear Supabase keys from storage
+                // Explicitly remove Supabase auth tokens from localStorage
+                // This ensures the next page load starts fresh
                 Object.keys(localStorage).forEach(key => {
                     if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
                         localStorage.removeItem(key);
                     }
                 });
-
-                // B. Force a hard reload of the page. 
-                // This destroys the current JS environment, stopping any infinite loops 
-                // or stale closures in hooks.
+                
+                // Force reload to Login page
                 window.location.href = '/';
-            }, 1500);
+            }, 2000);
 
         } catch (err: any) {
             console.error("Password update failed:", err);
