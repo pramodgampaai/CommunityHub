@@ -196,35 +196,49 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
 };
 
 export const createCommunity = async (data: Partial<Community>): Promise<Community> => {
-    const { data: newCommunity, error } = await supabase.from('communities').insert({
-        name: data.name,
-        address: data.address,
-        community_type: data.communityType,
-        blocks: data.blocks,
-        status: 'active'
-    }).select().single();
-    
-    if (error) throw error;
-    
-    return {
-        ...newCommunity,
-        communityType: newCommunity.community_type
-    };
+    try {
+        const { data: newCommunity, error } = await supabase.from('communities').insert({
+            name: data.name,
+            address: data.address,
+            community_type: data.communityType,
+            blocks: data.blocks,
+            status: 'active'
+        }).select().single();
+        
+        if (error) throw error;
+        
+        return {
+            ...newCommunity,
+            communityType: newCommunity.community_type
+        };
+    } catch (error: any) {
+        if (error.message && (error.message.includes("Could not find the 'blocks' column") || error.message.includes("Could not find the 'community_type' column"))) {
+            throw new Error("Database columns missing. Please run the SQL migration to add 'blocks' and 'community_type' columns.");
+        }
+        throw error;
+    }
 };
 
 export const updateCommunity = async (id: string, data: Partial<Community>): Promise<Community> => {
-    const { data: updated, error } = await supabase.from('communities').update({
-        name: data.name,
-        address: data.address,
-        community_type: data.communityType,
-        blocks: data.blocks
-    }).eq('id', id).select().single();
-    
-    if (error) throw error;
-     return {
-        ...updated,
-        communityType: updated.community_type
-    };
+    try {
+        const { data: updated, error } = await supabase.from('communities').update({
+            name: data.name,
+            address: data.address,
+            community_type: data.communityType,
+            blocks: data.blocks
+        }).eq('id', id).select().single();
+        
+        if (error) throw error;
+        return {
+            ...updated,
+            communityType: updated.community_type
+        };
+    } catch (error: any) {
+        if (error.message && (error.message.includes("Could not find the 'blocks' column") || error.message.includes("Could not find the 'community_type' column"))) {
+            throw new Error("Database columns missing. Please run the SQL migration to add 'blocks' and 'community_type' columns.");
+        }
+        throw error;
+    }
 };
 
 export const deleteCommunity = async (id: string): Promise<void> => {
