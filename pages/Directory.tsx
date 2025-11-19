@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { getResidents, createCommunityUser } from '../services/api';
-import type { User } from '../types';
+import { getResidents, createCommunityUser, getCommunity } from '../services/api';
+import type { User, Community, Block } from '../types';
 import { UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -21,6 +21,7 @@ const DirectorySkeleton: React.FC = () => (
 
 const Directory: React.FC = () => {
     const [residents, setResidents] = useState<User[]>([]);
+    const [community, setCommunity] = useState<Community | null>(null);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { user } = useAuth();
@@ -35,6 +36,9 @@ const Directory: React.FC = () => {
     const [newEmail, setNewEmail] = useState('');
     const [newFlatNumber, setNewFlatNumber] = useState('');
     const [newPassword, setNewPassword] = useState('');
+    const [selectedBlock, setSelectedBlock] = useState('');
+    const [selectedFloor, setSelectedFloor] = useState('');
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fetchResidents = async (communityId: string) => {
@@ -49,22 +53,55 @@ const Directory: React.FC = () => {
         }
     };
 
+    const fetchCommunityDetails = async (communityId: string) => {
+        try {
+            const data = await getCommunity(communityId);
+            setCommunity(data);
+        } catch (error) {
+            console.error("Failed to fetch community details", error);
+        }
+    };
+
     useEffect(() => {
         if (user?.communityId) {
             fetchResidents(user.communityId);
+            fetchCommunityDetails(user.communityId);
         }
     }, [user]);
+
+    const getFloorOptions = () => {
+        if (!community) return [];
+        let floorCount = 0;
+
+        if (community.communityType === 'Gated' && selectedBlock) {
+            const block = community.blocks?.find(b => b.name === selectedBlock);
+            floorCount = block?.floorCount || 0;
+        } else if (community.communityType === 'Standalone' && community.blocks && community.blocks.length > 0) {
+            floorCount = community.blocks[0].floorCount;
+        }
+
+        return Array.from({ length: floorCount }, (_, i) => i + 1);
+    };
 
     const handleAddResident = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !user.communityId) return;
         
         setIsSubmitting(true);
+
+        // Construct full flat number string for display/simple fields
+        let finalFlatNumber = newFlatNumber;
+        if (community?.communityType === 'Gated' && selectedBlock) {
+             finalFlatNumber = `${selectedBlock}-${newFlatNumber}`;
+        }
+
         try {
             await createCommunityUser({
                 name: newName,
                 email: newEmail,
-                flat_number: newFlatNumber,
+                flat_number: finalFlatNumber,
+                block: selectedBlock,
+                floor: selectedFloor ? parseInt(selectedFloor) : undefined,
                 password: newPassword,
                 community_id: user.communityId,
                 role: UserRole.Resident
@@ -75,6 +112,8 @@ const Directory: React.FC = () => {
             setNewEmail('');
             setNewFlatNumber('');
             setNewPassword('');
+            setSelectedBlock('');
+            setSelectedFloor('');
             alert('Resident added successfully!');
             await fetchResidents(user.communityId);
         } catch (error: any) {
@@ -125,7 +164,14 @@ const Directory: React.FC = () => {
             </div>
             <div className="ml-4 overflow-hidden flex-1">
                 <h3 className="font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)] truncate" title={resident.name}>{resident.name}</h3>
-                <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] truncate">Flat: <span className="font-medium">{resident.flatNumber || 'N/A'}</span></p>
+                <div className="flex gap-2 items-center mt-1">
+                    <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] truncate">Flat: <span className="font-medium">{resident.flatNumber || 'N/A'}</span></p>
+                    {(resident.block || resident.floor) && (
+                        <span className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-black/5 dark:bg-white/5 px-1.5 rounded">
+                            {resident.block ? `Blk ${resident.block}` : ''} {resident.floor ? `Flr ${resident.floor}` : ''}
+                        </span>
+                    )}
+                </div>
                  <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] truncate">{resident.email}</p>
                 {resident.role !== UserRole.Resident && (
                     <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full mt-1 inline-block font-medium ${
@@ -282,19 +328,56 @@ const Directory: React.FC = () => {
                         <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Full Name</label>
                         <input type="text" id="name" value={newName} onChange={e => setNewName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                     </div>
+                    
+                    {community?.communityType === 'Gated' && (
+                         <div>
+                            <label htmlFor="block" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Block / Tower</label>
+                            <select 
+                                id="block" 
+                                value={selectedBlock} 
+                                onChange={e => { setSelectedBlock(e.target.value); setSelectedFloor(''); }} 
+                                required 
+                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                            >
+                                <option value="">Select Block</option>
+                                {community.blocks?.map(block => (
+                                    <option key={block.name} value={block.name}>{block.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                             <label htmlFor="flat" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat No.</label>
-                             <input type="text" id="flat" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                             <label htmlFor="floor" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
+                             <select 
+                                id="floor" 
+                                value={selectedFloor} 
+                                onChange={e => setSelectedFloor(e.target.value)} 
+                                required 
+                                disabled={community?.communityType === 'Gated' && !selectedBlock}
+                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-50"
+                             >
+                                <option value="">Select Floor</option>
+                                {getFloorOptions().map(floor => (
+                                    <option key={floor} value={floor}>{floor}</option>
+                                ))}
+                             </select>
                         </div>
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Password</label>
-                            <input type="password" id="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                         <div>
+                             <label htmlFor="flat" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Unit / Flat No.</label>
+                             <input type="text" id="flat" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} placeholder="e.g. 101" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                         </div>
                     </div>
+
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Email Address</label>
                         <input type="email" id="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                    </div>
+
+                    <div>
+                        <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Password</label>
+                        <input type="password" id="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                     </div>
                     
                     <div className="flex justify-end pt-4 space-x-2">

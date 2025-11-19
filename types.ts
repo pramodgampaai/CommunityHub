@@ -33,6 +33,8 @@ export interface User {
   email: string;
   avatarUrl: string;
   flatNumber?: string;
+  block?: string;
+  floor?: number;
   role: UserRole;
   communityId?: string;
   status: 'active' | 'disabled';

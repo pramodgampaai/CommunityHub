@@ -54,10 +54,31 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         email: u.email,
         avatarUrl: u.avatar_url,
         flatNumber: u.flat_number,
+        block: u.block,
+        floor: u.floor,
         role: u.role as UserRole,
         communityId: u.community_id,
         status: u.status
     })) as User[];
+};
+
+export const getCommunity = async (communityId: string): Promise<Community> => {
+    const { data, error } = await supabase
+        .from('communities')
+        .select('*')
+        .eq('id', communityId)
+        .single();
+    
+    if (error) throw error;
+    
+    return {
+        id: data.id,
+        name: data.name,
+        address: data.address,
+        status: data.status,
+        communityType: data.community_type,
+        blocks: data.blocks
+    } as Community;
 };
 
 // CREATE operations
@@ -235,7 +256,16 @@ export const createAdminUser = async (userData: any) => {
     return response.json();
 };
 
-export const createCommunityUser = async (userData: any) => {
+export const createCommunityUser = async (userData: {
+    name: string;
+    email: string;
+    password: string;
+    community_id: string;
+    role: string;
+    flat_number: string;
+    block?: string;
+    floor?: number;
+}) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
 
