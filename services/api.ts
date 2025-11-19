@@ -295,7 +295,13 @@ export const createCommunityUser = async (userData: {
 
     if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to create user');
+        const errorMessage = err.error || 'Failed to create user';
+        
+        if (errorMessage.includes("Could not find the 'block' column") || errorMessage.includes("Could not find the 'floor' column")) {
+             throw new Error("Database columns missing. Please run the SQL migration to add 'block' and 'floor' columns to the 'users' table.");
+        }
+        
+        throw new Error(errorMessage);
     }
     return response.json();
 };
