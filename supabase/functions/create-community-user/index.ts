@@ -30,7 +30,7 @@ serve(async (req: any) => {
     )
 
     // Parse request body
-    const { name, email, password, community_id, role, flat_number, block, floor } = await req.json()
+    const { name, email, password, community_id, role, flat_number, block, floor, flat_size } = await req.json()
 
     // Validate inputs
     if (!email || !password || !name || !community_id || !role) {
@@ -48,7 +48,7 @@ serve(async (req: any) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, flat_number, block, floor }
+      user_metadata: { name, flat_number, block, floor, flat_size }
     })
 
     if (createError) {
@@ -71,6 +71,7 @@ serve(async (req: any) => {
         flat_number: flat_number,
         block: block,
         floor: floor,
+        flat_size: flat_size,
         status: 'active',
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
       })
@@ -79,7 +80,6 @@ serve(async (req: any) => {
       // Rollback logic could go here (delete auth user)
       console.error("Profile update error:", profileError);
       // We throw to inform the client, even though the Auth user was created.
-      // Ideally we would delete the Auth user here to be atomic.
       await supabaseClient.auth.admin.deleteUser(user.id);
       throw profileError
     }

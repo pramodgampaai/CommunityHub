@@ -68,6 +68,8 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
     const [communityType, setCommunityType] = useState<CommunityType>('Gated');
     const [blocks, setBlocks] = useState<Block[]>([{ name: '', floorCount: 0 }]);
     const [standaloneFloorCount, setStandaloneFloorCount] = useState<number>(1);
+    const [maintenanceRate, setMaintenanceRate] = useState<number>(0);
+    const [fixedMaintenanceAmount, setFixedMaintenanceAmount] = useState<number>(0);
     
     // Admin User Form States
     const [newAdminName, setNewAdminName] = useState('');
@@ -102,6 +104,8 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
         setCommunityType('Gated');
         setBlocks([{ name: '', floorCount: 0 }]);
         setStandaloneFloorCount(1);
+        setMaintenanceRate(0);
+        setFixedMaintenanceAmount(0);
         setCommunityModalOpen(true);
     };
 
@@ -112,6 +116,8 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
         setCommunityName(community.name);
         setCommunityAddress(community.address);
         setCommunityType(community.communityType || 'Gated');
+        setMaintenanceRate(community.maintenanceRate || 0);
+        setFixedMaintenanceAmount(community.fixedMaintenanceAmount || 0);
         
         if (community.blocks && community.blocks.length > 0) {
             if (community.communityType === 'Standalone') {
@@ -155,7 +161,9 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
             name: communityName,
             address: communityAddress,
             communityType,
-            blocks: finalBlocks
+            blocks: finalBlocks,
+            maintenanceRate: communityType === 'Gated' ? maintenanceRate : 0,
+            fixedMaintenanceAmount: communityType === 'Standalone' ? fixedMaintenanceAmount : 0
         };
 
         try {
@@ -226,7 +234,7 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                                         <th className="p-4 font-semibold">Community</th>
                                         <th className="p-4 font-semibold">Type</th>
                                         <th className="p-4 font-semibold">Residents</th>
-                                        <th className="p-4 font-semibold">Income</th>
+                                        <th className="p-4 font-semibold">Maintenance</th>
                                         <th className="p-4 font-semibold">Status</th>
                                         <th className="p-4 font-semibold text-right">Actions</th>
                                     </tr>
@@ -252,7 +260,13 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                                                 )}
                                             </td>
                                             <td className="p-4">{stat.resident_count}</td>
-                                            <td className="p-4">${stat.income_generated.toLocaleString()}</td>
+                                            <td className="p-4">
+                                                {stat.communityType === 'Standalone' ? (
+                                                     <span>₹{stat.fixedMaintenanceAmount || 0} / mo</span>
+                                                ) : (
+                                                     <span>₹{stat.maintenanceRate || 0} / sq ft</span>
+                                                )}
+                                            </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${stat.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                                     {stat.status}
@@ -317,20 +331,46 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                     </div>
 
                     {communityType === 'Standalone' ? (
-                        <div>
-                            <label htmlFor="standaloneFloors" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Number of Floors</label>
-                            <input 
-                                type="number" 
-                                id="standaloneFloors" 
-                                value={standaloneFloorCount} 
-                                onChange={e => setStandaloneFloorCount(parseInt(e.target.value) || 0)} 
-                                min="1"
-                                required 
-                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
-                            />
-                        </div>
+                        <>
+                            <div>
+                                <label htmlFor="standaloneFloors" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Number of Floors</label>
+                                <input 
+                                    type="number" 
+                                    id="standaloneFloors" 
+                                    value={standaloneFloorCount} 
+                                    onChange={e => setStandaloneFloorCount(parseInt(e.target.value) || 0)} 
+                                    min="1"
+                                    required 
+                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="fixedMaintenance" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Monthly Maintenance (₹)</label>
+                                <input 
+                                    type="number" 
+                                    id="fixedMaintenance" 
+                                    value={fixedMaintenanceAmount} 
+                                    onChange={e => setFixedMaintenanceAmount(parseFloat(e.target.value) || 0)} 
+                                    min="0"
+                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                />
+                            </div>
+                        </>
                     ) : (
                         <div className="border-t border-[var(--border-light)] dark:border-[var(--border-dark)] pt-4 mt-2">
+                             <div className="mb-4">
+                                <label htmlFor="maintenanceRate" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Maintenance Rate (₹ per Sq. Ft)</label>
+                                <input 
+                                    type="number" 
+                                    id="maintenanceRate" 
+                                    value={maintenanceRate} 
+                                    onChange={e => setMaintenanceRate(parseFloat(e.target.value) || 0)} 
+                                    min="0"
+                                    step="0.1"
+                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                />
+                            </div>
+
                             <div className="flex justify-between items-center mb-2">
                                 <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Blocks / Towers</label>
                                 <button type="button" onClick={addBlock} className="text-xs text-[var(--accent)] hover:underline flex items-center">

@@ -43,6 +43,7 @@ const Directory: React.FC = () => {
     const [newPassword, setNewPassword] = useState('');
     const [selectedBlock, setSelectedBlock] = useState('');
     const [selectedFloor, setSelectedFloor] = useState('');
+    const [newFlatSize, setNewFlatSize] = useState('');
     
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -88,6 +89,19 @@ const Directory: React.FC = () => {
         return Array.from({ length: floorCount }, (_, i) => i + 1);
     };
 
+    const calculateMaintenance = (resident: User) => {
+        if (!community) return 0;
+        
+        if (community.communityType === 'Standalone') {
+            return community.fixedMaintenanceAmount || 0;
+        } else {
+            // Gated: Rate * Flat Size
+            const rate = community.maintenanceRate || 0;
+            const size = resident.flatSize || 0;
+            return rate * size;
+        }
+    };
+
     const handleAddResident = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !user.communityId) return;
@@ -107,6 +121,7 @@ const Directory: React.FC = () => {
                 flat_number: finalFlatNumber,
                 block: selectedBlock,
                 floor: selectedFloor ? parseInt(selectedFloor) : undefined,
+                flat_size: newFlatSize ? parseFloat(newFlatSize) : 0,
                 password: newPassword,
                 community_id: user.communityId,
                 role: UserRole.Resident
@@ -119,6 +134,7 @@ const Directory: React.FC = () => {
             setNewPassword('');
             setSelectedBlock('');
             setSelectedFloor('');
+            setNewFlatSize('');
             alert('Resident added successfully!');
             await fetchResidents(user.communityId);
         } catch (error: any) {
@@ -169,6 +185,7 @@ const Directory: React.FC = () => {
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Resident</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Unit Details</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
+                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
                     </tr>
@@ -191,16 +208,25 @@ const Directory: React.FC = () => {
                                 <div className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
                                     {resident.flatNumber || 'N/A'}
                                 </div>
-                                {(resident.block || resident.floor) && (
+                                {(resident.block || resident.floor || resident.flatSize) && (
                                     <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-0.5">
                                         {resident.block ? `Block ${resident.block}` : ''}
-                                        {resident.block && resident.floor ? ' • ' : ''}
+                                        {resident.block && (resident.floor || resident.flatSize) ? ' • ' : ''}
                                         {resident.floor ? `Floor ${resident.floor}` : ''}
+                                        {resident.floor && resident.flatSize ? ' • ' : ''}
+                                        {resident.flatSize ? `${resident.flatSize} sq ft` : ''}
                                     </div>
                                 )}
                             </td>
                             <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                 {resident.email}
+                            </td>
+                             <td className="p-4">
+                                {resident.role === UserRole.Resident && (
+                                    <span className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                        ₹{calculateMaintenance(resident).toLocaleString()}
+                                    </span>
+                                )}
                             </td>
                             <td className="p-4">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
@@ -412,6 +438,12 @@ const Directory: React.FC = () => {
                              <label htmlFor="flat" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Unit / Flat No.</label>
                              <input type="text" id="flat" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} placeholder="e.g. 101" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                         </div>
+                    </div>
+                    
+                    <div>
+                        <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat Size (Sq. Ft)</label>
+                        <input type="number" id="flatSize" value={newFlatSize} onChange={e => setNewFlatSize(e.target.value)} placeholder="e.g. 1200" min="0" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                        <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">Used to calculate maintenance for Gated communities.</p>
                     </div>
 
                     <div>

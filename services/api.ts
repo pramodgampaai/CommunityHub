@@ -56,6 +56,7 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         flatNumber: u.flat_number,
         block: u.block,
         floor: u.floor,
+        flatSize: u.flat_size,
         role: u.role as UserRole,
         communityId: u.community_id,
         status: u.status
@@ -77,7 +78,9 @@ export const getCommunity = async (communityId: string): Promise<Community> => {
         address: data.address,
         status: data.status,
         communityType: data.community_type,
-        blocks: data.blocks
+        blocks: data.blocks,
+        maintenanceRate: data.maintenance_rate,
+        fixedMaintenanceAmount: data.fixed_maintenance_amount
     } as Community;
 };
 
@@ -188,6 +191,8 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
             status: c.status,
             communityType: c.community_type,
             blocks: c.blocks,
+            maintenanceRate: c.maintenance_rate,
+            fixedMaintenanceAmount: c.fixed_maintenance_amount,
             resident_count: count || 0,
             income_generated: 0 // Placeholder
         });
@@ -202,6 +207,8 @@ export const createCommunity = async (data: Partial<Community>): Promise<Communi
             address: data.address,
             community_type: data.communityType,
             blocks: data.blocks,
+            maintenance_rate: data.maintenanceRate,
+            fixed_maintenance_amount: data.fixedMaintenanceAmount,
             status: 'active'
         }).select().single();
         
@@ -209,11 +216,16 @@ export const createCommunity = async (data: Partial<Community>): Promise<Communi
         
         return {
             ...newCommunity,
-            communityType: newCommunity.community_type
+            communityType: newCommunity.community_type,
+            maintenanceRate: newCommunity.maintenance_rate,
+            fixedMaintenanceAmount: newCommunity.fixed_maintenance_amount
         };
     } catch (error: any) {
         if (error.message && (error.message.includes("Could not find the 'blocks' column") || error.message.includes("Could not find the 'community_type' column"))) {
             throw new Error("Database columns missing. Please run the SQL migration to add 'blocks' and 'community_type' columns.");
+        }
+        if (error.message && (error.message.includes("maintenance_rate") || error.message.includes("fixed_maintenance_amount"))) {
+            throw new Error("Database columns missing. Please run SQL migration to add maintenance columns.");
         }
         throw error;
     }
@@ -225,17 +237,24 @@ export const updateCommunity = async (id: string, data: Partial<Community>): Pro
             name: data.name,
             address: data.address,
             community_type: data.communityType,
-            blocks: data.blocks
+            blocks: data.blocks,
+            maintenance_rate: data.maintenanceRate,
+            fixed_maintenance_amount: data.fixedMaintenanceAmount
         }).eq('id', id).select().single();
         
         if (error) throw error;
         return {
             ...updated,
-            communityType: updated.community_type
+            communityType: updated.community_type,
+            maintenanceRate: updated.maintenance_rate,
+            fixedMaintenanceAmount: updated.fixed_maintenance_amount
         };
     } catch (error: any) {
         if (error.message && (error.message.includes("Could not find the 'blocks' column") || error.message.includes("Could not find the 'community_type' column"))) {
             throw new Error("Database columns missing. Please run the SQL migration to add 'blocks' and 'community_type' columns.");
+        }
+        if (error.message && (error.message.includes("maintenance_rate") || error.message.includes("fixed_maintenance_amount"))) {
+            throw new Error("Database columns missing. Please run SQL migration to add maintenance columns.");
         }
         throw error;
     }
@@ -279,6 +298,7 @@ export const createCommunityUser = async (userData: {
     flat_number: string;
     block?: string;
     floor?: number;
+    flat_size?: number;
 }) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
@@ -299,6 +319,9 @@ export const createCommunityUser = async (userData: {
         
         if (errorMessage.includes("Could not find the 'block' column") || errorMessage.includes("Could not find the 'floor' column")) {
              throw new Error("Database columns missing. Please run the SQL migration to add 'block' and 'floor' columns to the 'users' table.");
+        }
+        if (errorMessage.includes("flat_size")) {
+             throw new Error("Database columns missing. Please run the SQL migration to add 'flat_size' column.");
         }
         
         throw new Error(errorMessage);

@@ -20,6 +20,8 @@ export interface Community {
   status: 'active' | 'disabled';
   communityType?: CommunityType;
   blocks?: Block[];
+  maintenanceRate?: number; // For Gated: per sq ft
+  fixedMaintenanceAmount?: number; // For Standalone: fixed monthly
 }
 
 export interface CommunityStat extends Community {
@@ -35,6 +37,7 @@ export interface User {
   flatNumber?: string;
   block?: string;
   floor?: number;
+  flatSize?: number; // In Sq Ft
   role: UserRole;
   communityId?: string;
   status: 'active' | 'disabled';
