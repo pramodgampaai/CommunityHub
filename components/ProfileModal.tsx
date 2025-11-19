@@ -11,7 +11,7 @@ interface ProfileModalProps {
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -52,22 +52,22 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
             await updateUserPassword(newPassword);
             
             // 2. Show success message
-            setSuccess("Password updated successfully. You will be logged out shortly.");
+            setSuccess("Password updated successfully. Logging out...");
             
-            // 3. Clear form
-            setNewPassword('');
-            setConfirmPassword('');
+            // 3. NUCLEAR LOGOUT SEQUENCE
+            setTimeout(() => {
+                // A. Manually clear Supabase keys from storage
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                        localStorage.removeItem(key);
+                    }
+                });
 
-            // 4. Wait 2 seconds then force logout
-            setTimeout(async () => {
-                try {
-                    onClose();
-                    await logout();
-                } catch (logoutError) {
-                    console.error("Logout failed, forcing reload", logoutError);
-                    window.location.reload();
-                }
-            }, 2000);
+                // B. Force a hard reload of the page. 
+                // This destroys the current JS environment, stopping any infinite loops 
+                // or stale closures in hooks.
+                window.location.href = '/';
+            }, 1500);
 
         } catch (err: any) {
             console.error("Password update failed:", err);
@@ -77,11 +77,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
     };
 
     const handleClose = () => {
-        if (!isSubmitting) {
+        if (!isSubmitting && !success) {
             setNewPassword('');
             setConfirmPassword('');
             setError(null);
-            setSuccess(null);
             onClose();
         }
     }
@@ -115,7 +114,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                                 onChange={(e) => setNewPassword(e.target.value)} 
                                 className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent sm:text-sm"
                                 placeholder="At least 8 chars, 1 digit, 1 symbol"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || success !== null}
                                 required
                             />
                         </div>
@@ -126,7 +125,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                                 value={confirmPassword} 
                                 onChange={(e) => setConfirmPassword(e.target.value)} 
                                 className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent sm:text-sm"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || success !== null}
                                 required
                             />
                         </div>

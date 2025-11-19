@@ -45,8 +45,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           };
           setUser(appUser);
         } else {
+          // If profile is missing, we handle it gracefully without auto-logout loop
           console.warn('Profile missing for authenticated user.');
-          // Do NOT auto-logout here to avoid loops. Just set user to null or limited state.
           setUser(null); 
         }
       } catch (err) {
@@ -66,7 +66,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
         if (session) {
           // If we already have the user loaded and IDs match, don't re-fetch
-          // This prevents thrashing on token refreshes
           if (user && user.id === session.user.id) {
              setLoading(false);
              return;
@@ -94,21 +93,26 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   };
 
   const logout = async () => {
-    // 1. IMMMEDIATELY clear local state to update UI and stop any hooks
+    // 1. Stop UI updates immediately
     setUser(null);
     
     try {
-        // 2. Attempt server-side sign out
-        await supabase.auth.signOut();
+        // 2. Aggressively clear LocalStorage FIRST
+        // This prevents the browser from picking up the old session on refresh
+        // We search for ANY key that looks like a Supabase auth token
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                localStorage.removeItem(key);
+            }
+        });
+
+        // 3. Attempt server-side sign out (fire and forget)
+        // We don't await this if we want immediate UI response, but awaiting is safer for API logic
+        // We catch errors here so the function never throws
+        await supabase.auth.signOut().catch(err => console.warn("Supabase signOut failed (expected if token invalid):", err));
         
-        // 3. Force clear local storage keys for Supabase to ensure clean slate
-        // This handles cases where signOut might fail due to network or invalid tokens
-        const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-        if (supabaseUrl) {
-            localStorage.removeItem(`sb-${supabaseUrl}-auth-token`);
-        }
     } catch (error) {
-        console.error("Logout warning (usually harmless):", error);
+        console.error("Logout warning:", error);
     }
   };
 
