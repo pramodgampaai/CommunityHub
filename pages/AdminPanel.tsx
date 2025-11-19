@@ -337,37 +337,50 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                                     <PlusIcon className="w-3 h-3 mr-1"/> Add Block
                                 </button>
                             </div>
+
+                            {/* Header Row for Blocks */}
+                            <div className="flex gap-2 mb-2 px-1">
+                                <span className="flex-1 text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wide">Name</span>
+                                <span className="w-24 text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wide">Floor Count</span>
+                                <span className="w-6"></span> {/* Spacer for actions */}
+                            </div>
+
                             <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                                 {blocks.map((block, index) => (
                                     <div key={index} className="flex gap-2 items-center">
                                         <div className="flex-1">
                                             <input 
                                                 type="text" 
-                                                placeholder="Block Name (e.g. A)" 
+                                                placeholder="e.g. Block A" 
                                                 value={block.name} 
                                                 onChange={e => handleBlockChange(index, 'name', e.target.value)}
                                                 className="block w-full px-3 py-1.5 text-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                                aria-label="Block Name"
                                             />
                                         </div>
                                         <div className="w-24">
                                             <input 
                                                 type="number" 
-                                                placeholder="Floors" 
+                                                placeholder="0" 
                                                 value={block.floorCount} 
                                                 onChange={e => handleBlockChange(index, 'floorCount', parseInt(e.target.value) || 0)}
                                                 min="1"
                                                 className="block w-full px-3 py-1.5 text-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                                aria-label="Floor Count"
                                             />
                                         </div>
-                                        {blocks.length > 1 && (
-                                            <button 
-                                                type="button" 
-                                                onClick={() => removeBlock(index)}
-                                                className="text-red-500 hover:text-red-700 p-1"
-                                            >
-                                                <TrashIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
+                                        <div className="w-6 flex justify-center">
+                                            {blocks.length > 1 && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => removeBlock(index)}
+                                                    className="text-red-500 hover:text-red-700 p-1"
+                                                    title="Remove Block"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
