@@ -4,6 +4,7 @@ import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { useAuth } from '../hooks/useAuth';
 import { updateUserPassword } from '../services/api';
+import { supabase } from '../services/supabase';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -11,7 +12,7 @@ interface ProfileModalProps {
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -55,10 +56,18 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
             setNewPassword('');
             setConfirmPassword('');
 
-            // Wait for 2 seconds to show the success message, then logout
+            // Wait for 2 seconds to show the success message
             setTimeout(async () => {
                 onClose();
-                await logout();
+                // Force a hard sign-out and reload to clear any stale session state
+                // This prevents the "hanging" issue where the app thinks it has a session but the token is invalid.
+                try {
+                    await supabase.auth.signOut();
+                } catch (e) {
+                    console.warn("Sign out cleanup error:", e);
+                } finally {
+                    window.location.href = '/';
+                }
             }, 2000);
 
         } catch (err: any) {
