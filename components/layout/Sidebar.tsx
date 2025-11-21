@@ -2,6 +2,8 @@
 import React from 'react';
 import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon } from '../icons';
 import type { Page } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
+import { UserRole } from '../../types';
 
 interface SidebarProps {
   activePage: Page;
@@ -18,6 +20,15 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
+  const { user } = useAuth();
+
+  const filteredNavItems = navItems.filter(item => {
+    if (user?.role === UserRole.Helpdesk) {
+      return ['Notices', 'Help Desk'].includes(item.name);
+    }
+    return true;
+  });
+
   return (
     <aside className="hidden md:flex w-64 flex-col bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-r border-[var(--border-light)] dark:border-[var(--border-dark)]">
        <div className="h-20 flex items-center justify-center">
@@ -25,7 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
       </div>
       <nav className="flex-1 px-4 py-6">
         <ul className="space-y-2">
-          {navItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <li key={item.name}>
               <button
                 onClick={() => setActivePage(item.name)}

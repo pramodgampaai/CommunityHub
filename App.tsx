@@ -41,6 +41,16 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // Enforce Role-Based Page Access
+  useEffect(() => {
+    if (user?.role === UserRole.Helpdesk) {
+      const allowedPages: Page[] = ['Notices', 'Help Desk'];
+      if (!allowedPages.includes(activePage)) {
+        setActivePage('Help Desk');
+      }
+    }
+  }, [user, activePage]);
+
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };

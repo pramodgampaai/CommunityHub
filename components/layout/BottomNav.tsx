@@ -2,6 +2,8 @@
 import React from 'react';
 import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon } from '../icons';
 import type { Page } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
+import { UserRole } from '../../types';
 
 interface BottomNavProps {
     activePage: Page;
@@ -18,10 +20,19 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
+  const { user } = useAuth();
+
+  const filteredNavItems = navItems.filter(item => {
+    if (user?.role === UserRole.Helpdesk) {
+      return ['Notices', 'Help Desk'].includes(item.name);
+    }
+    return true;
+  });
+
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-t border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20 overflow-x-auto">
-      <div className="flex justify-around items-center h-16 min-w-max px-2">
-        {navItems.map((item) => (
+      <div className={`flex justify-around items-center h-16 min-w-max px-2 ${filteredNavItems.length < 4 ? 'justify-evenly' : ''}`}>
+        {filteredNavItems.map((item) => (
           <button
             key={item.name}
             onClick={() => setActivePage(item.name)}
