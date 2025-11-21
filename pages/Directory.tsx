@@ -419,7 +419,9 @@ const Directory: React.FC = () => {
                                     <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
                                 </>
                             )}
-                            <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
+                            {user?.role === UserRole.Helpdesk && (
+                                <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
+                            )}
                         </select>
                     </div>
 

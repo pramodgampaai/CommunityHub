@@ -93,8 +93,14 @@ serve(async (req: any) => {
             );
         }
     } else if (requesterProfile.role === 'Admin') {
-        // Admin can create anyone in their community (Resident, Security, Helpdesk, HelpdeskAgent)
-        // Pass through
+        // Admin can create Resident, Security, Helpdesk. 
+        // Admin CANNOT create HelpdeskAgent.
+        if (role === 'HelpdeskAgent') {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized: Community Admins cannot create Helpdesk Agents. Please ask a Helpdesk Admin.' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
     } else if (requesterProfile.role === 'SuperAdmin') {
         // SuperAdmin can create anyone anywhere
         // Pass through

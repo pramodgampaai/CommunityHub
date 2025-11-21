@@ -149,8 +149,10 @@ const HelpDesk: React.FC = () => {
              Array.from({ length: 3 }).map((_, index) => <ComplaintSkeleton key={index} />)
         ) : (
             complaints.map((complaint, index) => {
-                // Agent Permission Check: Can update only if assigned to them
-                const canUpdateStatus = isHelpdeskAdmin || (isHelpdeskAgent && complaint.assignedTo === user?.id);
+                // Agent Permission Check: Can update ONLY if they are a HelpdeskAgent AND it is assigned to them.
+                // Helpdesk Admins (Role: Helpdesk) cannot update status.
+                // Community Admins (Role: Admin) cannot update status.
+                const canUpdateStatus = (isHelpdeskAgent && complaint.assignedTo === user?.id);
                 
                 return (
                     <Card key={complaint.id} className="p-5 animated-card" style={{ animationDelay: `${index * 100}ms` }}>
