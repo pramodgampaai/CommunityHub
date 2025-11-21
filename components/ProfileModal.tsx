@@ -11,7 +11,7 @@ interface ProfileModalProps {
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -49,26 +49,15 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
 
         try {
             // 1. Update password via Edge Function (Server Side)
-            // This returns success if the server updated the record.
-            // The client session state is NOT touched here, preventing the loop.
             await updateUserPassword(newPassword);
             
             // 2. Show success message
             setSuccess("Password updated successfully. You will be logged out.");
             
-            // 3. FORCE CLEANUP & RELOAD
-            // We wait 2 seconds to let the user read the message, then destroy the session and reload.
-            setTimeout(() => {
-                // Explicitly remove Supabase auth tokens from localStorage
-                // This ensures the next page load starts fresh
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                        localStorage.removeItem(key);
-                    }
-                });
-                
-                // Force reload to Login page
-                window.location.href = '/';
+            // 3. Logout after delay
+            // We use the robust logout function from useAuth which handles the hard reload
+            setTimeout(async () => {
+                await logout();
             }, 2000);
 
         } catch (err: any) {

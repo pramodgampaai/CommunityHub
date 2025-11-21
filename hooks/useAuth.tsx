@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           };
           setUser(appUser);
         } else {
-          // If profile is missing, we handle it gracefully without auto-logout loop
+          // If profile is missing, we handle it gracefully
           console.warn('Profile missing for authenticated user.');
           setUser(null); 
         }
@@ -65,11 +65,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         if (!mounted) return;
 
         if (session) {
-          // If we already have the user loaded and IDs match, don't re-fetch
-          if (user && user.id === session.user.id) {
-             setLoading(false);
-             return;
-          }
+          // We intentionally removed the (user && user.id === session.user.id) check
+          // This ensures we ALWAYS fetch the fresh profile on login/session restore
+          // preventing stale state issues when switching accounts.
           await fetchProfile(session);
         } else {
           setUser(null);
@@ -97,22 +95,23 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     setUser(null);
     
     try {
-        // 2. Aggressively clear LocalStorage FIRST
-        // This prevents the browser from picking up the old session on refresh
-        // We search for ANY key that looks like a Supabase auth token
+        // 2. Aggressively clear LocalStorage
+        // We clear anything that looks like a Supabase token to prevent zombie sessions
         Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            if (key.startsWith('sb-')) {
                 localStorage.removeItem(key);
             }
         });
 
-        // 3. Attempt server-side sign out (fire and forget)
-        // We don't await this if we want immediate UI response, but awaiting is safer for API logic
-        // We catch errors here so the function never throws
+        // 3. Attempt server-side sign out (best effort)
         await supabase.auth.signOut().catch(err => console.warn("Supabase signOut failed (expected if token invalid):", err));
         
     } catch (error) {
         console.error("Logout warning:", error);
+    } finally {
+        // 4. HARD RELOAD to ensure a completely clean slate
+        // This fixes the "login stuck" issue by ensuring the Supabase client is re-initialized fresh
+        window.location.href = '/';
     }
   };
 
