@@ -10,6 +10,7 @@ import Visitors from './pages/Visitors';
 import Amenities from './pages/Amenities';
 import AdminPanel from './pages/AdminPanel';
 import Directory from './pages/Directory';
+import Maintenance from './pages/Maintenance';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
@@ -44,7 +45,8 @@ function App() {
   // Enforce Role-Based Page Access
   useEffect(() => {
     if (user) {
-      const allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory'];
+      // Base allowed pages for Residents/Admins
+      const allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance'];
       
       if (user.role === UserRole.HelpdeskAgent) {
           // Agents only see work items
@@ -53,8 +55,8 @@ function App() {
             setActivePage('Help Desk');
           }
       } else if (user.role === UserRole.Helpdesk) {
-          // Helpdesk Admins see work items + Directory (to manage agents)
-          const helpdeskAdminPages: Page[] = ['Notices', 'Help Desk', 'Directory'];
+          // Helpdesk Admins see work items + Directory (to manage agents) + Maintenance (Optional view, but usually restricted. Assuming Helpdesk acts as Admin for now)
+          const helpdeskAdminPages: Page[] = ['Notices', 'Help Desk', 'Directory', 'Maintenance'];
           if (!helpdeskAdminPages.includes(activePage)) {
             setActivePage('Help Desk');
           }
@@ -118,6 +120,7 @@ function App() {
       let allowedPages: Page[] = ['Notices', 'Help Desk'];
       if (user.role === UserRole.Helpdesk) {
           allowedPages.push('Directory');
+          allowedPages.push('Maintenance');
       }
 
       if (!allowedPages.includes(activePage)) {
@@ -145,6 +148,8 @@ function App() {
         return <Amenities />;
       case 'Directory':
         return <Directory />;
+      case 'Maintenance':
+        return <Maintenance />;
       default:
         return <Dashboard />;
     }

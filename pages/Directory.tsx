@@ -45,6 +45,7 @@ const Directory: React.FC = () => {
     const [selectedBlock, setSelectedBlock] = useState('');
     const [selectedFloor, setSelectedFloor] = useState('');
     const [newFlatSize, setNewFlatSize] = useState('');
+    const [newMaintenanceStartDate, setNewMaintenanceStartDate] = useState('');
     
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -85,6 +86,8 @@ const Directory: React.FC = () => {
             } else {
                 setNewRole(UserRole.Resident);
             }
+             // Set default start date to today
+             setNewMaintenanceStartDate(new Date().toISOString().split('T')[0]);
         } else {
             setNewName('');
             setNewEmail('');
@@ -93,6 +96,7 @@ const Directory: React.FC = () => {
             setSelectedBlock('');
             setSelectedFloor('');
             setNewFlatSize('');
+            setNewMaintenanceStartDate('');
         }
     }, [isModalOpen, user]);
 
@@ -145,6 +149,7 @@ const Directory: React.FC = () => {
                 block: newRole === UserRole.Resident ? selectedBlock : undefined,
                 floor: (newRole === UserRole.Resident && selectedFloor) ? parseInt(selectedFloor) : undefined,
                 flat_size: (newRole === UserRole.Resident && newFlatSize) ? parseFloat(newFlatSize) : 0,
+                maintenance_start_date: newRole === UserRole.Resident ? newMaintenanceStartDate : undefined,
                 password: newPassword,
                 community_id: user.communityId,
                 role: newRole
@@ -491,11 +496,17 @@ const Directory: React.FC = () => {
                     )}
                     
                     {newRole === UserRole.Resident && (
-                        <div>
-                            <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat Size (Sq. Ft)</label>
-                            <input type="number" id="flatSize" value={newFlatSize} onChange={e => setNewFlatSize(e.target.value)} placeholder="e.g. 1200" min="0" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                            <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">Used to calculate maintenance for Gated communities.</p>
-                        </div>
+                        <>
+                            <div>
+                                <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat Size (Sq. Ft)</label>
+                                <input type="number" id="flatSize" value={newFlatSize} onChange={e => setNewFlatSize(e.target.value)} placeholder="e.g. 1200" min="0" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                                <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">Used to calculate maintenance for Gated communities.</p>
+                            </div>
+                             <div>
+                                <label htmlFor="maintenanceStartDate" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Maintenance Start Date</label>
+                                <input type="date" id="maintenanceStartDate" value={newMaintenanceStartDate} onChange={e => setNewMaintenanceStartDate(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                            </div>
+                        </>
                     )}
 
                     <div>

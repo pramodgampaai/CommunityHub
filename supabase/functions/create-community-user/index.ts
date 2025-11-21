@@ -30,12 +30,23 @@ serve(async (req: any) => {
     )
 
     // Parse request body
-    const { name, email, password, community_id, role, flat_number, block, floor, flat_size } = await req.json()
+    const { name, email, password, community_id, role, flat_number, block, floor, flat_size, maintenance_start_date } = await req.json()
 
     // Validate inputs
     if (!email || !password || !name || !community_id || !role) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: name, email, password, community_id, role' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      )
+    }
+    
+    // Check for required maintenance date for Residents
+    if (role === 'Resident' && !maintenance_start_date) {
+       return new Response(
+        JSON.stringify({ error: 'Maintenance Start Date is required for Residents.' }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400,
@@ -56,18 +67,15 @@ serve(async (req: any) => {
     }
 
     // --- PERMISSION CHECK START ---
-    // Get the JWT from the request header to identify the requester
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing Authorization header');
 
-    // We use the admin client to get the user object from the token safely
     const { data: { user: requesterAuth }, error: userError } = await supabaseClient.auth.getUser(
       authHeader.replace('Bearer ', '')
     );
 
     if (userError || !requesterAuth) throw new Error('Invalid token');
 
-    // Fetch the requester's profile to get their Role and Community ID
     const { data: requesterProfile, error: requesterError } = await supabaseClient
         .from('users')
         .select('role, community_id')
@@ -76,7 +84,6 @@ serve(async (req: any) => {
     
     if (requesterError || !requesterProfile) throw new Error('Requester profile not found');
 
-    // Rule 1: Must belong to the same community (except SuperAdmin, though this function focuses on community users)
     if (requesterProfile.community_id !== community_id && requesterProfile.role !== 'SuperAdmin') {
          return new Response(
             JSON.stringify({ error: 'Unauthorized: Cannot create users for a different community' }),
@@ -84,7 +91,6 @@ serve(async (req: any) => {
         );
     }
 
-    // Rule 2: Role-based creation logic
     if (requesterProfile.role === 'Helpdesk') {
         if (role !== 'HelpdeskAgent') {
             return new Response(
@@ -93,8 +99,6 @@ serve(async (req: any) => {
             );
         }
     } else if (requesterProfile.role === 'Admin') {
-        // Admin can create Resident, Security, Helpdesk. 
-        // Admin CANNOT create HelpdeskAgent.
         if (role === 'HelpdeskAgent') {
             return new Response(
                 JSON.stringify({ error: 'Unauthorized: Community Admins cannot create Helpdesk Agents. Please ask a Helpdesk Admin.' }),
@@ -102,10 +106,8 @@ serve(async (req: any) => {
             );
         }
     } else if (requesterProfile.role === 'SuperAdmin') {
-        // SuperAdmin can create anyone anywhere
-        // Pass through
+        // SuperAdmin can create anyone
     } else {
-        // Residents, Security, Agents cannot create users
         return new Response(
             JSON.stringify({ error: 'Unauthorized: You do not have permission to create users.' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -142,15 +144,66 @@ serve(async (req: any) => {
         block: block,
         floor: floor,
         flat_size: flat_size,
+        maintenance_start_date: maintenance_start_date,
         status: 'active',
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
       })
 
     if (profileError) {
-      // Rollback logic (delete auth user)
       console.error("Profile update error:", profileError);
       await supabaseClient.auth.admin.deleteUser(user.id);
       throw profileError
+    }
+
+    // 3. Logic for Pro-Rata Maintenance (Only for Residents)
+    if (role === 'Resident' && maintenance_start_date) {
+        // Fetch Community Details to get rates
+        const { data: community, error: commError } = await supabaseClient
+            .from('communities')
+            .select('*')
+            .eq('id', community_id)
+            .single();
+        
+        if (!commError && community) {
+            let monthlyAmount = 0;
+            if (community.community_type === 'Standalone') {
+                monthlyAmount = community.fixed_maintenance_amount || 0;
+            } else {
+                // Gated
+                monthlyAmount = (community.maintenance_rate || 0) * (flat_size || 0);
+            }
+
+            if (monthlyAmount > 0) {
+                const startDate = new Date(maintenance_start_date);
+                const year = startDate.getFullYear();
+                const month = startDate.getMonth(); // 0-indexed
+                
+                // Days in this specific month
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const startDay = startDate.getDate();
+                
+                // Calculate days remaining (inclusive of start date)
+                // e.g. if starts on 1st of 30-day month, days remaining = 30 - 1 + 1 = 30.
+                const daysRemaining = daysInMonth - startDay + 1;
+                
+                // Pro-rata amount
+                const proRataAmount = Math.round((monthlyAmount / daysInMonth) * daysRemaining);
+
+                if (proRataAmount > 0) {
+                    // Create initial maintenance record
+                    // Set period_date to first of the month
+                    const periodDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
+
+                    await supabaseClient.from('maintenance_records').insert({
+                        user_id: user.id,
+                        community_id: community_id,
+                        amount: proRataAmount,
+                        period_date: periodDate,
+                        status: 'Pending'
+                    });
+                }
+            }
+        }
     }
 
     return new Response(

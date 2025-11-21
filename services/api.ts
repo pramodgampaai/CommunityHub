@@ -1,6 +1,6 @@
 
 import { supabase, supabaseKey } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block } from '../types';
+import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus } from '../types';
 
 // =================================================================
 // USER / ADMIN / RESIDENT-FACING API
@@ -115,7 +115,8 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         flatSize: u.flat_size,
         role: u.role as UserRole,
         communityId: u.community_id,
-        status: u.status
+        status: u.status,
+        maintenanceStartDate: u.maintenance_start_date
     })) as User[];
 };
 
@@ -139,6 +140,38 @@ export const getCommunity = async (communityId: string): Promise<Community> => {
         fixedMaintenanceAmount: data.fixed_maintenance_amount
     } as Community;
 };
+
+export const getMaintenanceRecords = async (communityId: string, userId?: string): Promise<MaintenanceRecord[]> => {
+    let query = supabase
+        .from('maintenance_records')
+        .select('*, user:users(name, flat_number)')
+        .eq('community_id', communityId)
+        .order('period_date', { ascending: false });
+
+    // If a userId is provided, filter by that user (Resident View)
+    if (userId) {
+        query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return data.map((r: any) => ({
+        id: r.id,
+        userId: r.user_id,
+        communityId: r.community_id,
+        amount: r.amount,
+        periodDate: r.period_date,
+        status: r.status as MaintenanceStatus,
+        paymentReceiptUrl: r.payment_receipt_url,
+        upiTransactionId: r.upi_transaction_id,
+        transactionDate: r.transaction_date,
+        createdAt: r.created_at,
+        userName: r.user?.name,
+        flatNumber: r.user?.flat_number
+    })) as MaintenanceRecord[];
+}
+
 
 // CREATE operations
 export const createNotice = async (noticeData: { title: string; content: string; type: Notice['type']; author: string; }, user: User): Promise<Notice> => {
@@ -292,6 +325,33 @@ export const assignComplaint = async (complaintId: string, agentId: string): Pro
     if (error) throw error;
 };
 
+// Maintenance Operations
+
+export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, transactionDate: string): Promise<void> => {
+    const { error } = await supabase
+        .from('maintenance_records')
+        .update({
+            payment_receipt_url: receiptUrl,
+            upi_transaction_id: upiId,
+            transaction_date: transactionDate,
+            status: 'Submitted'
+        })
+        .eq('id', recordId);
+
+    if (error) throw error;
+}
+
+export const verifyMaintenancePayment = async (recordId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('maintenance_records')
+        .update({
+            status: 'Paid'
+        })
+        .eq('id', recordId);
+
+    if (error) throw error;
+}
+
 
 // =================================================================
 // SUPER ADMIN API
@@ -429,6 +489,7 @@ export const createCommunityUser = async (userData: {
     block?: string;
     floor?: number;
     flat_size?: number;
+    maintenance_start_date?: string;
 }) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
@@ -453,6 +514,9 @@ export const createCommunityUser = async (userData: {
         if (errorMessage.includes("flat_size")) {
              throw new Error("Database columns missing. Please run the SQL migration to add 'flat_size' column.");
         }
+        if (errorMessage.includes("maintenance_start_date")) {
+            throw new Error("Database columns missing. Please run the SQL migration to add 'maintenance_start_date' column.");
+       }
         
         throw new Error(errorMessage);
     }

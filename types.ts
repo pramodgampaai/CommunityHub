@@ -43,6 +43,7 @@ export interface User {
   role: UserRole;
   communityId?: string;
   status: 'active' | 'disabled';
+  maintenanceStartDate?: string;
 }
 
 export enum NoticeType {
@@ -127,4 +128,26 @@ export interface Booking {
   communityId: string;
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory';
+export enum MaintenanceStatus {
+    Pending = 'Pending',
+    Submitted = 'Submitted',
+    Paid = 'Paid'
+}
+
+export interface MaintenanceRecord {
+    id: string;
+    userId: string;
+    communityId: string;
+    amount: number;
+    periodDate: string; // The 1st of the month
+    status: MaintenanceStatus;
+    paymentReceiptUrl?: string;
+    upiTransactionId?: string;
+    transactionDate?: string;
+    createdAt: string;
+    // Joins
+    userName?: string;
+    flatNumber?: string;
+}
+
+export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance';
