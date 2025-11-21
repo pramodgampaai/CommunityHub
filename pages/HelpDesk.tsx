@@ -98,7 +98,8 @@ const HelpDesk: React.FC = () => {
     }
   };
 
-  const canManageTickets = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+  // Only Helpdesk role can manage (update) tickets. Admins have view-only access.
+  const canManageTickets = user?.role === UserRole.Helpdesk;
 
   return (
     <div className="space-y-6">
