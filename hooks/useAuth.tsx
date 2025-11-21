@@ -24,6 +24,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
     const fetchProfile = async (session: Session) => {
       try {
+        // Add a timestamp to bust any browser GET cache
         const { data: profile, error } = await supabase
           .from('users')
           .select('*')
@@ -45,7 +46,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           };
           setUser(appUser);
         } else {
-          // If profile is missing, we handle it gracefully
           console.warn('Profile missing for authenticated user.');
           setUser(null); 
         }
@@ -65,9 +65,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         if (!mounted) return;
 
         if (session) {
-          // We intentionally removed the (user && user.id === session.user.id) check
-          // This ensures we ALWAYS fetch the fresh profile on login/session restore
-          // preventing stale state issues when switching accounts.
           await fetchProfile(session);
         } else {
           setUser(null);
@@ -91,24 +88,31 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   };
 
   const logout = async () => {
-    // 1. Stop UI updates immediately
+    // 1. Clear React State immediately
     setUser(null);
     
     try {
-        // 2. Preserve ThemePreference before nuking storage
         const theme = localStorage.getItem('theme');
         
-        // 3. Nuke EVERYTHING in LocalStorage
-        // This is the only way to guarantee no stale keys (from Supabase or others) remain.
-        localStorage.clear();
+        // 2. Attempt server-side sign out (best effort, don't block)
+        await Promise.race([
+            supabase.auth.signOut(),
+            new Promise(resolve => setTimeout(resolve, 500)) // Timeout after 500ms
+        ]).catch(err => console.warn("Supabase signOut warning:", err));
 
-        // 4. Restore Theme
+        // 3. Nuke ALL Storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // 4. Attempt to clear cookies (if any exist)
+        document.cookie.split(";").forEach((c) => {
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+
+        // 5. Restore Theme Preference
         if (theme) {
             localStorage.setItem('theme', theme);
         }
-
-        // 5. Attempt server-side sign out (best effort)
-        await supabase.auth.signOut().catch(err => console.warn("Supabase signOut failed:", err));
         
     } catch (error) {
         console.error("Logout error:", error);
