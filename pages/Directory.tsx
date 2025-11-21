@@ -498,8 +498,19 @@ const Directory: React.FC = () => {
                     {newRole === UserRole.Resident && (
                         <>
                             <div>
-                                <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat Size (Sq. Ft)</label>
-                                <input type="number" id="flatSize" value={newFlatSize} onChange={e => setNewFlatSize(e.target.value)} placeholder="e.g. 1200" min="0" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                                <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
+                                    Flat Size (Sq. Ft) {community?.communityType === 'Gated' && <span className="text-red-500">*</span>}
+                                </label>
+                                <input 
+                                    type="number" 
+                                    id="flatSize" 
+                                    value={newFlatSize} 
+                                    onChange={e => setNewFlatSize(e.target.value)} 
+                                    placeholder="e.g. 1200" 
+                                    min="0" 
+                                    required={community?.communityType === 'Gated'} 
+                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                />
                                 <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">Used to calculate maintenance for Gated communities.</p>
                             </div>
                              <div>
