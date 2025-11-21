@@ -10,31 +10,79 @@ import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, 
 export const getNotices = async (communityId: string): Promise<Notice[]> => {
     const { data, error } = await supabase.from('notices').select('*').eq('community_id', communityId).order('created_at', { ascending: false });
     if (error) throw error;
-    return data as Notice[];
+    
+    return data.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        author: n.author,
+        createdAt: n.created_at,
+        type: n.type,
+        communityId: n.community_id
+    })) as Notice[];
 };
 
 export const getComplaints = async (communityId: string): Promise<Complaint[]> => {
     const { data, error } = await supabase.from('complaints').select('*').eq('community_id', communityId).order('created_at', { ascending: false });
     if (error) throw error;
-    return data as Complaint[];
+    
+    return data.map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        residentName: c.resident_name,
+        flatNumber: c.flat_number,
+        status: c.status,
+        createdAt: c.created_at,
+        category: c.category,
+        userId: c.user_id,
+        communityId: c.community_id
+    })) as Complaint[];
 };
 
 export const getVisitors = async (communityId: string): Promise<Visitor[]> => {
     const { data, error } = await supabase.from('visitors').select('*').eq('community_id', communityId).order('expected_at', { ascending: false });
     if (error) throw error;
-    return data as Visitor[];
+    
+    return data.map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        purpose: v.purpose,
+        expectedAt: v.expected_at,
+        status: v.status,
+        residentName: v.resident_name,
+        flatNumber: v.flat_number,
+        communityId: v.community_id
+    })) as Visitor[];
 };
 
 export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
     const { data, error } = await supabase.from('amenities').select('*').eq('community_id', communityId).order('name');
     if (error) throw error;
-    return data as Amenity[];
+    
+    return data.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        imageUrl: a.image_url,
+        capacity: a.capacity,
+        communityId: a.community_id
+    })) as Amenity[];
 };
 
 export const getBookings = async (communityId: string): Promise<Booking[]> => {
     const { data, error } = await supabase.from('bookings').select('*').eq('community_id', communityId);
     if (error) throw error;
-    return data as Booking[];
+    
+    return data.map((b: any) => ({
+        id: b.id,
+        amenityId: b.amenity_id,
+        residentName: b.resident_name,
+        flatNumber: b.flat_number,
+        startTime: b.start_time,
+        endTime: b.end_time,
+        communityId: b.community_id
+    })) as Booking[];
 };
 
 export const getResidents = async (communityId: string): Promise<User[]> => {
@@ -87,12 +135,24 @@ export const getCommunity = async (communityId: string): Promise<Community> => {
 // CREATE operations
 export const createNotice = async (noticeData: { title: string; content: string; type: Notice['type']; author: string; }, user: User): Promise<Notice> => {
     const newNotice = {
-        ...noticeData,
+        title: noticeData.title,
+        content: noticeData.content,
+        type: noticeData.type,
+        author: noticeData.author,
         community_id: user.communityId,
     };
     const { data, error } = await supabase.from('notices').insert(newNotice).select().single();
     if (error) throw error;
-    return data as Notice;
+    
+    return {
+        id: data.id,
+        title: data.title,
+        content: data.content,
+        author: data.author,
+        createdAt: data.created_at,
+        type: data.type,
+        communityId: data.community_id
+    } as Notice;
 };
 
 export const createComplaint = async (complaintData: { title: string; description: string; category: ComplaintCategory; }, user: User): Promise<Complaint> => {
@@ -108,7 +168,19 @@ export const createComplaint = async (complaintData: { title: string; descriptio
     };
     const { data, error } = await supabase.from('complaints').insert(newComplaint).select().single();
     if (error) throw error;
-    return data as Complaint;
+    
+    return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        residentName: data.resident_name,
+        flatNumber: data.flat_number,
+        status: data.status,
+        createdAt: data.created_at,
+        category: data.category,
+        userId: data.user_id,
+        communityId: data.community_id
+    } as Complaint;
 };
 
 export const createVisitor = async (visitorData: { name: string; purpose: string; expectedAt: string }, user: User): Promise<Visitor> => {
@@ -124,7 +196,17 @@ export const createVisitor = async (visitorData: { name: string; purpose: string
     };
     const { data, error } = await supabase.from('visitors').insert(newVisitor).select().single();
     if (error) throw error;
-    return data as Visitor;
+    
+    return {
+        id: data.id,
+        name: data.name,
+        purpose: data.purpose,
+        expectedAt: data.expected_at,
+        status: data.status,
+        residentName: data.resident_name,
+        flatNumber: data.flat_number,
+        communityId: data.community_id
+    } as Visitor;
 };
 
 export const createBooking = async (bookingData: { amenityId: string; startTime: string; endTime: string; }, user: User): Promise<Booking> => {
@@ -139,7 +221,16 @@ export const createBooking = async (bookingData: { amenityId: string; startTime:
     };
     const { data, error } = await supabase.from('bookings').insert(newBooking).select().single();
     if (error) throw error;
-    return data as Booking;
+    
+    return {
+        id: data.id,
+        amenityId: data.amenity_id,
+        residentName: data.resident_name,
+        flatNumber: data.flat_number,
+        startTime: data.start_time,
+        endTime: data.end_time,
+        communityId: data.community_id
+    } as Booking;
 };
 
 export const createAmenity = async (amenityData: { name: string; description: string; imageUrl: string; capacity: number; }, user: User): Promise<Amenity> => {
@@ -152,14 +243,34 @@ export const createAmenity = async (amenityData: { name: string; description: st
     };
     const { data, error } = await supabase.from('amenities').insert(newAmenity).select().single();
     if (error) throw error;
-    return data as Amenity;
+    
+    return {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        imageUrl: data.image_url,
+        capacity: data.capacity,
+        communityId: data.community_id
+    } as Amenity;
 };
 
 // UPDATE operations
 export const updateComplaintStatus = async (id: string, status: ComplaintStatus): Promise<Complaint> => {
     const { data, error } = await supabase.from('complaints').update({ status }).eq('id', id).select().single();
     if (error) throw error;
-    return data as Complaint;
+    
+    return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        residentName: data.resident_name,
+        flatNumber: data.flat_number,
+        status: data.status,
+        createdAt: data.created_at,
+        category: data.category,
+        userId: data.user_id,
+        communityId: data.community_id
+    } as Complaint;
 };
 
 
