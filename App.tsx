@@ -100,6 +100,21 @@ function App() {
   if (user.role === UserRole.SuperAdmin) {
     return <AdminPanel theme={theme} toggleTheme={toggleTheme} />;
   }
+  
+  // Security check for Helpdesk users
+  // Prevents rendering unauthorized pages even for a split second before the useEffect redirect kicks in
+  if (user.role === UserRole.Helpdesk) {
+      const allowedPages: Page[] = ['Notices', 'Help Desk'];
+      if (!allowedPages.includes(activePage)) {
+          return (
+            <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
+                 <div className="flex justify-center items-center h-64">
+                    <Spinner />
+                 </div>
+            </Layout>
+          );
+      }
+  }
 
   const renderContent = () => {
     switch (activePage) {

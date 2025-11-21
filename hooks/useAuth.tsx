@@ -95,22 +95,25 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     setUser(null);
     
     try {
-        // 2. Aggressively clear LocalStorage
-        // We clear anything that looks like a Supabase token to prevent zombie sessions
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('sb-')) {
-                localStorage.removeItem(key);
-            }
-        });
+        // 2. Preserve ThemePreference before nuking storage
+        const theme = localStorage.getItem('theme');
+        
+        // 3. Nuke EVERYTHING in LocalStorage
+        // This is the only way to guarantee no stale keys (from Supabase or others) remain.
+        localStorage.clear();
 
-        // 3. Attempt server-side sign out (best effort)
-        await supabase.auth.signOut().catch(err => console.warn("Supabase signOut failed (expected if token invalid):", err));
+        // 4. Restore Theme
+        if (theme) {
+            localStorage.setItem('theme', theme);
+        }
+
+        // 5. Attempt server-side sign out (best effort)
+        await supabase.auth.signOut().catch(err => console.warn("Supabase signOut failed:", err));
         
     } catch (error) {
-        console.error("Logout warning:", error);
+        console.error("Logout error:", error);
     } finally {
-        // 4. HARD RELOAD to ensure a completely clean slate
-        // This fixes the "login stuck" issue by ensuring the Supabase client is re-initialized fresh
+        // 6. HARD RELOAD to ensure a completely clean JS environment
         window.location.href = '/';
     }
   };
