@@ -37,6 +37,7 @@ const Directory: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     // Form State
+    const [newRole, setNewRole] = useState<UserRole>(UserRole.Resident);
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [newFlatNumber, setNewFlatNumber] = useState('');
@@ -75,6 +76,20 @@ const Directory: React.FC = () => {
         }
     }, [user]);
 
+    // Reset form when modal opens/closes
+    useEffect(() => {
+        if (!isModalOpen) {
+            setNewName('');
+            setNewEmail('');
+            setNewFlatNumber('');
+            setNewPassword('');
+            setSelectedBlock('');
+            setSelectedFloor('');
+            setNewFlatSize('');
+            setNewRole(UserRole.Resident);
+        }
+    }, [isModalOpen]);
+
     const getFloorOptions = () => {
         if (!community) return [];
         let floorCount = 0;
@@ -110,7 +125,9 @@ const Directory: React.FC = () => {
 
         // Construct full flat number string for display/simple fields
         let finalFlatNumber = newFlatNumber;
-        if (community?.communityType === 'Gated' && selectedBlock) {
+        
+        // Only append block logic if it's a Resident in a Gated community
+        if (newRole === UserRole.Resident && community?.communityType === 'Gated' && selectedBlock) {
              finalFlatNumber = `${selectedBlock}-${newFlatNumber}`;
         }
 
@@ -119,27 +136,20 @@ const Directory: React.FC = () => {
                 name: newName,
                 email: newEmail,
                 flat_number: finalFlatNumber,
-                block: selectedBlock,
-                floor: selectedFloor ? parseInt(selectedFloor) : undefined,
-                flat_size: newFlatSize ? parseFloat(newFlatSize) : 0,
+                block: newRole === UserRole.Resident ? selectedBlock : undefined,
+                floor: (newRole === UserRole.Resident && selectedFloor) ? parseInt(selectedFloor) : undefined,
+                flat_size: (newRole === UserRole.Resident && newFlatSize) ? parseFloat(newFlatSize) : 0,
                 password: newPassword,
                 community_id: user.communityId,
-                role: UserRole.Resident
+                role: newRole
             });
             
             setIsModalOpen(false);
-            setNewName('');
-            setNewEmail('');
-            setNewFlatNumber('');
-            setNewPassword('');
-            setSelectedBlock('');
-            setSelectedFloor('');
-            setNewFlatSize('');
-            alert('Resident added successfully!');
+            alert(`${newRole} added successfully!`);
             await fetchResidents(user.communityId);
         } catch (error: any) {
-            console.error("Failed to create resident:", error);
-            alert(error.message || "Failed to create resident.");
+            console.error("Failed to create user:", error);
+            alert(error.message || "Failed to create user.");
         } finally {
             setIsSubmitting(false);
         }
@@ -182,8 +192,8 @@ const Directory: React.FC = () => {
             <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead className="bg-black/5 dark:bg-white/5">
                     <tr>
-                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Resident</th>
-                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Unit Details</th>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Name</th>
+                        <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Details</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
                          <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
@@ -231,6 +241,7 @@ const Directory: React.FC = () => {
                             <td className="p-4">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                     ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
+                                      resident.role === UserRole.Helpdesk ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' :
                                       resident.role === UserRole.Security ? 'bg-gray-100 text-gray-800 dark:bg-gray-700/40 dark:text-gray-300' :
                                       'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
                                     {resident.role}
@@ -254,8 +265,8 @@ const Directory: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 animated-card">
                 <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
                 {user?.role === UserRole.Admin && (
-                    <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add Resident" variant="fab">
-                        <span className="hidden sm:inline">Add Resident</span>
+                    <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add User" variant="fab">
+                        <span className="hidden sm:inline">Add User</span>
                         <span className="sm:hidden">Add</span>
                     </Button>
                 )}
@@ -294,6 +305,7 @@ const Directory: React.FC = () => {
                                     <option value={UserRole.Resident}>Residents</option>
                                     <option value={UserRole.Admin}>Admins</option>
                                     <option value={UserRole.Security}>Security</option>
+                                    <option value={UserRole.Helpdesk}>Helpdesk</option>
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                     <FunnelIcon className="w-4 h-4" />
@@ -320,7 +332,7 @@ const Directory: React.FC = () => {
                 </div>
                 
                 <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium whitespace-nowrap text-right">
-                    Showing {filteredResidents.length} residents
+                    Showing {filteredResidents.length} users
                 </div>
             </div>
 
@@ -329,8 +341,8 @@ const Directory: React.FC = () => {
                     <table className="w-full text-left">
                         <thead className="bg-black/5 dark:bg-white/5">
                             <tr>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Resident</th>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Unit Details</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Name</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Details</th>
                                 <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
                                 <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
                                 <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
@@ -346,45 +358,27 @@ const Directory: React.FC = () => {
                     {filteredResidents.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-16 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)]">
                             <MagnifyingGlassIcon className="w-12 h-12 mb-4 opacity-20" />
-                            <p className="text-lg font-medium">No residents found</p>
+                            <p className="text-lg font-medium">No users found</p>
                             <p className="text-sm opacity-75">Try adjusting your search or filters</p>
                         </div>
                     )}
 
                     {isGrouped ? (
                         <div className="space-y-8">
-                            {/* Admin Group */}
-                            {groupedResidents[UserRole.Admin] && groupedResidents[UserRole.Admin].length > 0 && (
-                                <div>
+                            {Object.keys(groupedResidents).map(role => (
+                                <div key={role}>
                                     <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-4 flex items-center gap-2">
-                                        <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
-                                        Admins ({groupedResidents[UserRole.Admin].length})
+                                        <span className={`w-2 h-6 rounded-full ${
+                                            role === UserRole.Admin ? 'bg-purple-500' :
+                                            role === UserRole.Helpdesk ? 'bg-orange-500' :
+                                            role === UserRole.Security ? 'bg-gray-500' :
+                                            'bg-[var(--accent)]'
+                                        }`}></span>
+                                        {role}s ({groupedResidents[role].length})
                                     </h3>
-                                    {renderTable(groupedResidents[UserRole.Admin])}
+                                    {renderTable(groupedResidents[role])}
                                 </div>
-                            )}
-                            
-                            {/* Resident Group */}
-                            {groupedResidents[UserRole.Resident] && groupedResidents[UserRole.Resident].length > 0 && (
-                                <div>
-                                    <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-4 flex items-center gap-2">
-                                        <span className="w-2 h-6 bg-[var(--accent)] rounded-full"></span>
-                                        Residents ({groupedResidents[UserRole.Resident].length})
-                                    </h3>
-                                    {renderTable(groupedResidents[UserRole.Resident])}
-                                </div>
-                            )}
-
-                            {/* Security Group */}
-                            {groupedResidents[UserRole.Security] && groupedResidents[UserRole.Security].length > 0 && (
-                                <div>
-                                    <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-4 flex items-center gap-2">
-                                        <span className="w-2 h-6 bg-gray-500 rounded-full"></span>
-                                        Security ({groupedResidents[UserRole.Security].length})
-                                    </h3>
-                                    {renderTable(groupedResidents[UserRole.Security])}
-                                </div>
-                            )}
+                            ))}
                         </div>
                     ) : (
                         renderTable(filteredResidents)
@@ -392,14 +386,30 @@ const Directory: React.FC = () => {
                 </>
             )}
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Resident">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New User">
                 <form className="space-y-4" onSubmit={handleAddResident}>
+                    
+                    <div>
+                        <label htmlFor="role" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Role</label>
+                        <select 
+                            id="role" 
+                            value={newRole} 
+                            onChange={e => setNewRole(e.target.value as UserRole)} 
+                            required 
+                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                        >
+                            <option value={UserRole.Resident}>Resident</option>
+                            <option value={UserRole.Security}>Security</option>
+                            <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
+                        </select>
+                    </div>
+
                     <div>
                         <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Full Name</label>
                         <input type="text" id="name" value={newName} onChange={e => setNewName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                     </div>
                     
-                    {community?.communityType === 'Gated' && (
+                    {newRole === UserRole.Resident && community?.communityType === 'Gated' && (
                          <div>
                             <label htmlFor="block" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Block / Tower</label>
                             <select 
@@ -417,34 +427,43 @@ const Directory: React.FC = () => {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    {newRole === UserRole.Resident ? (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                 <label htmlFor="floor" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
+                                 <select 
+                                    id="floor" 
+                                    value={selectedFloor} 
+                                    onChange={e => setSelectedFloor(e.target.value)} 
+                                    required 
+                                    disabled={community?.communityType === 'Gated' && !selectedBlock}
+                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-50"
+                                 >
+                                    <option value="">Select Floor</option>
+                                    {getFloorOptions().map(floor => (
+                                        <option key={floor} value={floor}>{floor}</option>
+                                    ))}
+                                 </select>
+                            </div>
+                             <div>
+                                 <label htmlFor="flat" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Unit / Flat No.</label>
+                                 <input type="text" id="flat" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} placeholder="e.g. 101" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                            </div>
+                        </div>
+                    ) : (
                         <div>
-                             <label htmlFor="floor" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
-                             <select 
-                                id="floor" 
-                                value={selectedFloor} 
-                                onChange={e => setSelectedFloor(e.target.value)} 
-                                required 
-                                disabled={community?.communityType === 'Gated' && !selectedBlock}
-                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-50"
-                             >
-                                <option value="">Select Floor</option>
-                                {getFloorOptions().map(floor => (
-                                    <option key={floor} value={floor}>{floor}</option>
-                                ))}
-                             </select>
+                             <label htmlFor="flat" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Location / Desk ID</label>
+                             <input type="text" id="flat" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} placeholder={newRole === UserRole.Security ? "e.g. Main Gate" : "e.g. Helpdesk Office"} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                         </div>
-                         <div>
-                             <label htmlFor="flat" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Unit / Flat No.</label>
-                             <input type="text" id="flat" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} placeholder="e.g. 101" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                        </div>
-                    </div>
+                    )}
                     
-                    <div>
-                        <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat Size (Sq. Ft)</label>
-                        <input type="number" id="flatSize" value={newFlatSize} onChange={e => setNewFlatSize(e.target.value)} placeholder="e.g. 1200" min="0" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                        <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">Used to calculate maintenance for Gated communities.</p>
-                    </div>
+                    {newRole === UserRole.Resident && (
+                        <div>
+                            <label htmlFor="flatSize" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Flat Size (Sq. Ft)</label>
+                            <input type="number" id="flatSize" value={newFlatSize} onChange={e => setNewFlatSize(e.target.value)} placeholder="e.g. 1200" min="0" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                            <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">Used to calculate maintenance for Gated communities.</p>
+                        </div>
+                    )}
 
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Email Address</label>
@@ -458,7 +477,7 @@ const Directory: React.FC = () => {
                     
                     <div className="flex justify-end pt-4 space-x-2">
                         <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add Resident'}</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add User'}</Button>
                     </div>
                 </form>
             </Modal>

@@ -4,6 +4,7 @@ export enum UserRole {
   Admin = 'Admin',
   Resident = 'Resident',
   Security = 'Security',
+  Helpdesk = 'Helpdesk',
 }
 
 export interface Block {

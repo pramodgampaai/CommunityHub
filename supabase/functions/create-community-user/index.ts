@@ -43,6 +43,18 @@ serve(async (req: any) => {
       )
     }
 
+    // Validate Allowed Roles
+    const allowedRoles = ['Resident', 'Security', 'Admin', 'Helpdesk'];
+    if (!allowedRoles.includes(role)) {
+       return new Response(
+        JSON.stringify({ error: `Invalid role. Must be one of: ${allowedRoles.join(', ')}` }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      )
+    }
+
     // 1. Create the user in Supabase Auth
     const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
       email,
@@ -66,7 +78,7 @@ serve(async (req: any) => {
         id: user.id,
         email: email,
         name: name,
-        role: role, // 'Resident', 'Security', 'Admin'
+        role: role, // 'Resident', 'Security', 'Admin', 'Helpdesk'
         community_id: community_id,
         flat_number: flat_number,
         block: block,

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createComplaint, getComplaints, updateComplaintStatus } from '../services/api';
 import type { Complaint } from '../types';
@@ -97,6 +98,8 @@ const HelpDesk: React.FC = () => {
     }
   };
 
+  const canManageTickets = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
@@ -124,7 +127,7 @@ const HelpDesk: React.FC = () => {
                         </div>
                         <div className="mt-3 sm:mt-0 flex items-center gap-4">
                             <StatusBadge status={complaint.status} />
-                            {user?.role === UserRole.Admin && (
+                            {canManageTickets && (
                                 <div className="relative">
                                     <select
                                         value={complaint.status}
