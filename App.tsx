@@ -43,12 +43,21 @@ function App() {
 
   // Enforce Role-Based Page Access
   useEffect(() => {
-    // Restrict Helpdesk Admin AND Helpdesk Agent
-    if (user?.role === UserRole.Helpdesk || user?.role === UserRole.HelpdeskAgent) {
-      const allowedPages: Page[] = ['Notices', 'Help Desk'];
-      // Prevent flash of Dashboard or other pages
-      if (!allowedPages.includes(activePage)) {
-        setActivePage('Help Desk');
+    if (user) {
+      const allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory'];
+      
+      if (user.role === UserRole.HelpdeskAgent) {
+          // Agents only see work items
+          const agentPages: Page[] = ['Notices', 'Help Desk'];
+           if (!agentPages.includes(activePage)) {
+            setActivePage('Help Desk');
+          }
+      } else if (user.role === UserRole.Helpdesk) {
+          // Helpdesk Admins see work items + Directory (to manage agents)
+          const helpdeskAdminPages: Page[] = ['Notices', 'Help Desk', 'Directory'];
+          if (!helpdeskAdminPages.includes(activePage)) {
+            setActivePage('Help Desk');
+          }
       }
     }
   }, [user, activePage]);
@@ -103,10 +112,14 @@ function App() {
     return <AdminPanel theme={theme} toggleTheme={toggleTheme} />;
   }
   
-  // Security check for Helpdesk users
-  // Prevents rendering unauthorized pages even for a split second before the useEffect redirect kicks in
+  // Security check for restricted users (Helpdesk/Agents)
+  // Prevents rendering unauthorized pages even for a split second
   if (user.role === UserRole.Helpdesk || user.role === UserRole.HelpdeskAgent) {
-      const allowedPages: Page[] = ['Notices', 'Help Desk'];
+      let allowedPages: Page[] = ['Notices', 'Help Desk'];
+      if (user.role === UserRole.Helpdesk) {
+          allowedPages.push('Directory');
+      }
+
       if (!allowedPages.includes(activePage)) {
           return (
             <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>

@@ -23,8 +23,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const { user } = useAuth();
 
   const filteredNavItems = navItems.filter(item => {
-    if (user?.role === UserRole.Helpdesk || user?.role === UserRole.HelpdeskAgent) {
+    if (user?.role === UserRole.HelpdeskAgent) {
       return ['Notices', 'Help Desk'].includes(item.name);
+    }
+    if (user?.role === UserRole.Helpdesk) {
+      // Helpdesk Admin needs Directory to manage agents
+      return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
     }
     return true;
   });

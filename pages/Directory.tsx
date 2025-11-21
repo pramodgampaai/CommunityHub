@@ -165,7 +165,13 @@ const Directory: React.FC = () => {
     const getFilteredResidents = () => {
         let filtered = residents;
 
-        // Role Filter
+        // Strict View Filtering for Helpdesk Admins
+        // Helpdesk Admins should ONLY see Helpdesk profiles and Agents.
+        if (user?.role === UserRole.Helpdesk) {
+             filtered = filtered.filter(r => r.role === UserRole.Helpdesk || r.role === UserRole.HelpdeskAgent);
+        }
+
+        // Role Filter (Dropdown)
         if (filterRole !== 'All') {
             filtered = filtered.filter(r => r.role === filterRole);
         }
@@ -271,13 +277,19 @@ const Directory: React.FC = () => {
     // Admins can create anyone. Helpdesk can create Helpdesk Agents.
     const canCreateUser = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
 
+    // Role Options for Filter Dropdown
+    // Helpdesk Admin only sees relevant filters
+    const isHelpdeskAdmin = user?.role === UserRole.Helpdesk;
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 animated-card">
-                <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
+                <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                    {isHelpdeskAdmin ? 'Helpdesk Staff' : 'Directory'}
+                </h2>
                 {canCreateUser && (
                     <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add User" variant="fab">
-                        <span className="hidden sm:inline">Add User</span>
+                        <span className="hidden sm:inline">{isHelpdeskAdmin ? 'Add Agent' : 'Add User'}</span>
                         <span className="sm:hidden">Add</span>
                     </Button>
                 )}
@@ -313,9 +325,9 @@ const Directory: React.FC = () => {
                                     className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] text-sm rounded-lg block pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-shadow cursor-pointer"
                                 >
                                     <option value="All">All Roles</option>
-                                    <option value={UserRole.Resident}>Residents</option>
-                                    <option value={UserRole.Admin}>Admins</option>
-                                    <option value={UserRole.Security}>Security</option>
+                                    {!isHelpdeskAdmin && <option value={UserRole.Resident}>Residents</option>}
+                                    {!isHelpdeskAdmin && <option value={UserRole.Admin}>Admins</option>}
+                                    {!isHelpdeskAdmin && <option value={UserRole.Security}>Security</option>}
                                     <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
                                     <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
                                 </select>
