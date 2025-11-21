@@ -44,7 +44,7 @@ serve(async (req: any) => {
     }
 
     // Validate Allowed Roles
-    const allowedRoles = ['Resident', 'Security', 'Admin', 'Helpdesk'];
+    const allowedRoles = ['Resident', 'Security', 'Admin', 'Helpdesk', 'HelpdeskAgent'];
     if (!allowedRoles.includes(role)) {
        return new Response(
         JSON.stringify({ error: `Invalid role. Must be one of: ${allowedRoles.join(', ')}` }),
@@ -54,6 +54,58 @@ serve(async (req: any) => {
         }
       )
     }
+
+    // --- PERMISSION CHECK START ---
+    // Get the JWT from the request header to identify the requester
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) throw new Error('Missing Authorization header');
+
+    // We use the admin client to get the user object from the token safely
+    const { data: { user: requesterAuth }, error: userError } = await supabaseClient.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    );
+
+    if (userError || !requesterAuth) throw new Error('Invalid token');
+
+    // Fetch the requester's profile to get their Role and Community ID
+    const { data: requesterProfile, error: requesterError } = await supabaseClient
+        .from('users')
+        .select('role, community_id')
+        .eq('id', requesterAuth.id)
+        .single();
+    
+    if (requesterError || !requesterProfile) throw new Error('Requester profile not found');
+
+    // Rule 1: Must belong to the same community (except SuperAdmin, though this function focuses on community users)
+    if (requesterProfile.community_id !== community_id && requesterProfile.role !== 'SuperAdmin') {
+         return new Response(
+            JSON.stringify({ error: 'Unauthorized: Cannot create users for a different community' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+
+    // Rule 2: Role-based creation logic
+    if (requesterProfile.role === 'Helpdesk') {
+        if (role !== 'HelpdeskAgent') {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized: Helpdesk Admins can only create Helpdesk Agents.' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+    } else if (requesterProfile.role === 'Admin') {
+        // Admin can create anyone in their community (Resident, Security, Helpdesk, HelpdeskAgent)
+        // Pass through
+    } else if (requesterProfile.role === 'SuperAdmin') {
+        // SuperAdmin can create anyone anywhere
+        // Pass through
+    } else {
+        // Residents, Security, Agents cannot create users
+        return new Response(
+            JSON.stringify({ error: 'Unauthorized: You do not have permission to create users.' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+    // --- PERMISSION CHECK END ---
 
     // 1. Create the user in Supabase Auth
     const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
@@ -78,7 +130,7 @@ serve(async (req: any) => {
         id: user.id,
         email: email,
         name: name,
-        role: role, // 'Resident', 'Security', 'Admin', 'Helpdesk'
+        role: role,
         community_id: community_id,
         flat_number: flat_number,
         block: block,
@@ -89,9 +141,8 @@ serve(async (req: any) => {
       })
 
     if (profileError) {
-      // Rollback logic could go here (delete auth user)
+      // Rollback logic (delete auth user)
       console.error("Profile update error:", profileError);
-      // We throw to inform the client, even though the Auth user was created.
       await supabaseClient.auth.admin.deleteUser(user.id);
       throw profileError
     }

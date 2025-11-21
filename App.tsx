@@ -43,8 +43,10 @@ function App() {
 
   // Enforce Role-Based Page Access
   useEffect(() => {
-    if (user?.role === UserRole.Helpdesk) {
+    // Restrict Helpdesk Admin AND Helpdesk Agent
+    if (user?.role === UserRole.Helpdesk || user?.role === UserRole.HelpdeskAgent) {
       const allowedPages: Page[] = ['Notices', 'Help Desk'];
+      // Prevent flash of Dashboard or other pages
       if (!allowedPages.includes(activePage)) {
         setActivePage('Help Desk');
       }
@@ -103,7 +105,7 @@ function App() {
   
   // Security check for Helpdesk users
   // Prevents rendering unauthorized pages even for a split second before the useEffect redirect kicks in
-  if (user.role === UserRole.Helpdesk) {
+  if (user.role === UserRole.Helpdesk || user.role === UserRole.HelpdeskAgent) {
       const allowedPages: Page[] = ['Notices', 'Help Desk'];
       if (!allowedPages.includes(activePage)) {
           return (

@@ -23,7 +23,13 @@ export const getNotices = async (communityId: string): Promise<Notice[]> => {
 };
 
 export const getComplaints = async (communityId: string): Promise<Complaint[]> => {
-    const { data, error } = await supabase.from('complaints').select('*').eq('community_id', communityId).order('created_at', { ascending: false });
+    // We use a join to get the name of the person assigned to the ticket
+    const { data, error } = await supabase
+        .from('complaints')
+        .select('*, assigned_user:users!assigned_to(name)')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false });
+        
     if (error) throw error;
     
     return data.map((c: any) => ({
@@ -36,7 +42,9 @@ export const getComplaints = async (communityId: string): Promise<Complaint[]> =
         createdAt: c.created_at,
         category: c.category,
         userId: c.user_id,
-        communityId: c.community_id
+        communityId: c.community_id,
+        assignedTo: c.assigned_to,
+        assignedToName: c.assigned_user?.name
     })) as Complaint[];
 };
 
@@ -256,7 +264,7 @@ export const createAmenity = async (amenityData: { name: string; description: st
 
 // UPDATE operations
 export const updateComplaintStatus = async (id: string, status: ComplaintStatus): Promise<Complaint> => {
-    const { data, error } = await supabase.from('complaints').update({ status }).eq('id', id).select().single();
+    const { data, error } = await supabase.from('complaints').update({ status }).eq('id', id).select('*, assigned_user:users!assigned_to(name)').single();
     if (error) throw error;
     
     return {
@@ -269,8 +277,19 @@ export const updateComplaintStatus = async (id: string, status: ComplaintStatus)
         createdAt: data.created_at,
         category: data.category,
         userId: data.user_id,
-        communityId: data.community_id
+        communityId: data.community_id,
+        assignedTo: data.assigned_to,
+        assignedToName: data.assigned_user?.name
     } as Complaint;
+};
+
+export const assignComplaint = async (complaintId: string, agentId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('complaints')
+        .update({ assigned_to: agentId })
+        .eq('id', complaintId);
+
+    if (error) throw error;
 };
 
 

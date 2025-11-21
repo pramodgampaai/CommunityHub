@@ -4,7 +4,8 @@ export enum UserRole {
   Admin = 'Admin',
   Resident = 'Resident',
   Security = 'Security',
-  Helpdesk = 'Helpdesk',
+  Helpdesk = 'Helpdesk', // Acts as Helpdesk Admin
+  HelpdeskAgent = 'HelpdeskAgent', // Acts as Worker
 }
 
 export interface Block {
@@ -86,6 +87,8 @@ export interface Complaint {
   category: ComplaintCategory;
   userId: string;
   communityId: string;
+  assignedTo?: string; // User ID of the agent
+  assignedToName?: string; // Name of the agent (for display)
 }
 
 export enum VisitorStatus {

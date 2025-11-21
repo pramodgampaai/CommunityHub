@@ -78,7 +78,14 @@ const Directory: React.FC = () => {
 
     // Reset form when modal opens/closes
     useEffect(() => {
-        if (!isModalOpen) {
+        if (isModalOpen) {
+            // Default role based on logged in user
+            if (user?.role === UserRole.Helpdesk) {
+                setNewRole(UserRole.HelpdeskAgent);
+            } else {
+                setNewRole(UserRole.Resident);
+            }
+        } else {
             setNewName('');
             setNewEmail('');
             setNewFlatNumber('');
@@ -86,9 +93,8 @@ const Directory: React.FC = () => {
             setSelectedBlock('');
             setSelectedFloor('');
             setNewFlatSize('');
-            setNewRole(UserRole.Resident);
         }
-    }, [isModalOpen]);
+    }, [isModalOpen, user]);
 
     const getFloorOptions = () => {
         if (!community) return [];
@@ -242,6 +248,7 @@ const Directory: React.FC = () => {
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                     ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
                                       resident.role === UserRole.Helpdesk ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' :
+                                      resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
                                       resident.role === UserRole.Security ? 'bg-gray-100 text-gray-800 dark:bg-gray-700/40 dark:text-gray-300' :
                                       'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
                                     {resident.role}
@@ -260,11 +267,15 @@ const Directory: React.FC = () => {
         </Card>
     );
 
+    // Permission check for creating users
+    // Admins can create anyone. Helpdesk can create Helpdesk Agents.
+    const canCreateUser = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 animated-card">
                 <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
-                {user?.role === UserRole.Admin && (
+                {canCreateUser && (
                     <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add User" variant="fab">
                         <span className="hidden sm:inline">Add User</span>
                         <span className="sm:hidden">Add</span>
@@ -305,7 +316,8 @@ const Directory: React.FC = () => {
                                     <option value={UserRole.Resident}>Residents</option>
                                     <option value={UserRole.Admin}>Admins</option>
                                     <option value={UserRole.Security}>Security</option>
-                                    <option value={UserRole.Helpdesk}>Helpdesk</option>
+                                    <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
+                                    <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
                                 </select>
                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                     <FunnelIcon className="w-4 h-4" />
@@ -371,6 +383,7 @@ const Directory: React.FC = () => {
                                         <span className={`w-2 h-6 rounded-full ${
                                             role === UserRole.Admin ? 'bg-purple-500' :
                                             role === UserRole.Helpdesk ? 'bg-orange-500' :
+                                            role === UserRole.HelpdeskAgent ? 'bg-teal-500' :
                                             role === UserRole.Security ? 'bg-gray-500' :
                                             'bg-[var(--accent)]'
                                         }`}></span>
@@ -396,11 +409,17 @@ const Directory: React.FC = () => {
                             value={newRole} 
                             onChange={e => setNewRole(e.target.value as UserRole)} 
                             required 
-                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                            disabled={user?.role === UserRole.Helpdesk} // Helpdesk can only create agents
+                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-70"
                         >
-                            <option value={UserRole.Resident}>Resident</option>
-                            <option value={UserRole.Security}>Security</option>
-                            <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
+                            {user?.role === UserRole.Admin && (
+                                <>
+                                    <option value={UserRole.Resident}>Resident</option>
+                                    <option value={UserRole.Security}>Security</option>
+                                    <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
+                                </>
+                            )}
+                            <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
                         </select>
                     </div>
 

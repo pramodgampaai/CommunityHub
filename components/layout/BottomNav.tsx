@@ -23,7 +23,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
   const { user } = useAuth();
 
   const filteredNavItems = navItems.filter(item => {
-    if (user?.role === UserRole.Helpdesk) {
+    if (user?.role === UserRole.Helpdesk || user?.role === UserRole.HelpdeskAgent) {
       return ['Notices', 'Help Desk'].includes(item.name);
     }
     return true;
