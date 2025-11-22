@@ -89,8 +89,8 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
             getVisitors(user.communityId)
         ];
 
-        // Only Admin/Helpdesk should see maintenance stats on dashboard
-        const isAdmin = user.role === UserRole.Admin || user.role === UserRole.Helpdesk;
+        // Only Admin should see maintenance stats on dashboard. Helpdesk is excluded.
+        const isAdmin = user.role === UserRole.Admin;
         if (isAdmin) {
             promises.push(getMaintenanceRecords(user.communityId));
         }
@@ -192,7 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
   const latestNotice = notices[0];
   const pendingComplaints = complaints.filter(c => c.status !== ComplaintStatus.Resolved);
   const expectedVisitors = visitors.filter(v => v.status === VisitorStatus.Expected);
-  const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+  const isAdmin = user?.role === UserRole.Admin;
 
   return (
     <div className="space-y-8">

@@ -28,7 +28,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
       return ['Notices', 'Help Desk'].includes(item.name);
     }
     if (user?.role === UserRole.Helpdesk) {
-      return ['Notices', 'Help Desk', 'Directory', 'Maintenance'].includes(item.name);
+      return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
     }
     return true;
   });

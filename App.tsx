@@ -53,8 +53,8 @@ function App() {
             setActivePage('Help Desk');
           }
       } else if (user.role === UserRole.Helpdesk) {
-          // Helpdesk Admin allowed on these pages
-          const allowed = ['Notices', 'Help Desk', 'Directory', 'Maintenance'];
+          // Helpdesk Admin allowed on these pages (Maintenance Removed)
+          const allowed = ['Notices', 'Help Desk', 'Directory'];
           if (!allowed.includes(activePage)) {
             setActivePage('Help Desk');
           }
@@ -107,7 +107,7 @@ function App() {
   if (user.role === UserRole.HelpdeskAgent) {
       allowedPages = ['Notices', 'Help Desk'];
   } else if (user.role === UserRole.Helpdesk) {
-      allowedPages = ['Notices', 'Help Desk', 'Directory', 'Maintenance'];
+      allowedPages = ['Notices', 'Help Desk', 'Directory'];
   }
 
   // If the user is on a restricted page, don't render content, just wait for useEffect to redirect
