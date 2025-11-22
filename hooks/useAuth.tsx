@@ -19,7 +19,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Use a ref to track the current user ID to avoid stale closures in the auth listener
+  // Use a ref to track the current user ID to avoid stale closures and redundant fetches
   const userIdRef = useRef<string | null>(null);
 
   // Wrapper to keep ref in sync with state
@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
   const logout = async () => {
     try {
-        // 1. Clear React State
+        // 1. Clear React State immediately
         setUser(null);
         
         // 2. Sign out from Supabase
@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
         });
         
-        // 5. Redirect to home
+        // 5. Redirect to home/login
         window.location.href = '/'; 
     } catch (error) {
         console.error("Logout error:", error);
@@ -92,65 +92,67 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
   useEffect(() => {
     let mounted = true;
+    let authSubscription: any = null;
 
-    const initAuth = async () => {
-        // Get initial session
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-            // Check if we already processed this user (via listener race condition)
-            if (userIdRef.current === session.user.id) {
-                if (mounted) setLoading(false);
-                return;
+    const initializeAuth = async () => {
+        try {
+            // 1. Check for existing session first (Synchronous-like check)
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (session) {
+                // We have a session, fetch the profile
+                const userProfile = await fetchProfile(session);
+                if (mounted) {
+                    if (userProfile) {
+                        setUser(userProfile);
+                    } else {
+                         // Session exists but profile is missing (e.g. deleted user)
+                         // Treat as logged out
+                         console.warn("Session valid but profile not found.");
+                         setUser(null);
+                    }
+                }
+            } else {
+                // No session
+                if (mounted) setUser(null);
             }
+        } catch (error) {
+            console.error("Auth initialization error:", error);
+            if (mounted) setUser(null);
+        } finally {
+            // 2. ALWAYS set loading to false after the initial check is done
+            if (mounted) setLoading(false);
+        }
 
-            const userProfile = await fetchProfile(session);
-            if (mounted) {
-                if (userProfile) {
-                    setUser(userProfile);
-                } else {
-                    console.warn("Session valid but profile not found.");
+        // 3. Subscribe to changes AFTER initial load to handle future events
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event: AuthChangeEvent, session: Session | null) => {
+                if (!mounted) return;
+
+                if (event === 'SIGNED_OUT') {
                     setUser(null);
+                    setLoading(false);
+                } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                    if (session) {
+                        // Only fetch if the user ID has changed (avoid redundant fetches on refresh tokens)
+                        if (userIdRef.current !== session.user.id) {
+                             const userProfile = await fetchProfile(session);
+                             if (mounted && userProfile) {
+                                 setUser(userProfile);
+                             }
+                        }
+                    }
                 }
             }
-        }
-        if (mounted) setLoading(false);
+        );
+        authSubscription = subscription;
     };
 
-    initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session: Session | null) => {
-        if (!mounted) return;
-
-        if (event === 'SIGNED_OUT') {
-            setUser(null);
-            setLoading(false);
-        } else if (session) {
-            // Check against Ref to see if we already have this user loaded
-            // This is the critical fix for the "Hung" state
-            if (userIdRef.current === session.user.id) {
-                setLoading(false);
-                return; 
-            }
-            
-            // If ID matches ref, we do nothing. If different (or null), we fetch.
-            const userProfile = await fetchProfile(session);
-            if (mounted && userProfile) {
-                setUser(userProfile);
-            }
-             // Ensure loading is false once we have a session event handled
-            setLoading(false);
-        } else {
-             // No session, ensure loading is false
-             setLoading(false);
-        }
-      }
-    );
+    initializeAuth();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (authSubscription) authSubscription.unsubscribe();
     };
   }, []);
   
