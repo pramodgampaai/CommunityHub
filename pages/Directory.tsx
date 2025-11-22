@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords, updateMaintenanceStartDate } from '../services/api';
 import type { User, Community, Block, MaintenanceRecord, Unit } from '../types';
@@ -106,7 +107,7 @@ const Directory: React.FC = () => {
     // Reset form when modal opens/closes
     useEffect(() => {
         if (isModalOpen) {
-            // Default role
+            // Default role based on who is creating
             if (user?.role === UserRole.Helpdesk) {
                 setNewRole(UserRole.HelpdeskAgent);
             } else {
@@ -266,21 +267,39 @@ const Directory: React.FC = () => {
     };
 
 
-    // Filtering logic
+    // ---------------------------------------------------------
+    // ROLE-BASED VISIBILITY LOGIC (STRICT)
+    // ---------------------------------------------------------
     const getFilteredResidents = () => {
-        let filtered = residents;
+        if (!user) return [];
 
-        // Strict View Filtering for Helpdesk Admins
-        if (user?.role === UserRole.Helpdesk) {
-             filtered = filtered.filter(r => r.role === UserRole.Helpdesk || r.role === UserRole.HelpdeskAgent);
+        // 1. Determine allowed roles based on current user's role
+        let allowedRoles: UserRole[] = [];
+
+        if (user.role === UserRole.Admin) {
+            // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin)
+            // Also including Security so they aren't invisible, as they are generally managed by Admin.
+            allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.Helpdesk, UserRole.Security];
+        } else if (user.role === UserRole.Resident) {
+            // Resident sees: Admin, Resident
+            allowedRoles = [UserRole.Admin, UserRole.Resident];
+        } else if (user.role === UserRole.Helpdesk) {
+            // Helpdesk Admin sees: Helpdesk, HelpdeskAgent
+            allowedRoles = [UserRole.Helpdesk, UserRole.HelpdeskAgent];
+        } else if (user.role === UserRole.HelpdeskAgent) {
+            // Helpdesk Agent should not see anything (Page access restricted in App.tsx, but safe fallback here)
+            return [];
         }
 
-        // Role Filter (Dropdown)
+        // 2. First pass filter: Remove unauthorized roles
+        let filtered = residents.filter(r => allowedRoles.includes(r.role));
+
+        // 3. Second pass filter: Dropdown Role Selection (UI Filter)
         if (filterRole !== 'All') {
             filtered = filtered.filter(r => r.role === filterRole);
         }
 
-        // Search Filter
+        // 4. Third pass filter: Search Query
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase().trim();
             filtered = filtered.filter(r => 
@@ -304,10 +323,15 @@ const Directory: React.FC = () => {
         return acc;
     }, {} as Record<string, User[]>);
 
-    // Permission Checks
+    // Permission Checks for Actions
     const canViewHistory = user?.role === UserRole.Admin; // Only Admins can view maintenance history
     const canViewMaintenanceStart = user?.role === UserRole.Admin;
     const canAddUser = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+
+    // If Helpdesk Agent tries to view, render nothing (Access Control)
+    if (user?.role === UserRole.HelpdeskAgent) {
+        return <div className="p-8 text-center text-red-500">Unauthorized Access</div>;
+    }
 
     const renderTable = (users: User[]) => (
         <Card className="overflow-x-auto animated-card">
@@ -459,12 +483,25 @@ const Directory: React.FC = () => {
                             onChange={(e) => setFilterRole(e.target.value as UserRole | 'All')}
                             className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
                         >
+                            {/* Dynamic Dropdown options based on strict visibility rules */}
                             <option value="All">All Roles</option>
-                            <option value={UserRole.Resident}>Residents</option>
-                            <option value={UserRole.Security}>Security</option>
-                            <option value={UserRole.Admin}>Admins</option>
-                            <option value={UserRole.Helpdesk}>Helpdesk</option>
-                            <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
+                            {user?.role === UserRole.Helpdesk ? (
+                                <>
+                                    <option value={UserRole.Helpdesk}>Helpdesk</option>
+                                    <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value={UserRole.Resident}>Residents</option>
+                                    <option value={UserRole.Admin}>Admins</option>
+                                    {user?.role === UserRole.Admin && (
+                                        <>
+                                            <option value={UserRole.Security}>Security</option>
+                                            <option value={UserRole.Helpdesk}>Helpdesk</option>
+                                        </>
+                                    )}
+                                </>
+                            )}
                         </select>
                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                             <FunnelIcon className="w-4 h-4" />
@@ -521,7 +558,7 @@ const Directory: React.FC = () => {
             >
                 <form id="add-user-form" className="space-y-4" onSubmit={handleAddResident}>
                     
-                    {/* Role Selection */}
+                    {/* Role Selection - Strictly limited by who is adding */}
                     <div>
                         <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Role</label>
                         <select 

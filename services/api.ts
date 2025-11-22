@@ -128,11 +128,9 @@ const mapUserFromDB = (u: any, units: any[] = []): User => {
 
 export const getResidents = async (communityId: string): Promise<User[]> => {
     // ROBUST STRATEGY: Decoupled Fetching
-    // 1. Fetch Users (Guaranteed to exist)
-    // 2. Fetch Units (Might fail if table missing, but shouldn't crash app)
-    // 3. Combine in memory
+    // This guarantees the directory loads even if the 'units' table or relationship is broken.
     
-    // Step 1: Fetch Users
+    // Step 1: Fetch Users (Guaranteed to exist)
     const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -214,16 +212,10 @@ export const getMaintenanceRecords = async (communityId: string, userId?: string
         if (linkedUnit) {
             displayFlat = linkedUnit.block ? `${linkedUnit.block}-${linkedUnit.flat_number}` : linkedUnit.flat_number;
         } else {
-             // Fallback to what might be on the user record? 
-             // Since we didn't fetch user.flat_number in the join above, we might miss it if unit_id is null.
-             // But for new system, unit_id should exist.
-             displayFlat = 'Unit Not Found';
+             // Fallback
+             displayFlat = r.user?.flat_number || 'N/A';
         }
         
-        // IMPORTANT: If the user record has a flat_number (legacy), we could try to use it, 
-        // but accessing r.user.flat_number requires updating the join above. 
-        // For now, we rely on unit_id or basic fallback.
-
         return {
             id: r.id,
             userId: r.user_id,
