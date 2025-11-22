@@ -99,7 +99,7 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         .from('users')
         .select('*, units(*)')
         .eq('community_id', communityId)
-        .order('created_at', { ascending: true }); // Changed order as flat_number is no longer on user
+        .order('created_at', { ascending: true }); 
     
     if (error) throw error;
     
@@ -129,7 +129,8 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             role: u.role as UserRole,
             communityId: u.community_id,
             status: u.status,
-            units: mappedUnits
+            units: mappedUnits,
+            maintenanceStartDate: u.maintenance_start_date // Legacy
         } as User;
     });
 };
@@ -223,13 +224,16 @@ export const createNotice = async (noticeData: { title: string; content: string;
 };
 
 export const createComplaint = async (complaintData: { title: string; description: string; category: ComplaintCategory; }, user: User): Promise<Complaint> => {
+    // If user has units, try to find default, otherwise user legacy flat
+    const displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
+
     const newComplaint = {
         title: complaintData.title,
         description: complaintData.description,
         category: complaintData.category,
         status: ComplaintStatus.Pending,
         resident_name: user.name,
-        flat_number: user.flatNumber || 'N/A',
+        flat_number: displayFlat,
         user_id: user.id,
         community_id: user.communityId,
     };
@@ -251,13 +255,15 @@ export const createComplaint = async (complaintData: { title: string; descriptio
 };
 
 export const createVisitor = async (visitorData: { name: string; purpose: string; expectedAt: string }, user: User): Promise<Visitor> => {
+     const displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
+
     const newVisitor = {
         name: visitorData.name,
         purpose: visitorData.purpose,
         expected_at: visitorData.expectedAt,
         status: 'Expected',
         resident_name: user.name,
-        flat_number: user.flatNumber || 'N/A',
+        flat_number: displayFlat,
         user_id: user.id,
         community_id: user.communityId,
     };
@@ -277,12 +283,13 @@ export const createVisitor = async (visitorData: { name: string; purpose: string
 };
 
 export const createBooking = async (bookingData: { amenityId: string; startTime: string; endTime: string; }, user: User): Promise<Booking> => {
+     const displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
     const newBooking = {
         amenity_id: bookingData.amenityId,
         start_time: bookingData.startTime,
         end_time: bookingData.endTime,
         resident_name: user.name,
-        flat_number: user.flatNumber || 'N/A',
+        flat_number: displayFlat,
         user_id: user.id,
         community_id: user.communityId,
     };

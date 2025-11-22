@@ -47,12 +47,13 @@ export interface User {
   name: string;
   email: string;
   avatarUrl: string;
-  // Legacy fields for flat number are replaced by 'units' array
-  flatNumber?: string; // Kept optional for backward compatibility or display logic
+  // Legacy fields for backward compatibility or Staff location
+  flatNumber?: string; 
   role: UserRole;
   communityId?: string;
   status: 'active' | 'disabled';
   units?: Unit[]; // One-to-Many relationship
+  maintenanceStartDate?: string; // Legacy field
 }
 
 export enum NoticeType {
