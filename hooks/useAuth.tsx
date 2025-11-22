@@ -18,11 +18,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  
-  // Use a ref to track the current user ID to avoid stale closures and redundant fetches
   const userIdRef = useRef<string | null>(null);
 
-  // Wrapper to keep ref in sync with state
   const setUser = (u: User | null) => {
       userIdRef.current = u ? u.id : null;
       setUserState(u);
@@ -30,24 +27,15 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
   const logout = async () => {
     try {
-        // 1. Clear React State immediately
         setUser(null);
-        
-        // 2. Sign out from Supabase
         await supabase.auth.signOut();
-
-        // 3. Clear Local Storage (preserving theme)
         const theme = localStorage.getItem('theme');
         localStorage.clear();
         sessionStorage.clear();
         if (theme) localStorage.setItem('theme', theme);
-
-        // 4. Clear cookies
         document.cookie.split(";").forEach((c) => {
           document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
         });
-        
-        // 5. Redirect to home/login
         window.location.href = '/'; 
     } catch (error) {
         console.error("Logout error:", error);
@@ -55,62 +43,60 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     }
   };
 
-  // Helper to fetch and map profile
+  // Robust Fetch Profile Strategy
   const fetchProfile = async (session: Session) => {
       try {
-        // Add a timestamp to bust any browser GET cache
-        // CRITICAL UPDATE: Try selecting with units first
+        // Step 1: Fetch User Profile (Guaranteed to exist if logged in)
         const { data: profile, error } = await supabase
           .from('users')
-          .select('*, units(*)')
+          .select('*')
           .eq('id', session.user.id)
           .single();
 
-        let userProfileData = profile;
-
-        // Fallback: If fetching with units fails (schema mismatch), fetch just the user
         if (error || !profile) {
-             console.warn("Fetching profile with units failed, trying fallback.", error);
-             const { data: fallbackProfile, error: fallbackError } = await supabase
-                .from('users')
+             console.error("Fetch profile error:", error);
+             return null;
+        }
+
+        // Step 2: Fetch Units (Best effort, might fail if table missing)
+        let units: any[] = [];
+        try {
+            const { data: unitsData } = await supabase
+                .from('units')
                 .select('*')
-                .eq('id', session.user.id)
-                .single();
-            
-             if (fallbackError || !fallbackProfile) {
-                 console.error("Error fetching profile (fallback):", fallbackError);
-                 return null;
-             }
-             userProfileData = fallbackProfile;
+                .eq('user_id', session.user.id);
+            if (unitsData) units = unitsData;
+        } catch (unitErr) {
+            console.warn("Failed to fetch user units", unitErr);
         }
 
-        if (userProfileData) {
-          // Map Units from DB (snake_case) to Type (camelCase)
-          const mappedUnits: Unit[] = userProfileData.units?.map((u: any) => ({
-              id: u.id,
-              userId: u.user_id,
-              communityId: u.community_id,
-              flatNumber: u.flat_number,
-              block: u.block,
-              floor: u.floor,
-              flatSize: u.flat_size,
-              maintenanceStartDate: u.maintenance_start_date
-          })) || [];
+        // Step 3: Map
+        const mappedUnits: Unit[] = units.map((u: any) => ({
+            id: u.id,
+            userId: u.user_id,
+            communityId: u.community_id,
+            flatNumber: u.flat_number,
+            block: u.block,
+            floor: u.floor,
+            flatSize: u.flat_size,
+            maintenanceStartDate: u.maintenance_start_date
+        }));
 
-          return {
-            id: userProfileData.id,
-            name: userProfileData.name || 'User',
-            email: userProfileData.email || session.user.email || '',
-            avatarUrl: userProfileData.avatar_url || `https://i.pravatar.cc/150?u=${userProfileData.id}`,
-            flatNumber: userProfileData.flat_number, // Legacy/Fallback
-            role: userProfileData.role as UserRole || UserRole.Resident,
-            communityId: userProfileData.community_id,
-            status: userProfileData.status || 'active',
-            maintenanceStartDate: userProfileData.maintenance_start_date,
-            units: mappedUnits // Now populated (or empty if fallback used)
-          } as User;
-        }
-        return null;
+        const primaryUnit = mappedUnits.length > 0 ? mappedUnits[0] : null;
+
+        return {
+            id: profile.id,
+            name: profile.name || 'User',
+            email: profile.email || session.user.email || '',
+            avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
+            flatNumber: primaryUnit ? primaryUnit.flatNumber : profile.flat_number,
+            role: profile.role as UserRole || UserRole.Resident,
+            communityId: profile.community_id,
+            status: profile.status || 'active',
+            maintenanceStartDate: profile.maintenance_start_date,
+            units: mappedUnits
+        } as User;
+
       } catch (err) {
         console.error("Unexpected error fetching profile:", err);
         return null;
@@ -123,45 +109,35 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
     const initializeAuth = async () => {
         try {
-            // 1. Check for existing session first (Synchronous-like check)
             const { data: { session } } = await supabase.auth.getSession();
-
             if (session) {
-                // We have a session, fetch the profile
                 const userProfile = await fetchProfile(session);
                 if (mounted) {
                     if (userProfile) {
                         setUser(userProfile);
                     } else {
-                         // Session exists but profile is missing (e.g. deleted user)
-                         // Treat as logged out
                          console.warn("Session valid but profile not found.");
                          setUser(null);
                     }
                 }
             } else {
-                // No session
                 if (mounted) setUser(null);
             }
         } catch (error) {
             console.error("Auth initialization error:", error);
             if (mounted) setUser(null);
         } finally {
-            // 2. ALWAYS set loading to false after the initial check is done
             if (mounted) setLoading(false);
         }
 
-        // 3. Subscribe to changes AFTER initial load to handle future events
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event: AuthChangeEvent, session: Session | null) => {
                 if (!mounted) return;
-
                 if (event === 'SIGNED_OUT') {
                     setUser(null);
                     setLoading(false);
                 } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
                     if (session) {
-                        // Only fetch if the user ID has changed (avoid redundant fetches on refresh tokens)
                         if (userIdRef.current !== session.user.id) {
                              const userProfile = await fetchProfile(session);
                              if (mounted && userProfile) {
@@ -185,20 +161,15 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   
 
   const login = async (email: string, pass: string) => {
-    // 1. Perform Auth
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
 
     if (data.session) {
-        // 2. Validate Profile IMMEDIATELY
         const userProfile = await fetchProfile(data.session);
-        
         if (!userProfile) {
             await supabase.auth.signOut();
             throw new Error("Login successful, but user profile not found. Please contact the Administrator.");
         }
-        
-        // 3. Update State
         setUser(userProfile);
     }
   };

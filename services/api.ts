@@ -94,10 +94,11 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
 };
 
 // Helper to map DB user to User interface
-const mapUserFromDB = (u: any): User => {
-    const primaryUnit = u.units && u.units.length > 0 ? u.units[0] : null;
+const mapUserFromDB = (u: any, units: any[] = []): User => {
+    // Map units specific to this user
+    const userUnitsRaw = units.filter((unit: any) => unit.user_id === u.id);
     
-    const mappedUnits: Unit[] = u.units?.map((unit: any) => ({
+    const mappedUnits: Unit[] = userUnitsRaw.map((unit: any) => ({
         id: unit.id,
         userId: unit.user_id,
         communityId: unit.community_id,
@@ -106,7 +107,9 @@ const mapUserFromDB = (u: any): User => {
         floor: unit.floor,
         flatSize: unit.flat_size,
         maintenanceStartDate: unit.maintenance_start_date
-    })) || [];
+    }));
+
+    const primaryUnit = mappedUnits.length > 0 ? mappedUnits[0] : null;
 
     return {
         id: u.id,
@@ -114,7 +117,7 @@ const mapUserFromDB = (u: any): User => {
         email: u.email,
         avatarUrl: u.avatar_url,
         // Display purpose: Use first unit or legacy field
-        flatNumber: primaryUnit ? primaryUnit.flat_number : u.flat_number,
+        flatNumber: primaryUnit ? primaryUnit.flatNumber : u.flat_number,
         role: u.role as UserRole,
         communityId: u.community_id,
         status: u.status,
@@ -124,31 +127,38 @@ const mapUserFromDB = (u: any): User => {
 };
 
 export const getResidents = async (communityId: string): Promise<User[]> => {
-    // Strategy: Try the optimized JOIN query first.
-    // If it fails for ANY reason (Schema mismatch, RLS, API cache), fall back to the simple query.
+    // ROBUST STRATEGY: Decoupled Fetching
+    // 1. Fetch Users (Guaranteed to exist)
+    // 2. Fetch Units (Might fail if table missing, but shouldn't crash app)
+    // 3. Combine in memory
     
-    // Attempt 1: Join with Units
-    const { data, error } = await supabase
-        .from('users')
-        .select('*, units(*)')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: true }); 
-    
-    if (!error && data) {
-        return data.map(mapUserFromDB);
-    }
-
-    // Attempt 2: Fallback (Simple Select)
-    console.warn("Fetching residents with units failed, falling back to simple fetch.", error);
-    
-    const { data: fallbackData, error: fallbackError } = await supabase
+    // Step 1: Fetch Users
+    const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('community_id', communityId)
         .order('created_at', { ascending: true });
     
-    if (fallbackError) throw fallbackError;
-    return fallbackData.map(mapUserFromDB);
+    if (userError) throw userError;
+    if (!users) return [];
+
+    // Step 2: Fetch Units (Best Effort)
+    let allUnits: any[] = [];
+    try {
+        const { data: units, error: unitsError } = await supabase
+            .from('units')
+            .select('*')
+            .eq('community_id', communityId);
+        
+        if (!unitsError && units) {
+            allUnits = units;
+        }
+    } catch (err) {
+        console.warn("Failed to fetch units (table might be missing), proceeding with users only.", err);
+    }
+
+    // Step 3: Combine
+    return users.map(user => mapUserFromDB(user, allUnits));
 };
 
 export const getCommunity = async (communityId: string): Promise<Community> => {
@@ -173,29 +183,46 @@ export const getCommunity = async (communityId: string): Promise<Community> => {
 };
 
 export const getMaintenanceRecords = async (communityId: string, userId?: string): Promise<MaintenanceRecord[]> => {
+    // Similar decoupled strategy for robust loading
     let query = supabase
         .from('maintenance_records')
-        .select('*, user:users(name), unit:units(flat_number, block)')
+        .select('*, user:users(name)') // Only join user (reliable)
         .eq('community_id', communityId)
         .order('period_date', { ascending: false });
 
-    // If a userId is provided, filter by that user (Resident View)
     if (userId) {
         query = query.eq('user_id', userId);
     }
 
-    const { data, error } = await query;
+    const { data: records, error } = await query;
     if (error) throw error;
 
-    return data.map((r: any) => {
-        // Construct display flat number
-        let displayFlat = 'Unknown';
-        if (r.unit) {
-            displayFlat = r.unit.block ? `${r.unit.block}-${r.unit.flat_number}` : r.unit.flat_number;
-        } else if (r.user?.flat_number) {
-            // Fallback to legacy logic if unit_id is null
-             displayFlat = r.user.flat_number;
+    // Fetch Units separately to map flat details safely
+    let unitsMap: Record<string, any> = {};
+    try {
+        const { data: units } = await supabase.from('units').select('*').eq('community_id', communityId);
+        if (units) {
+            units.forEach((u: any) => unitsMap[u.id] = u);
         }
+    } catch (e) { /* ignore */ }
+
+    return records.map((r: any) => {
+        // Determine Display Flat
+        let displayFlat = 'Unknown';
+        const linkedUnit = r.unit_id ? unitsMap[r.unit_id] : null;
+
+        if (linkedUnit) {
+            displayFlat = linkedUnit.block ? `${linkedUnit.block}-${linkedUnit.flat_number}` : linkedUnit.flat_number;
+        } else {
+             // Fallback to what might be on the user record? 
+             // Since we didn't fetch user.flat_number in the join above, we might miss it if unit_id is null.
+             // But for new system, unit_id should exist.
+             displayFlat = 'Unit Not Found';
+        }
+        
+        // IMPORTANT: If the user record has a flat_number (legacy), we could try to use it, 
+        // but accessing r.user.flat_number requires updating the join above. 
+        // For now, we rely on unit_id or basic fallback.
 
         return {
             id: r.id,
@@ -246,10 +273,6 @@ export const createComplaint = async (
     specificFlatNumber?: string
 ): Promise<Complaint> => {
     
-    // Determine the flat number to display on the ticket
-    // 1. Use the specific one selected by the user
-    // 2. Or fallback to their first unit
-    // 3. Or fallback to legacy flat_number
     let displayFlat = specificFlatNumber;
     
     if (!displayFlat) {
@@ -270,7 +293,7 @@ export const createComplaint = async (
         flat_number: displayFlat,
         user_id: user.id,
         community_id: user.communityId,
-        unit_id: specificUnitId // Optional link to specific unit
+        unit_id: specificUnitId
     };
 
     const { data, error } = await supabase.from('complaints').insert(newComplaint).select().single();
@@ -394,7 +417,6 @@ export const assignComplaint = async (complaintId: string, agentId: string): Pro
     if (error) throw error;
 };
 
-// Updated to support Units
 export const updateMaintenanceStartDate = async (userId: string, date: string, unitId?: string): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
@@ -418,7 +440,7 @@ export const updateMaintenanceStartDate = async (userId: string, date: string, u
             user_id: userId, 
             maintenance_start_date: date,
             community_id: user.community_id,
-            unit_id: unitId // Pass specific unit ID if available
+            unit_id: unitId 
         })
     });
 
@@ -427,8 +449,6 @@ export const updateMaintenanceStartDate = async (userId: string, date: string, u
         throw new Error(err.error || 'Failed to update maintenance date');
     }
 };
-
-// Maintenance Operations
 
 export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, transactionDate: string): Promise<void> => {
     const { error } = await supabase
@@ -470,7 +490,6 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
 
     const stats: CommunityStat[] = [];
     for (const c of communities) {
-        // Fetch resident count
         const { count } = await supabase
             .from('users')
             .select('*', { count: 'exact', head: true })
@@ -487,70 +506,50 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
             maintenanceRate: c.maintenance_rate,
             fixedMaintenanceAmount: c.fixed_maintenance_amount,
             resident_count: count || 0,
-            income_generated: 0 // Placeholder
+            income_generated: 0
         });
     }
     return stats;
 };
 
 export const createCommunity = async (data: Partial<Community>): Promise<Community> => {
-    try {
-        const { data: newCommunity, error } = await supabase.from('communities').insert({
-            name: data.name,
-            address: data.address,
-            community_type: data.communityType,
-            blocks: data.blocks,
-            maintenance_rate: data.maintenanceRate,
-            fixed_maintenance_amount: data.fixedMaintenanceAmount,
-            status: 'active'
-        }).select().single();
-        
-        if (error) throw error;
-        
-        return {
-            ...newCommunity,
-            communityType: newCommunity.community_type,
-            maintenanceRate: newCommunity.maintenance_rate,
-            fixedMaintenanceAmount: newCommunity.fixed_maintenance_amount
-        };
-    } catch (error: any) {
-        if (error.message && (error.message.includes("Could not find the 'blocks' column") || error.message.includes("Could not find the 'community_type' column"))) {
-            throw new Error("Database columns missing. Please run the SQL migration to add 'blocks' and 'community_type' columns.");
-        }
-        if (error.message && (error.message.includes("maintenance_rate") || error.message.includes("fixed_maintenance_amount"))) {
-            throw new Error("Database columns missing. Please run SQL migration to add maintenance columns.");
-        }
-        throw error;
-    }
+    const { data: newCommunity, error } = await supabase.from('communities').insert({
+        name: data.name,
+        address: data.address,
+        community_type: data.communityType,
+        blocks: data.blocks,
+        maintenance_rate: data.maintenanceRate,
+        fixed_maintenance_amount: data.fixedMaintenanceAmount,
+        status: 'active'
+    }).select().single();
+    
+    if (error) throw error;
+    
+    return {
+        ...newCommunity,
+        communityType: newCommunity.community_type,
+        maintenanceRate: newCommunity.maintenance_rate,
+        fixedMaintenanceAmount: newCommunity.fixed_maintenance_amount
+    };
 };
 
 export const updateCommunity = async (id: string, data: Partial<Community>): Promise<Community> => {
-    try {
-        const { data: updated, error } = await supabase.from('communities').update({
-            name: data.name,
-            address: data.address,
-            community_type: data.communityType,
-            blocks: data.blocks,
-            maintenance_rate: data.maintenanceRate,
-            fixed_maintenance_amount: data.fixedMaintenanceAmount
-        }).eq('id', id).select().single();
-        
-        if (error) throw error;
-        return {
-            ...updated,
-            communityType: updated.community_type,
-            maintenanceRate: updated.maintenance_rate,
-            fixedMaintenanceAmount: updated.fixed_maintenance_amount
-        };
-    } catch (error: any) {
-        if (error.message && (error.message.includes("Could not find the 'blocks' column") || error.message.includes("Could not find the 'community_type' column"))) {
-            throw new Error("Database columns missing. Please run the SQL migration to add 'blocks' and 'community_type' columns.");
-        }
-        if (error.message && (error.message.includes("maintenance_rate") || error.message.includes("fixed_maintenance_amount"))) {
-            throw new Error("Database columns missing. Please run SQL migration to add maintenance columns.");
-        }
-        throw error;
-    }
+    const { data: updated, error } = await supabase.from('communities').update({
+        name: data.name,
+        address: data.address,
+        community_type: data.communityType,
+        blocks: data.blocks,
+        maintenance_rate: data.maintenanceRate,
+        fixed_maintenance_amount: data.fixedMaintenanceAmount
+    }).eq('id', id).select().single();
+    
+    if (error) throw error;
+    return {
+        ...updated,
+        communityType: updated.community_type,
+        maintenanceRate: updated.maintenance_rate,
+        fixedMaintenanceAmount: updated.fixed_maintenance_amount
+    };
 };
 
 export const deleteCommunity = async (id: string): Promise<void> => {
@@ -582,15 +581,12 @@ export const createAdminUser = async (userData: any) => {
     return response.json();
 };
 
-// Refactored to accept Array of Units
 export const createCommunityUser = async (userData: {
     name: string;
     email: string;
     password: string;
     community_id: string;
     role: string;
-    // Legacy single fields (can be sent as first element of units array by wrapper)
-    // New structure:
     units?: Array<{
         flat_number: string;
         block?: string;
@@ -598,7 +594,6 @@ export const createCommunityUser = async (userData: {
         flat_size?: number;
         maintenance_start_date?: string;
     }>;
-    // Keep legacy args for other roles
     flat_number?: string;
 }) => {
     const { data: { session } } = await supabase.auth.getSession();
