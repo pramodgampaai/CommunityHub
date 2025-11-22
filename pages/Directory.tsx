@@ -504,8 +504,18 @@ const Directory: React.FC = () => {
             )}
 
             {/* Add User Modal */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New User">
-                <form className="space-y-4" onSubmit={handleAddResident}>
+            <Modal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                title="Add New User"
+                footer={
+                    <div className="flex justify-end space-x-2">
+                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="submit" form="add-user-form" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add User'}</Button>
+                    </div>
+                }
+            >
+                <form id="add-user-form" className="space-y-4" onSubmit={handleAddResident}>
                     
                     {/* Tab Navigation */}
                     <div className="flex border-b border-[var(--border-light)] dark:border-[var(--border-dark)] mb-4">
@@ -591,7 +601,7 @@ const Directory: React.FC = () => {
                                 </button>
                             </div>
                             
-                            <div className="max-h-[400px] overflow-y-auto pr-1 space-y-4">
+                            <div className="space-y-4">
                                 {newUnits.map((unit, index) => (
                                     <div key={index} className="bg-black/5 dark:bg-white/5 p-4 rounded-lg space-y-3 relative border border-[var(--border-light)] dark:border-[var(--border-dark)]">
                                         {newUnits.length > 1 && (
@@ -655,11 +665,6 @@ const Directory: React.FC = () => {
                             </div>
                         </div>
                     )}
-                    
-                    <div className="flex justify-end pt-4 space-x-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] mt-6">
-                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add User'}</Button>
-                    </div>
                 </form>
             </Modal>
 

@@ -7,9 +7,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  footer?: ReactNode;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
   if (!isOpen) return null;
 
   return (
@@ -27,6 +28,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
         <div className="p-6 overflow-y-auto">
           {children}
         </div>
+        {footer && (
+          <div className="p-4 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] shrink-0 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-b-lg">
+             {footer}
+          </div>
+        )}
       </div>
     </div>
   );
