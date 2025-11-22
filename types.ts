@@ -31,19 +31,28 @@ export interface CommunityStat extends Community {
     income_generated: number;
 }
 
+export interface Unit {
+    id: string;
+    userId: string;
+    communityId: string;
+    flatNumber: string;
+    block?: string;
+    floor?: number;
+    flatSize?: number;
+    maintenanceStartDate?: string;
+}
+
 export interface User {
   id:string;
   name: string;
   email: string;
   avatarUrl: string;
-  flatNumber?: string;
-  block?: string;
-  floor?: number;
-  flatSize?: number; // In Sq Ft
+  // Legacy fields for flat number are replaced by 'units' array
+  flatNumber?: string; // Kept optional for backward compatibility or display logic
   role: UserRole;
   communityId?: string;
   status: 'active' | 'disabled';
-  maintenanceStartDate?: string;
+  units?: Unit[]; // One-to-Many relationship
 }
 
 export enum NoticeType {
@@ -137,6 +146,7 @@ export enum MaintenanceStatus {
 export interface MaintenanceRecord {
     id: string;
     userId: string;
+    unitId?: string; // Linked to specific unit
     communityId: string;
     amount: number;
     periodDate: string; // The 1st of the month
@@ -147,7 +157,7 @@ export interface MaintenanceRecord {
     createdAt: string;
     // Joins
     userName?: string;
-    flatNumber?: string;
+    flatNumber?: string; // Display flat number
 }
 
 export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance';

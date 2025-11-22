@@ -18,54 +18,34 @@ serve(async (req: any) => {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-        }
-      }
+      { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const { user_id, maintenance_start_date, community_id } = await req.json()
+    const { user_id, maintenance_start_date, community_id, unit_id } = await req.json()
 
-    if (!user_id || !maintenance_start_date || !community_id) {
-      throw new Error('Missing required fields')
+    if (!user_id || !maintenance_start_date || !community_id || !unit_id) {
+      throw new Error('Missing required fields: unit_id is required now.')
     }
 
-    // 1. Check Permissions (Requester must be Admin of the community)
+    // Check Auth (Admin Only)
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing Authorization header');
-    
-    const { data: { user: requesterAuth }, error: userError } = await supabaseClient.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-    if (userError || !requesterAuth) throw new Error('Invalid token');
+    const { data: { user: requesterAuth } } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (!requesterAuth) throw new Error('Invalid token');
 
-    const { data: requesterProfile } = await supabaseClient
-        .from('users')
-        .select('role, community_id')
-        .eq('id', requesterAuth.id)
-        .single();
-
-    if (!requesterProfile || (requesterProfile.role !== 'Admin' && requesterProfile.role !== 'SuperAdmin')) {
-         if (requesterProfile?.role === 'Admin' && requesterProfile.community_id !== community_id) {
-             throw new Error('Unauthorized');
-         }
-    }
-
-    // 2. Update the User Record
+    // 1. Update the UNIT Record (Not User)
     const { error: updateError } = await supabaseClient
-        .from('users')
+        .from('units')
         .update({ maintenance_start_date })
-        .eq('id', user_id);
+        .eq('id', unit_id);
 
     if (updateError) throw updateError;
 
-    // 3. Fetch User Details (for Flat Size) and Community Details (for Rates)
-    const { data: targetUser } = await supabaseClient
-        .from('users')
+    // 2. Fetch Unit Details
+    const { data: targetUnit } = await supabaseClient
+        .from('units')
         .select('flat_size')
-        .eq('id', user_id)
+        .eq('id', unit_id)
         .single();
 
     const { data: community } = await supabaseClient
@@ -74,15 +54,15 @@ serve(async (req: any) => {
         .eq('id', community_id)
         .single();
 
-    // 4. Calculate Pro-Rata Amount
-    if (targetUser && community) {
+    // 3. Recalculate Logic
+    if (targetUnit && community) {
         let monthlyAmount = 0;
         const type = community.community_type ? community.community_type.toLowerCase() : 'gated';
         
         if (type === 'standalone') {
             monthlyAmount = Number(community.fixed_maintenance_amount) || 0;
         } else {
-            monthlyAmount = (Number(community.maintenance_rate) || 0) * (Number(targetUser.flat_size) || 0);
+            monthlyAmount = (Number(community.maintenance_rate) || 0) * (Number(targetUnit.flat_size) || 0);
         }
 
         if (monthlyAmount > 0) {
@@ -90,32 +70,27 @@ serve(async (req: any) => {
             const year = startDate.getFullYear();
             const month = startDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const startDay = startDate.getDate();
-            const daysRemaining = daysInMonth - startDay + 1;
-            
+            const daysRemaining = daysInMonth - startDate.getDate() + 1;
             const proRataAmount = Math.round((monthlyAmount / daysInMonth) * daysRemaining);
 
             if (proRataAmount > 0) {
                 const periodDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
 
-                // Check if a record already exists for this month to avoid duplicates
                 const { data: existingRecord } = await supabaseClient
                     .from('maintenance_records')
                     .select('id')
-                    .eq('user_id', user_id)
+                    .eq('unit_id', unit_id) // Check by Unit ID
                     .eq('period_date', periodDate)
                     .single();
 
                 if (existingRecord) {
-                     // Update existing
-                     await supabaseClient
-                        .from('maintenance_records')
+                     await supabaseClient.from('maintenance_records')
                         .update({ amount: proRataAmount, status: 'Pending' })
                         .eq('id', existingRecord.id);
                 } else {
-                    // Create new
                     await supabaseClient.from('maintenance_records').insert({
                         user_id: user_id,
+                        unit_id: unit_id,
                         community_id: community_id,
                         amount: proRataAmount,
                         period_date: periodDate,
@@ -128,19 +103,13 @@ serve(async (req: any) => {
 
     return new Response(
       JSON.stringify({ message: 'Date updated and maintenance calculated.' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
   } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 })
