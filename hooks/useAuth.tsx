@@ -19,6 +19,42 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Define logout first so it can be used in fetchProfile
+  const logout = async () => {
+    // 1. Clear React State immediately
+    setUser(null);
+    
+    try {
+        const theme = localStorage.getItem('theme');
+        
+        // 2. Attempt server-side sign out (best effort, don't block)
+        await Promise.race([
+            supabase.auth.signOut(),
+            new Promise(resolve => setTimeout(resolve, 500)) // Timeout after 500ms
+        ]).catch(err => console.warn("Supabase signOut warning:", err));
+
+        // 3. Nuke ALL Storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // 4. Attempt to clear cookies (if any exist)
+        document.cookie.split(";").forEach((c) => {
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+        });
+
+        // 5. Restore Theme Preference
+        if (theme) {
+            localStorage.setItem('theme', theme);
+        }
+        
+    } catch (error) {
+        console.error("Logout error:", error);
+    } finally {
+        // 6. HARD RELOAD to ensure a completely clean JS environment
+        window.location.href = '/';
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -32,6 +68,17 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           .single();
 
         if (!mounted) return;
+
+        if (error) {
+            console.error("Error fetching profile from public.users:", error);
+            // If we have a session but can't read the profile (RLS error or missing row),
+            // we must logout to prevent getting stuck.
+            if (error.code === 'PGRST116' || error.code === '42501') { // Not found or Permission denied
+                console.warn("Profile missing or inaccessible. Logging out.");
+                await logout();
+                return;
+            }
+        }
 
         if (profile) {
           const appUser: User = {
@@ -47,10 +94,11 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           setUser(appUser);
         } else {
           console.warn('Profile missing for authenticated user.');
-          setUser(null); 
+          // Force cleanup if profile doesn't exist
+          await logout();
         }
       } catch (err) {
-        console.error("Error fetching profile:", err);
+        console.error("Unexpected error fetching profile:", err);
         if (mounted) setUser(null);
       } finally {
         if (mounted) setLoading(false);
@@ -84,41 +132,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) {
         throw error;
-    }
-  };
-
-  const logout = async () => {
-    // 1. Clear React State immediately
-    setUser(null);
-    
-    try {
-        const theme = localStorage.getItem('theme');
-        
-        // 2. Attempt server-side sign out (best effort, don't block)
-        await Promise.race([
-            supabase.auth.signOut(),
-            new Promise(resolve => setTimeout(resolve, 500)) // Timeout after 500ms
-        ]).catch(err => console.warn("Supabase signOut warning:", err));
-
-        // 3. Nuke ALL Storage
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // 4. Attempt to clear cookies (if any exist)
-        document.cookie.split(";").forEach((c) => {
-          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-        });
-
-        // 5. Restore Theme Preference
-        if (theme) {
-            localStorage.setItem('theme', theme);
-        }
-        
-    } catch (error) {
-        console.error("Logout error:", error);
-    } finally {
-        // 6. HARD RELOAD to ensure a completely clean JS environment
-        window.location.href = '/';
     }
   };
 
