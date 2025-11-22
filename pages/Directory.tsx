@@ -45,6 +45,7 @@ const Directory: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     // Form State
+    const [activeTab, setActiveTab] = useState<'general' | 'units'>('general');
     const [newRole, setNewRole] = useState<UserRole>(UserRole.Resident);
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
@@ -119,6 +120,7 @@ const Directory: React.FC = () => {
                 flatSize: '',
                 maintenanceStartDate: new Date().toISOString().split('T')[0]
             }]);
+            setActiveTab('general');
         } else {
             setNewName('');
             setNewEmail('');
@@ -505,124 +507,156 @@ const Directory: React.FC = () => {
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New User">
                 <form className="space-y-4" onSubmit={handleAddResident}>
                     
-                    <div>
-                        <label htmlFor="role" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Role</label>
-                        <select 
-                            id="role" 
-                            value={newRole} 
-                            onChange={e => setNewRole(e.target.value as UserRole)} 
-                            required 
-                            disabled={user?.role === UserRole.Helpdesk} 
-                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-70"
+                    {/* Tab Navigation */}
+                    <div className="flex border-b border-[var(--border-light)] dark:border-[var(--border-dark)] mb-4">
+                        <button type="button"
+                            className={`px-4 py-2 font-medium text-sm focus:outline-none border-b-2 ${activeTab === 'general' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] hover:text-[var(--text-light)]'}`}
+                            onClick={() => setActiveTab('general')}
                         >
-                            {user?.role === UserRole.Admin && (
-                                <>
-                                    <option value={UserRole.Resident}>Resident</option>
-                                    <option value={UserRole.Security}>Security</option>
-                                    <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
-                                </>
-                            )}
-                            {user?.role === UserRole.Helpdesk && (
-                                <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
-                            )}
-                        </select>
+                            General
+                        </button>
+                        {newRole === UserRole.Resident && (
+                            <button type="button"
+                                className={`px-4 py-2 font-medium text-sm focus:outline-none border-b-2 ${activeTab === 'units' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] hover:text-[var(--text-light)]'}`}
+                                onClick={() => setActiveTab('units')}
+                            >
+                                Units
+                            </button>
+                        )}
                     </div>
 
-                    <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Full Name</label>
-                        <input type="text" id="name" value={newName} onChange={e => setNewName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                    </div>
+                    {/* General Information Tab */}
+                    {activeTab === 'general' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="role" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Role</label>
+                                <select 
+                                    id="role" 
+                                    value={newRole} 
+                                    onChange={e => {
+                                        const r = e.target.value as UserRole;
+                                        setNewRole(r);
+                                        // If switching away from resident, force tab to general
+                                        if (r !== UserRole.Resident) setActiveTab('general');
+                                    }} 
+                                    required 
+                                    disabled={user?.role === UserRole.Helpdesk} 
+                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-70"
+                                >
+                                    {user?.role === UserRole.Admin && (
+                                        <>
+                                            <option value={UserRole.Resident}>Resident</option>
+                                            <option value={UserRole.Security}>Security</option>
+                                            <option value={UserRole.Helpdesk}>Helpdesk Admin</option>
+                                        </>
+                                    )}
+                                    {user?.role === UserRole.Helpdesk && (
+                                        <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
+                                    )}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Full Name</label>
+                                <input type="text" id="name" value={newName} onChange={e => setNewName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                            </div>
+
+                            <div>
+                                <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Email Address</label>
+                                <input type="email" id="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                            </div>
+
+                            <div>
+                                <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Password</label>
+                                <input type="password" id="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                            </div>
+
+                            {/* For Staff Roles */}
+                            {newRole !== UserRole.Resident && (
+                                <div>
+                                    <label htmlFor="location" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Location / Desk ID</label>
+                                    <input type="text" id="location" value={newStaffLocation} onChange={e => setNewStaffLocation(e.target.value)} placeholder="e.g. Main Gate" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     
-                    {/* DYNAMIC UNIT ADDITION FOR RESIDENTS */}
-                    {newRole === UserRole.Resident && (
-                        <div className="space-y-4 border border-[var(--border-light)] dark:border-[var(--border-dark)] p-3 rounded-lg">
-                            <div className="flex justify-between items-center">
-                                <h4 className="text-sm font-semibold">Units Owned</h4>
+                    {/* Units Tab */}
+                    {activeTab === 'units' && newRole === UserRole.Resident && (
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <h4 className="text-sm font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">Units Owned</h4>
                                 <button type="button" onClick={addUnitField} className="text-xs text-[var(--accent)] flex items-center gap-1 hover:underline">
                                     <PlusIcon className="w-3 h-3" /> Add Unit
                                 </button>
                             </div>
                             
-                            {newUnits.map((unit, index) => (
-                                <div key={index} className="bg-black/5 dark:bg-white/5 p-3 rounded space-y-3 relative">
-                                    {newUnits.length > 1 && (
-                                        <button type="button" onClick={() => removeUnitField(index)} className="absolute top-2 right-2 text-red-500 hover:text-red-700">
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    
-                                    {community?.communityType === 'Gated' && (
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1">Block</label>
-                                            <select 
-                                                value={unit.block} 
-                                                onChange={e => handleUnitChange(index, 'block', e.target.value)} 
-                                                required 
-                                                className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent"
-                                            >
-                                                <option value="">Select Block</option>
-                                                {community.blocks?.map(block => (
-                                                    <option key={block.name} value={block.name}>{block.name}</option>
-                                                ))}
-                                            </select>
+                            <div className="max-h-[400px] overflow-y-auto pr-1 space-y-4">
+                                {newUnits.map((unit, index) => (
+                                    <div key={index} className="bg-black/5 dark:bg-white/5 p-4 rounded-lg space-y-3 relative border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                                        {newUnits.length > 1 && (
+                                            <button type="button" onClick={() => removeUnitField(index)} className="absolute top-3 right-3 text-red-500 hover:text-red-700 p-1">
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        
+                                        {community?.communityType === 'Gated' && (
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">Block</label>
+                                                <select 
+                                                    value={unit.block} 
+                                                    onChange={e => handleUnitChange(index, 'block', e.target.value)} 
+                                                    required 
+                                                    className="block w-full px-2 py-1.5 text-sm border rounded bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                                                >
+                                                    <option value="">Select Block</option>
+                                                    {community.blocks?.map(block => (
+                                                        <option key={block.name} value={block.name}>{block.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">Floor</label>
+                                                <select 
+                                                    value={unit.floor} 
+                                                    onChange={e => handleUnitChange(index, 'floor', e.target.value)} 
+                                                    required 
+                                                    disabled={community?.communityType === 'Gated' && !unit.block}
+                                                    className="block w-full px-2 py-1.5 text-sm border rounded bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                                                >
+                                                    <option value="">Select</option>
+                                                    {getFloorOptions(unit.block).map(floor => (
+                                                        <option key={floor} value={floor}>{floor}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">Flat No.</label>
+                                                <input type="text" value={unit.flatNumber} onChange={e => handleUnitChange(index, 'flatNumber', e.target.value)} required className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent" />
+                                            </div>
                                         </div>
-                                    )}
-                                    
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1">Floor</label>
-                                            <select 
-                                                value={unit.floor} 
-                                                onChange={e => handleUnitChange(index, 'floor', e.target.value)} 
-                                                required 
-                                                disabled={community?.communityType === 'Gated' && !unit.block}
-                                                className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent"
-                                            >
-                                                <option value="">Select</option>
-                                                {getFloorOptions(unit.block).map(floor => (
-                                                    <option key={floor} value={floor}>{floor}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-medium mb-1">Flat No.</label>
-                                            <input type="text" value={unit.flatNumber} onChange={e => handleUnitChange(index, 'flatNumber', e.target.value)} required className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent" />
-                                        </div>
-                                    </div>
 
-                                    <div>
-                                        <label className="block text-xs font-medium mb-1">Size (Sq. Ft)</label>
-                                        <input type="number" value={unit.flatSize} onChange={e => handleUnitChange(index, 'flatSize', e.target.value)} required={community?.communityType === 'Gated'} className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent" />
-                                    </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">Size (Sq. Ft)</label>
+                                                <input type="number" value={unit.flatSize} onChange={e => handleUnitChange(index, 'flatSize', e.target.value)} required={community?.communityType === 'Gated'} className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent" />
+                                            </div>
 
-                                    <div>
-                                        <label className="block text-xs font-medium mb-1">Maintenance Start</label>
-                                        <input type="date" value={unit.maintenanceStartDate} onChange={e => handleUnitChange(index, 'maintenanceStartDate', e.target.value)} required className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent" />
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">Maintenance Start</label>
+                                                <input type="date" value={unit.maintenanceStartDate} onChange={e => handleUnitChange(index, 'maintenanceStartDate', e.target.value)} required className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent" />
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     )}
-
-                    {/* For Staff Roles */}
-                    {newRole !== UserRole.Resident && (
-                        <div>
-                             <label htmlFor="location" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Location / Desk ID</label>
-                             <input type="text" id="location" value={newStaffLocation} onChange={e => setNewStaffLocation(e.target.value)} placeholder="e.g. Main Gate" required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                        </div>
-                    )}
-
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Email Address</label>
-                        <input type="email" id="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                    </div>
-
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Password</label>
-                        <input type="password" id="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                    </div>
                     
-                    <div className="flex justify-end pt-4 space-x-2">
+                    <div className="flex justify-end pt-4 space-x-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] mt-6">
                         <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
                         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add User'}</Button>
                     </div>
