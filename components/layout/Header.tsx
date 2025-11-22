@@ -14,6 +14,28 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
   const { user, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // Helper to format unit display in header
+  const getUnitDisplay = () => {
+      if (!user) return '';
+      
+      if (user.units && user.units.length > 0) {
+          if (user.units.length === 1) {
+              const u = user.units[0];
+              return `Flat: ${u.block ? u.block + '-' : ''}${u.flatNumber}`;
+          } else {
+              // Multiple units
+              return `${user.units.length} Units Owned`;
+          }
+      }
+      // Fallback for staff or legacy
+      return user.flatNumber ? (user.role === 'Resident' ? `Flat: ${user.flatNumber}` : `${user.flatNumber}`) : '';
+  };
+
+  const getTooltip = () => {
+      if (!user?.units || user.units.length <= 1) return undefined;
+      return user.units.map(u => `${u.block ? u.block + '-' : ''}${u.flatNumber}`).join(', ');
+  }
+
   return (
     <>
       <header className="flex justify-between items-center p-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-b border-[var(--border-light)] dark:border-[var(--border-dark)] z-10 sticky top-0">
@@ -32,10 +54,13 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
               onClick={() => setIsProfileOpen(true)}
               role="button"
               tabIndex={0}
+              title={getTooltip()}
             >
               <div className="text-right mr-3 hidden sm:block">
                 <p className="font-semibold text-sm text-[var(--text-light)] dark:text-[var(--text-dark)]">{user.name}</p>
-                <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Flat: {user.flatNumber}</p>
+                <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium">
+                    {getUnitDisplay()}
+                </p>
               </div>
               <img className="w-10 h-10 rounded-full ring-2 ring-offset-2 ring-offset-[var(--card-bg-light)] dark:ring-offset-[var(--card-bg-dark)] ring-[var(--accent)]" src={user?.avatarUrl} alt="User Avatar" />
             </div>

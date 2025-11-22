@@ -86,13 +86,46 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                         <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{user.email}</p>
                         <div className="flex gap-2 mt-1">
                              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">{user.role}</span>
-                             {user.flatNumber && <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700/40 dark:text-gray-300">Flat {user.flatNumber}</span>}
                         </div>
                     </div>
                 </div>
 
+                {/* Units Information Section */}
+                {user.role === 'Resident' && user.units && user.units.length > 0 && (
+                    <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg p-4 border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                        <h4 className="font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-3 uppercase tracking-wider">My Units ({user.units.length})</h4>
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-1">
+                            {user.units.map((unit) => (
+                                <div key={unit.id} className="flex justify-between items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-3 rounded border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-sm">
+                                    <div>
+                                        <p className="font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {unit.block ? `${unit.block} - ` : ''}{unit.flatNumber}
+                                        </p>
+                                        <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                            {unit.floor ? `Floor ${unit.floor}` : ''} 
+                                            {unit.floor && unit.flatSize ? ' • ' : ''}
+                                            {unit.flatSize ? `${unit.flatSize} sq ft` : ''}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-xs font-medium px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">Active</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {/* Fallback for Staff Location */}
+                {user.role !== 'Resident' && user.flatNumber && (
+                    <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg p-4 border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                        <p className="text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Location / Desk</p>
+                        <p className="font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{user.flatNumber}</p>
+                    </div>
+                )}
+
                 <div>
-                    <h4 className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)] mb-3">Change Password</h4>
+                    <h4 className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)] mb-3 pt-2">Change Password</h4>
                     {error && <div className="mb-3 p-3 text-sm text-red-600 bg-red-100 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">{error}</div>}
                     {success && <div className="mb-3 p-3 text-sm text-green-600 bg-green-100 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">{success}</div>}
                     
