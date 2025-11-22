@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import type { User } from '../types';
 import { UserRole } from '../types';
@@ -16,8 +16,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Use a ref to track the current user ID to avoid stale closures in the auth listener
+  const userIdRef = useRef<string | null>(null);
+
+  // Wrapper to keep ref in sync with state
+  const setUser = (u: User | null) => {
+      userIdRef.current = u ? u.id : null;
+      setUserState(u);
+  };
 
   const logout = async () => {
     try {
@@ -38,11 +47,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
         });
         
-        // 5. Redirect to home (No hard reload needed, React state update will handle UI)
-        // window.location.href = '/'; 
+        // 5. Redirect to home
+        window.location.href = '/'; 
     } catch (error) {
         console.error("Logout error:", error);
-        // Fallback for stuck states
         window.location.href = '/';
     }
   };
@@ -90,13 +98,17 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
+            // Check if we already processed this user (via listener race condition)
+            if (userIdRef.current === session.user.id) {
+                if (mounted) setLoading(false);
+                return;
+            }
+
             const userProfile = await fetchProfile(session);
             if (mounted) {
                 if (userProfile) {
                     setUser(userProfile);
                 } else {
-                    // Session exists but profile is missing/broken.
-                    // Don't log out automatically, just leave user null so they hit Login page.
                     console.warn("Session valid but profile not found.");
                     setUser(null);
                 }
@@ -115,20 +127,23 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             setUser(null);
             setLoading(false);
         } else if (session) {
-            // Only fetch if we don't have a user or the ID changed
-            // This prevents thrashing on token refresh
-            setUser(prev => {
-                if (prev && prev.id === session.user.id) return prev;
-                return prev; 
-            });
-            
-            // If we don't have a user yet, fetch it
-            if (!user) {
-                const userProfile = await fetchProfile(session);
-                if (mounted && userProfile) {
-                    setUser(userProfile);
-                }
+            // Check against Ref to see if we already have this user loaded
+            // This is the critical fix for the "Hung" state
+            if (userIdRef.current === session.user.id) {
+                setLoading(false);
+                return; 
             }
+            
+            // If ID matches ref, we do nothing. If different (or null), we fetch.
+            const userProfile = await fetchProfile(session);
+            if (mounted && userProfile) {
+                setUser(userProfile);
+            }
+             // Ensure loading is false once we have a session event handled
+            setLoading(false);
+        } else {
+             // No session, ensure loading is false
+             setLoading(false);
         }
       }
     );
@@ -147,11 +162,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
     if (data.session) {
         // 2. Validate Profile IMMEDIATELY
-        // We do this here to catch "Zombie Users" (Auth success, DB fail) and show a proper error
         const userProfile = await fetchProfile(data.session);
         
         if (!userProfile) {
-            // Clean up the zombie session immediately
             await supabase.auth.signOut();
             throw new Error("Login successful, but user profile not found. Please contact the Administrator.");
         }
