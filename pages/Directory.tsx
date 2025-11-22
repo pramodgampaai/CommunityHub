@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords } from '../services/api';
+import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords, updateMaintenanceStartDate } from '../services/api';
 import type { User, Community, Block, MaintenanceRecord } from '../types';
 import { UserRole, MaintenanceStatus } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon } from '../components/icons';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon, PencilIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const DirectoryRowSkeleton: React.FC = () => (
@@ -54,6 +54,12 @@ const Directory: React.FC = () => {
     const [historyUser, setHistoryUser] = useState<User | null>(null);
     const [maintenanceHistory, setMaintenanceHistory] = useState<MaintenanceRecord[]>([]);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
+    // Edit User Maintenance State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [editMaintenanceDate, setEditMaintenanceDate] = useState('');
+
 
     const fetchResidents = async (communityId: string) => {
         try {
@@ -185,6 +191,32 @@ const Directory: React.FC = () => {
         setMaintenanceHistory([]);
     };
 
+    // Handle Edit Maintenance Date
+    const handleEditClick = (resident: User) => {
+        setEditingUser(resident);
+        setEditMaintenanceDate(resident.maintenanceStartDate || '');
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdateSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser) return;
+
+        setIsSubmitting(true);
+        try {
+            await updateMaintenanceStartDate(editingUser.id, editMaintenanceDate);
+            setIsEditModalOpen(false);
+            alert("Maintenance start date updated successfully!");
+            if (user?.communityId) await fetchResidents(user.communityId);
+        } catch (error: any) {
+            console.error("Update failed", error);
+            alert("Failed to update: " + (error.message || "Unknown error"));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+
     // Filtering logic
     const getFilteredResidents = () => {
         let filtered = residents;
@@ -301,15 +333,26 @@ const Directory: React.FC = () => {
                                 </span>
                             </td>
                              {canViewHistory && (
-                                <td className="p-4 text-right">
+                                <td className="p-4 text-right space-x-2">
                                     {resident.role === UserRole.Resident && (
-                                        <button 
-                                            onClick={() => handleViewHistory(resident)}
-                                            className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] p-1 rounded transition-colors"
-                                            title="View Maintenance History"
-                                        >
-                                            <ClockIcon className="w-5 h-5" />
-                                        </button>
+                                        <>
+                                            {user?.role === UserRole.Admin && (
+                                                <button 
+                                                    onClick={() => handleEditClick(resident)}
+                                                    className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] p-1 rounded transition-colors"
+                                                    title="Edit Resident"
+                                                >
+                                                    <PencilIcon className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => handleViewHistory(resident)}
+                                                className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] p-1 rounded transition-colors"
+                                                title="View Maintenance History"
+                                            >
+                                                <ClockIcon className="w-5 h-5" />
+                                            </button>
+                                        </>
                                     )}
                                 </td>
                             )}
@@ -632,6 +675,26 @@ const Directory: React.FC = () => {
                         <Button onClick={closeHistoryModal} variant="outlined">Close</Button>
                     </div>
                 </div>
+            </Modal>
+
+            {/* Edit User Maintenance Modal */}
+            <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Edit Resident: ${editingUser?.name}`}>
+                <form onSubmit={handleUpdateSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Maintenance Start Date</label>
+                        <input 
+                            type="date" 
+                            value={editMaintenanceDate} 
+                            onChange={(e) => setEditMaintenanceDate(e.target.value)} 
+                            required 
+                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                        />
+                    </div>
+                    <div className="flex justify-end pt-4 space-x-2">
+                        <Button type="button" variant="outlined" onClick={() => setIsEditModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Updating...' : 'Update'}</Button>
+                    </div>
+                </form>
             </Modal>
         </div>
     );

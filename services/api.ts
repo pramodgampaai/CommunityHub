@@ -325,6 +325,14 @@ export const assignComplaint = async (complaintId: string, agentId: string): Pro
     if (error) throw error;
 };
 
+export const updateMaintenanceStartDate = async (userId: string, date: string): Promise<void> => {
+    const { error } = await supabase
+        .from('users')
+        .update({ maintenance_start_date: date })
+        .eq('id', userId);
+    if (error) throw error;
+};
+
 // Maintenance Operations
 
 export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, transactionDate: string): Promise<void> => {
