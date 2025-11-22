@@ -326,11 +326,36 @@ export const assignComplaint = async (complaintId: string, agentId: string): Pro
 };
 
 export const updateMaintenanceStartDate = async (userId: string, date: string): Promise<void> => {
-    const { error } = await supabase
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session");
+
+    // We fetch the user's community ID first to pass it to the edge function
+    const { data: user, error: userError } = await supabase
         .from('users')
-        .update({ maintenance_start_date: date })
-        .eq('id', userId);
-    if (error) throw error;
+        .select('community_id')
+        .eq('id', userId)
+        .single();
+
+    if (userError || !user) throw new Error("User not found");
+
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-maintenance-date', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseKey
+        },
+        body: JSON.stringify({ 
+            user_id: userId, 
+            maintenance_start_date: date,
+            community_id: user.community_id
+        })
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to update maintenance date');
+    }
 };
 
 // Maintenance Operations
