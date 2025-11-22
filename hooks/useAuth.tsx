@@ -19,46 +19,36 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Define logout first so it can be used in fetchProfile
   const logout = async () => {
-    // 1. Clear React State immediately
-    setUser(null);
-    
     try {
-        const theme = localStorage.getItem('theme');
+        // 1. Clear React State
+        setUser(null);
         
-        // 2. Attempt server-side sign out (best effort, don't block)
-        await Promise.race([
-            supabase.auth.signOut(),
-            new Promise(resolve => setTimeout(resolve, 500)) // Timeout after 500ms
-        ]).catch(err => console.warn("Supabase signOut warning:", err));
+        // 2. Sign out from Supabase
+        await supabase.auth.signOut();
 
-        // 3. Nuke ALL Storage
+        // 3. Clear Local Storage (preserving theme)
+        const theme = localStorage.getItem('theme');
         localStorage.clear();
         sessionStorage.clear();
-        
-        // 4. Attempt to clear cookies (if any exist)
+        if (theme) localStorage.setItem('theme', theme);
+
+        // 4. Clear cookies
         document.cookie.split(";").forEach((c) => {
           document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
         });
-
-        // 5. Restore Theme Preference
-        if (theme) {
-            localStorage.setItem('theme', theme);
-        }
         
+        // 5. Redirect to home (No hard reload needed, React state update will handle UI)
+        // window.location.href = '/'; 
     } catch (error) {
         console.error("Logout error:", error);
-    } finally {
-        // 6. HARD RELOAD to ensure a completely clean JS environment
+        // Fallback for stuck states
         window.location.href = '/';
     }
   };
 
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchProfile = async (session: Session) => {
+  // Helper to fetch and map profile
+  const fetchProfile = async (session: Session) => {
       try {
         // Add a timestamp to bust any browser GET cache
         const { data: profile, error } = await supabase
@@ -67,21 +57,13 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           .eq('id', session.user.id)
           .single();
 
-        if (!mounted) return;
-
         if (error) {
-            console.error("CRITICAL: Error fetching profile from public.users:", error);
-            // If we have a session but can't read the profile (RLS error or missing row),
-            // we must logout to prevent getting stuck.
-            if (error.code === 'PGRST116' || error.code === '42501') { // Not found or Permission denied
-                console.warn("Profile missing or inaccessible (RLS Policy Error). Logging out to prevent loop.");
-                await logout();
-                return;
-            }
+            console.error("Error fetching profile:", error);
+            return null;
         }
 
         if (profile) {
-          const appUser: User = {
+          return {
             id: profile.id,
             name: profile.name || 'User',
             email: profile.email || session.user.email || '',
@@ -91,33 +73,62 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             communityId: profile.community_id,
             status: profile.status || 'active',
             maintenanceStartDate: profile.maintenance_start_date
-          };
-          setUser(appUser);
-        } else {
-          console.warn('Profile missing for authenticated user (Row not found).');
-          // Force cleanup if profile doesn't exist
-          await logout();
+          } as User;
         }
+        return null;
       } catch (err) {
         console.error("Unexpected error fetching profile:", err);
-        if (mounted) setUser(null);
-      } finally {
-        if (mounted) setLoading(false);
+        return null;
       }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initAuth = async () => {
+        // Get initial session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+            const userProfile = await fetchProfile(session);
+            if (mounted) {
+                if (userProfile) {
+                    setUser(userProfile);
+                } else {
+                    // Session exists but profile is missing/broken.
+                    // Don't log out automatically, just leave user null so they hit Login page.
+                    console.warn("Session valid but profile not found.");
+                    setUser(null);
+                }
+            }
+        }
+        if (mounted) setLoading(false);
     };
 
-    // Initial loading state
-    setLoading(true);
-    
+    initAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session: Session | null) => {
         if (!mounted) return;
 
-        if (session) {
-          await fetchProfile(session);
-        } else {
-          setUser(null);
-          setLoading(false);
+        if (event === 'SIGNED_OUT') {
+            setUser(null);
+            setLoading(false);
+        } else if (session) {
+            // Only fetch if we don't have a user or the ID changed
+            // This prevents thrashing on token refresh
+            setUser(prev => {
+                if (prev && prev.id === session.user.id) return prev;
+                return prev; 
+            });
+            
+            // If we don't have a user yet, fetch it
+            if (!user) {
+                const userProfile = await fetchProfile(session);
+                if (mounted && userProfile) {
+                    setUser(userProfile);
+                }
+            }
         }
       }
     );
@@ -130,9 +141,23 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   
 
   const login = async (email: string, pass: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) {
-        throw error;
+    // 1. Perform Auth
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+
+    if (data.session) {
+        // 2. Validate Profile IMMEDIATELY
+        // We do this here to catch "Zombie Users" (Auth success, DB fail) and show a proper error
+        const userProfile = await fetchProfile(data.session);
+        
+        if (!userProfile) {
+            // Clean up the zombie session immediately
+            await supabase.auth.signOut();
+            throw new Error("Login successful, but user profile not found. Please contact the Administrator.");
+        }
+        
+        // 3. Update State
+        setUser(userProfile);
     }
   };
 
