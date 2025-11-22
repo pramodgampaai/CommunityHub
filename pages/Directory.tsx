@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords, updateMaintenanceStartDate } from '../services/api';
 import type { User, Community, Block, MaintenanceRecord, Unit } from '../types';
@@ -324,96 +323,105 @@ const Directory: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                    {users.map((resident) => (
-                        <tr key={resident.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors align-top">
-                            <td className="p-4">
-                                <div className="flex items-center">
-                                    <div className="relative flex-shrink-0">
-                                        <img className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)]" src={resident.avatarUrl} alt={resident.name} />
-                                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${resident.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    {users.length > 0 ? (
+                        users.map((resident) => (
+                            <tr key={resident.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors align-top">
+                                <td className="p-4">
+                                    <div className="flex items-center">
+                                        <div className="relative flex-shrink-0">
+                                            <img className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)]" src={resident.avatarUrl} alt={resident.name} />
+                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${resident.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                        </div>
+                                        <div className="ml-3">
+                                            <div className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{resident.name}</div>
+                                            {/* Display Unit Count if multiple */}
+                                            {resident.units && resident.units.length > 1 && (
+                                                <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{resident.units.length} Properties</div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="ml-3">
-                                        <div className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{resident.name}</div>
-                                        {/* Display Unit Count if multiple */}
-                                        {resident.units && resident.units.length > 1 && (
-                                            <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{resident.units.length} Properties</div>
-                                        )}
-                                    </div>
-                                </div>
-                            </td>
-                            <td className="p-4">
-                                {/* MULTI-UNIT DISPLAY LOGIC */}
-                                {resident.role === UserRole.Resident && resident.units && resident.units.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {resident.units.map((u) => (
-                                            <div key={u.id} className="flex items-center justify-between gap-3 p-1.5 rounded bg-black/5 dark:bg-white/5 border border-transparent hover:border-[var(--border-light)] dark:hover:border-[var(--border-dark)] transition-colors max-w-[280px]">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                                        {u.block ? `${u.block} - ` : ''}{u.flatNumber}
-                                                    </span>
-                                                    <div className="flex gap-2 text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                                        {u.floor && <span>Flr {u.floor}</span>}
-                                                        {u.flatSize && <span>{u.flatSize} sqft</span>}
+                                </td>
+                                <td className="p-4">
+                                    {/* MULTI-UNIT DISPLAY LOGIC */}
+                                    {resident.role === UserRole.Resident && resident.units && resident.units.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {resident.units.map((u) => (
+                                                <div key={u.id} className="flex items-center justify-between gap-3 p-1.5 rounded bg-black/5 dark:bg-white/5 border border-transparent hover:border-[var(--border-light)] dark:hover:border-[var(--border-dark)] transition-colors max-w-[280px]">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                            {u.block ? `${u.block} - ` : ''}{u.flatNumber}
+                                                        </span>
+                                                        <div className="flex gap-2 text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                            {u.floor && <span>Flr {u.floor}</span>}
+                                                            {u.floor && u.flatSize && <span>•</span>}
+                                                            {u.flatSize && <span>{u.flatSize} sqft</span>}
+                                                        </div>
+                                                        {canViewMaintenanceStart && u.maintenanceStartDate && (
+                                                             <span className="text-[10px] text-[var(--accent)] mt-0.5">
+                                                                Start: {new Date(u.maintenanceStartDate).toLocaleDateString()}
+                                                             </span>
+                                                        )}
                                                     </div>
-                                                    {canViewMaintenanceStart && u.maintenanceStartDate && (
-                                                         <span className="text-[10px] text-[var(--accent)] mt-0.5">
-                                                            Start: {new Date(u.maintenanceStartDate).toLocaleDateString()}
-                                                         </span>
+                                                    
+                                                    {/* Unit Specific Action (Edit Date) */}
+                                                    {canViewMaintenanceStart && (
+                                                        <button 
+                                                            onClick={() => handleEditClick(resident, u)}
+                                                            className="p-1 text-[var(--text-secondary-light)] hover:text-[var(--accent)] rounded transition-colors"
+                                                            title="Edit Maintenance Start Date"
+                                                        >
+                                                            <PencilIcon className="w-3.5 h-3.5" />
+                                                        </button>
                                                     )}
                                                 </div>
-                                                
-                                                {/* Unit Specific Action (Edit Date) */}
-                                                {canViewMaintenanceStart && (
-                                                    <button 
-                                                        onClick={() => handleEditClick(resident, u)}
-                                                        className="p-1 text-[var(--text-secondary-light)] hover:text-[var(--accent)] rounded transition-colors"
-                                                        title="Edit Maintenance Start Date"
-                                                    >
-                                                        <PencilIcon className="w-3.5 h-3.5" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    // STAFF or LEGACY View
-                                    <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                        {resident.flatNumber || 'N/A'}
-                                        {resident.role !== UserRole.Resident && (
-                                            <span className="block text-xs opacity-70">Location</span>
-                                        )}
-                                    </div>
-                                )}
-                            </td>
-                            <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                {resident.email}
-                            </td>
-                            <td className="p-4">
-                                <span className={`px-2 py-1 text-xs font-medium rounded-full 
-                                    ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
-                                      resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
-                                      resident.role === UserRole.Helpdesk ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
-                                      resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
-                                      'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
-                                    {resident.role}
-                                </span>
-                            </td>
-                            <td className="p-4">
-                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${resident.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
-                                    {resident.status}
-                                </span>
-                            </td>
-                            {canViewHistory && (
-                                <td className="p-4 text-right">
-                                    {resident.role === UserRole.Resident && (
-                                        <Button size="sm" variant="outlined" onClick={() => handleViewHistory(resident)} title="View Maintenance History">
-                                            <ClockIcon className="w-4 h-4" />
-                                        </Button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        // STAFF or LEGACY View
+                                        <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                            {resident.flatNumber || 'N/A'}
+                                            {resident.role !== UserRole.Resident && (
+                                                <span className="block text-xs opacity-70">Location</span>
+                                            )}
+                                        </div>
                                     )}
                                 </td>
-                            )}
+                                <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                    {resident.email}
+                                </td>
+                                <td className="p-4">
+                                    <span className={`px-2 py-1 text-xs font-medium rounded-full 
+                                        ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
+                                          resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
+                                          resident.role === UserRole.Helpdesk ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
+                                          resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
+                                          'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
+                                        {resident.role}
+                                    </span>
+                                </td>
+                                <td className="p-4">
+                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${resident.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                        {resident.status}
+                                    </span>
+                                </td>
+                                {canViewHistory && (
+                                    <td className="p-4 text-right">
+                                        {resident.role === UserRole.Resident && (
+                                            <Button size="sm" variant="outlined" onClick={() => handleViewHistory(resident)} title="View Maintenance History">
+                                                <ClockIcon className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </td>
+                                )}
+                            </tr>
+                        ))
+                    ) : (
+                        <tr>
+                            <td colSpan={canViewHistory ? 6 : 5} className="p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                No users found matching your criteria.
+                            </td>
                         </tr>
-                    ))}
+                    )}
                 </tbody>
             </table>
         </Card>
@@ -486,8 +494,8 @@ const Directory: React.FC = () => {
             ) : isGrouped ? (
                  Object.entries(groupedResidents).map(([role, users]) => (
                      <div key={role} className="space-y-2 animated-card">
-                         <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] px-2 capitalize">{role}s ({users.length})</h3>
-                         {renderTable(users)}
+                         <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] px-2 capitalize">{role}s ({(users as User[]).length})</h3>
+                         {renderTable(users as User[])}
                      </div>
                  ))
             ) : (

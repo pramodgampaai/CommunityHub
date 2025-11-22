@@ -1,3 +1,4 @@
+
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit } from '../types';
 
@@ -92,46 +93,64 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
     })) as Booking[];
 };
 
-export const getResidents = async (communityId: string): Promise<User[]> => {
-    // Fetch users and JOIN their units
-    const { data, error } = await supabase
-        .from('users')
-        .select('*, units(*)')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: true }); 
+// Helper to map DB user to User interface
+const mapUserFromDB = (u: any): User => {
+    const primaryUnit = u.units && u.units.length > 0 ? u.units[0] : null;
     
-    if (error) throw error;
-    
-    // Map database columns to User interface
-    return data.map((u: any) => {
-        // Legacy flat number support: If units exist, take the first one, else fallback to legacy column
-        const primaryUnit = u.units && u.units.length > 0 ? u.units[0] : null;
-        
-        const mappedUnits: Unit[] = u.units?.map((unit: any) => ({
-            id: unit.id,
-            userId: unit.user_id,
-            communityId: unit.community_id,
-            flatNumber: unit.flat_number,
-            block: unit.block,
-            floor: unit.floor,
-            flatSize: unit.flat_size,
-            maintenanceStartDate: unit.maintenance_start_date
-        })) || [];
+    const mappedUnits: Unit[] = u.units?.map((unit: any) => ({
+        id: unit.id,
+        userId: unit.user_id,
+        communityId: unit.community_id,
+        flatNumber: unit.flat_number,
+        block: unit.block,
+        floor: unit.floor,
+        flatSize: unit.flat_size,
+        maintenanceStartDate: unit.maintenance_start_date
+    })) || [];
 
-        return {
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            avatarUrl: u.avatar_url,
-            // Display purpose: Use first unit or legacy field
-            flatNumber: primaryUnit ? primaryUnit.flat_number : u.flat_number,
-            role: u.role as UserRole,
-            communityId: u.community_id,
-            status: u.status,
-            units: mappedUnits,
-            maintenanceStartDate: u.maintenance_start_date // Legacy
-        } as User;
-    });
+    return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        avatarUrl: u.avatar_url,
+        // Display purpose: Use first unit or legacy field
+        flatNumber: primaryUnit ? primaryUnit.flat_number : u.flat_number,
+        role: u.role as UserRole,
+        communityId: u.community_id,
+        status: u.status,
+        units: mappedUnits,
+        maintenanceStartDate: u.maintenance_start_date // Legacy
+    } as User;
+};
+
+export const getResidents = async (communityId: string): Promise<User[]> => {
+    try {
+        // Fetch users and JOIN their units
+        const { data, error } = await supabase
+            .from('users')
+            .select('*, units(*)')
+            .eq('community_id', communityId)
+            .order('created_at', { ascending: true }); 
+        
+        if (error) throw error;
+        return data.map(mapUserFromDB);
+
+    } catch (error: any) {
+        // Fallback: If units table doesn't exist or relationship issue, fetch users only
+        // This ensures the directory still works even if DB migration is pending
+        if (error.code === 'PGRST200' || error.message?.includes('units') || error.message?.includes('relation')) {
+            console.warn("Fetching residents without units (Schema mismatch or missing table).");
+            const { data, error: retryError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('community_id', communityId)
+                .order('created_at', { ascending: true });
+            
+            if (retryError) throw retryError;
+            return data.map(mapUserFromDB);
+        }
+        throw error;
+    }
 };
 
 export const getCommunity = async (communityId: string): Promise<Community> => {
