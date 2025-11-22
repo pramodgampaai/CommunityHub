@@ -6,7 +6,7 @@ import { UserRole, MaintenanceStatus } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon, PencilIcon, TrashIcon } from '../components/icons';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon, PencilIcon, TrashIcon, AlertTriangleIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const DirectoryRowSkeleton: React.FC = () => (
@@ -98,9 +98,15 @@ const Directory: React.FC = () => {
     };
 
     useEffect(() => {
-        if (user?.communityId) {
-            fetchResidents(user.communityId);
-            fetchCommunityDetails(user.communityId);
+        if (user) {
+            if (user.communityId) {
+                fetchResidents(user.communityId);
+                fetchCommunityDetails(user.communityId);
+            } else {
+                // If user has no community ID, we stop loading but list remains empty
+                console.warn("Logged in user has no Community ID");
+                setLoading(false);
+            }
         }
     }, [user]);
 
@@ -277,8 +283,7 @@ const Directory: React.FC = () => {
         let allowedRoles: UserRole[] = [];
 
         if (user.role === UserRole.Admin) {
-            // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin)
-            // Also including Security so they aren't invisible, as they are generally managed by Admin.
+            // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin), Security
             allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.Helpdesk, UserRole.Security];
         } else if (user.role === UserRole.Resident) {
             // Resident sees: Admin, Resident
@@ -287,7 +292,7 @@ const Directory: React.FC = () => {
             // Helpdesk Admin sees: Helpdesk, HelpdeskAgent
             allowedRoles = [UserRole.Helpdesk, UserRole.HelpdeskAgent];
         } else if (user.role === UserRole.HelpdeskAgent) {
-            // Helpdesk Agent should not see anything (Page access restricted in App.tsx, but safe fallback here)
+            // Helpdesk Agent should not see anything
             return [];
         }
 
@@ -331,6 +336,18 @@ const Directory: React.FC = () => {
     // If Helpdesk Agent tries to view, render nothing (Access Control)
     if (user?.role === UserRole.HelpdeskAgent) {
         return <div className="p-8 text-center text-red-500">Unauthorized Access</div>;
+    }
+
+    if (!user?.communityId && !loading) {
+         return (
+             <div className="p-8 flex flex-col items-center justify-center text-center">
+                 <AlertTriangleIcon className="w-12 h-12 text-red-500 mb-4"/>
+                 <h3 className="text-xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Account Setup Incomplete</h3>
+                 <p className="text-[var(--text-secondary-light)] mt-2">
+                     Your account is not associated with any community. Please contact the Super Admin.
+                 </p>
+             </div>
+         )
     }
 
     const renderTable = (users: User[]) => (
