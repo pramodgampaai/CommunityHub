@@ -1,4 +1,3 @@
-
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit } from '../types';
 
@@ -93,6 +92,19 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
     })) as Booking[];
 };
 
+const normalizeRole = (r: string): UserRole => {
+    if (!r) return UserRole.Resident;
+    const lower = r.toLowerCase();
+    if (lower === 'admin') return UserRole.Admin;
+    if (lower === 'resident') return UserRole.Resident;
+    if (lower === 'security') return UserRole.Security;
+    if (lower === 'helpdesk') return UserRole.Helpdesk;
+    if (lower === 'helpdeskagent') return UserRole.HelpdeskAgent;
+    if (lower === 'superadmin') return UserRole.SuperAdmin;
+    // Fallback to capitalization
+    return (r.charAt(0).toUpperCase() + r.slice(1)) as UserRole;
+};
+
 // Helper to map DB user to User interface
 const mapUserFromDB = (u: any, units: any[] = []): User => {
     // Map units specific to this user
@@ -118,7 +130,7 @@ const mapUserFromDB = (u: any, units: any[] = []): User => {
         avatarUrl: u.avatar_url,
         // Display purpose: Use first unit or legacy field
         flatNumber: primaryUnit ? primaryUnit.flatNumber : u.flat_number,
-        role: u.role as UserRole,
+        role: normalizeRole(u.role),
         communityId: u.community_id,
         status: u.status,
         units: mappedUnits,
