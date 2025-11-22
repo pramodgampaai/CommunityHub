@@ -47,12 +47,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
                 onClick={() => setActivePage(item.name)}
                 className={`w-full flex items-center p-3 rounded-full transition-all duration-200 group ${
                   activePage === item.name
-                    ? 'bg-blue-100 dark:bg-blue-500/20 text-googleBlue-600 dark:text-blue-300'
+                    ? 'bg-teal-100 dark:bg-teal-500/20 text-brand-600 dark:text-teal-300'
                     : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-gray-100 dark:hover:bg-white/5'
                 }`}
               >
                 <item.icon className="w-6 h-6" />
-                <span className={`ml-4 font-medium ${activePage === item.name ? 'text-googleBlue-600 dark:text-blue-200' : ''}`}>{item.name}</span>
+                <span className={`ml-4 font-medium ${activePage === item.name ? 'text-brand-600 dark:text-teal-200' : ''}`}>{item.name}</span>
               </button>
             </li>
           ))}

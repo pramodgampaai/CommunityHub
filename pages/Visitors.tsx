@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createVisitor, getVisitors } from '../services/api';
 import type { Visitor } from '../types';
@@ -172,7 +173,7 @@ const Visitors: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center animated-card">
-                <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Visitor Management</h2>
+                <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Visitor Management</h2>
                 <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add New Visitor" variant="fab">
                     <span className="hidden sm:inline">New Visitor</span>
                     <span className="sm:hidden">New</span>

@@ -11,9 +11,9 @@ const Button: React.FC<ButtonProps> = ({ children, variant = 'filled', size = 'm
   const baseClasses = 'inline-flex items-center justify-center font-medium focus:outline-none focus:ring-4 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md';
 
   const variantClasses = {
-    filled: 'bg-googleBlue-500 hover:bg-googleBlue-600 text-white focus:ring-googleBlue-500/30 border border-transparent',
-    outlined: 'bg-transparent text-googleBlue-500 border border-current hover:bg-googleBlue-500/10 focus:ring-googleBlue-500/30',
-    fab: 'bg-googleBlue-500 hover:bg-googleBlue-600 text-white focus:ring-googleBlue-500/30 border border-transparent rounded-full px-6',
+    filled: 'bg-brand-500 hover:bg-brand-600 text-white focus:ring-brand-500/30 border border-transparent',
+    outlined: 'bg-transparent text-brand-500 border border-current hover:bg-brand-500/10 focus:ring-brand-500/30',
+    fab: 'bg-brand-500 hover:bg-brand-600 text-white focus:ring-brand-500/30 border border-transparent rounded-full px-6',
   };
 
   const sizeClasses = {

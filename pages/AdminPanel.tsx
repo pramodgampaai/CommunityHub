@@ -19,7 +19,7 @@ const AdminHeader: React.FC<{ theme: Theme; toggleTheme: () => void; }> = ({ the
     return (
         <>
             <header className="flex justify-between items-center p-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-b border-[var(--border-light)] dark:border-[var(--border-dark)] z-10 sticky top-0">
-                <h1 className="text-xl font-bold text-[var(--accent)]">CommunityHub - Super Admin</h1>
+                <h1 className="text-2xl font-bold text-[var(--accent)]">CommunityHub - Super Admin</h1>
                 <div className="flex items-center">
                     <button
                         onClick={toggleTheme}
@@ -217,7 +217,7 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
                 <div className="max-w-7xl mx-auto">
                     <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-3xl font-bold">Platform Overview</h2>
+                        <h2 className="text-2xl font-bold">Platform Overview</h2>
                         <Button onClick={openCreateCommunityModal} leftIcon={<PlusIcon className="w-5 h-5" />}>
                             Create Community
                         </Button>

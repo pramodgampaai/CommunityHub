@@ -34,24 +34,30 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
   });
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-t border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20 overflow-x-auto">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-t border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-20 overflow-x-auto no-scrollbar">
       <div className={`flex justify-around items-center h-16 min-w-max px-2 ${filteredNavItems.length < 4 ? 'justify-evenly' : ''}`}>
         {filteredNavItems.map((item) => (
           <button
             key={item.name}
             onClick={() => setActivePage(item.name)}
-            className={`flex flex-col items-center justify-center w-16 h-full transition-colors duration-200 ${
+            aria-label={`Navigate to ${item.name}`}
+            aria-current={activePage === item.name ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center w-16 h-full transition-colors duration-200 group focus:outline-none ${
               activePage === item.name ? 'text-[var(--accent)]' : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]'
             }`}
           >
-            <div className={`flex items-center justify-center rounded-full px-3 py-1 ${activePage === item.name ? 'bg-blue-100 dark:bg-blue-500/20' : ''}`}>
+            <div className={`flex items-center justify-center rounded-full px-3 py-1 transition-colors duration-200 ${
+                activePage === item.name 
+                    ? 'bg-teal-100 dark:bg-teal-500/20' 
+                    : 'group-hover:bg-gray-100 dark:group-hover:bg-white/5'
+            }`}>
                 <item.icon className="w-6 h-6" />
             </div>
             <span className="text-[10px] font-medium mt-1 truncate w-full text-center">{item.name}</span>
           </button>
         ))}
       </div>
-    </div>
+    </nav>
   );
 };
 

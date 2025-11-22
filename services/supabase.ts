@@ -16,9 +16,10 @@ const supabaseKeyFromEnv = (import.meta as any).env?.VITE_SUPABASE_KEY ?? proces
 // 2. Replace "YOUR_SUPABASE_KEY" with your Supabase public anon key.
 //
 // WARNING: Do not commit your keys to a public repository.
-const supabaseUrlPlaceholder = "YOUR_SUPABASE_URL";
-const supabaseKeyPlaceholder = "YOUR_SUPABASE_KEY";
-
+//const supabaseUrlPlaceholder = "YOUR_SUPABASE_URL";
+//const supabaseKeyPlaceholder = "YOUR_SUPABASE_KEY";
+const supabaseUrlPlaceholder = "https://vnfmtbkhptkntaqzfdcx.supabase.co";
+const supabaseKeyPlaceholder = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZm10YmtocHRrbnRhcXpmZGN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzOTkyNjcsImV4cCI6MjA3ODk3NTI2N30.jv6cXggO9e2qSWQOAqZfDS3k1g5JJrfyyvVPokT3xkk";
 const supabaseUrl = supabaseUrlFromEnv || supabaseUrlPlaceholder;
 export const supabaseKey = supabaseKeyFromEnv || supabaseKeyPlaceholder;
 

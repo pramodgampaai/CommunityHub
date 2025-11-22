@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { CurrencyRupeeIcon, MagnifyingGlassIcon, FunnelIcon } from '../components/icons';
+import { useScreen } from '../hooks/useScreen';
 
 interface MaintenanceProps {
     initialFilter?: MaintenanceStatus;
@@ -32,12 +33,27 @@ const MaintenanceSkeleton: React.FC = () => (
     </tr>
 );
 
+const MobileCardSkeleton: React.FC = () => (
+    <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 animate-pulse mb-4">
+        <div className="flex justify-between mb-4">
+            <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
+        <div className="flex justify-between">
+            <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+            <div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+    </div>
+);
+
 const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
     const [records, setRecords] = useState<MaintenanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const { user } = useAuth();
+    const { isMobile } = useScreen();
     
     const [selectedRecord, setSelectedRecord] = useState<MaintenanceRecord | null>(null);
     
@@ -155,11 +171,47 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
         return true;
     });
 
+    const renderMobileList = () => (
+        <div className="space-y-4">
+            {filteredRecords.length === 0 ? (
+                <div className="p-8 text-center text-[var(--text-secondary-light)]">No records found.</div>
+            ) : (
+                filteredRecords.map(record => (
+                    <div key={record.id} className="p-4 rounded-xl bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] shadow-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h4 className="font-bold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.flatNumber}</h4>
+                                {isAdmin && <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.userName}</p>}
+                            </div>
+                            <span className="font-bold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{record.amount}</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-3">
+                            <span>{new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</span>
+                            {record.transactionDate && <span>Paid: {new Date(record.transactionDate).toLocaleDateString()}</span>}
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                            <StatusPill status={record.status} />
+                            
+                            {!isAdmin && record.status === MaintenanceStatus.Pending && (
+                                <Button size="sm" onClick={() => handlePayClick(record)} leftIcon={<CurrencyRupeeIcon className="w-4 h-4"/>}>Pay</Button>
+                            )}
+                            {isAdmin && record.status === MaintenanceStatus.Submitted && (
+                                <Button size="sm" onClick={() => handleVerifyClick(record)}>Verify</Button>
+                            )}
+                        </div>
+                    </div>
+                ))
+            )}
+        </div>
+    );
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center animated-card">
                 <div>
-                    <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Maintenance History</h2>
+                    <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Maintenance History</h2>
                     <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-lg mt-1">
                         {isAdmin ? "Manage and verify resident payments." : "View dues and payment history."}
                     </p>
@@ -167,7 +219,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
             </div>
 
             {isAdmin && (
-                <div className="flex flex-col sm:flex-row gap-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
+                <div className="flex flex-col gap-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
                      <div className="relative flex-1">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <MagnifyingGlassIcon className="h-5 w-5 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]" />
@@ -184,7 +236,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                          <select 
                             value={filterStatus} 
                             onChange={(e) => setFilterStatus(e.target.value as any)}
-                            className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                            className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                         >
                             <option value="All">All Status</option>
                             <option value={MaintenanceStatus.Pending}>Pending</option>
@@ -198,66 +250,81 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                 </div>
             )}
 
-            <Card className="overflow-x-auto animated-card">
-                <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead className="bg-black/5 dark:bg-white/5">
-                        <tr>
-                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                {isAdmin ? 'Resident' : 'Unit'}
-                            </th>
-                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Month</th>
-                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Amount</th>
-                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
-                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Payment Date</th>
-                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                        {loading ? (
-                             Array.from({ length: 5 }).map((_, i) => <MaintenanceSkeleton key={i} />)
-                        ) : filteredRecords.length === 0 ? (
-                            <tr><td colSpan={6} className="p-4 text-center text-[var(--text-secondary-light)]">No records found.</td></tr>
-                        ) : (
-                            filteredRecords.map(record => (
-                                <tr key={record.id}>
-                                    <td className="p-4">
-                                        {isAdmin ? (
-                                            <div>
-                                                <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.userName}</div>
-                                                <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.flatNumber}</div>
-                                            </div>
-                                        ) : (
-                                            <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                                {record.flatNumber}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                        {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
-                                    </td>
-                                    <td className="p-4 font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                        ₹{record.amount}
-                                    </td>
-                                    <td className="p-4">
-                                        <StatusPill status={record.status} />
-                                    </td>
-                                    <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                        {record.transactionDate ? new Date(record.transactionDate).toLocaleDateString() : '-'}
-                                    </td>
-                                    <td className="p-4">
-                                        {!isAdmin && record.status === MaintenanceStatus.Pending && (
-                                            <Button size="sm" onClick={() => handlePayClick(record)} leftIcon={<CurrencyRupeeIcon className="w-4 h-4"/>}>Pay Now</Button>
-                                        )}
-                                        {isAdmin && record.status === MaintenanceStatus.Submitted && (
-                                            <Button size="sm" onClick={() => handleVerifyClick(record)}>Verify</Button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </Card>
+            {loading ? (
+                isMobile ? (
+                    <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <MobileCardSkeleton key={i} />)}</div>
+                ) : (
+                    <Card className="overflow-x-auto animated-card">
+                         <table className="w-full text-left border-collapse whitespace-nowrap">
+                             {/* Table Header Skeletons handled by row skeleton loop below */}
+                            <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                                {Array.from({ length: 5 }).map((_, i) => <MaintenanceSkeleton key={i} />)}
+                            </tbody>
+                        </table>
+                    </Card>
+                )
+            ) : isMobile ? (
+                renderMobileList()
+            ) : (
+                <Card className="overflow-x-auto animated-card">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                        <thead className="bg-black/5 dark:bg-white/5">
+                            <tr>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                    {isAdmin ? 'Resident' : 'Unit'}
+                                </th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Month</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Amount</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Payment Date</th>
+                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                            {filteredRecords.length === 0 ? (
+                                <tr><td colSpan={6} className="p-4 text-center text-[var(--text-secondary-light)]">No records found.</td></tr>
+                            ) : (
+                                filteredRecords.map(record => (
+                                    <tr key={record.id}>
+                                        <td className="p-4">
+                                            {isAdmin ? (
+                                                <div>
+                                                    <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.userName}</div>
+                                                    <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.flatNumber}</div>
+                                                </div>
+                                            ) : (
+                                                <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                    {record.flatNumber}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+                                        </td>
+                                        <td className="p-4 font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            ₹{record.amount}
+                                        </td>
+                                        <td className="p-4">
+                                            <StatusPill status={record.status} />
+                                        </td>
+                                        <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                            {record.transactionDate ? new Date(record.transactionDate).toLocaleDateString() : '-'}
+                                        </td>
+                                        <td className="p-4">
+                                            {!isAdmin && record.status === MaintenanceStatus.Pending && (
+                                                <Button size="sm" onClick={() => handlePayClick(record)} leftIcon={<CurrencyRupeeIcon className="w-4 h-4"/>}>Pay Now</Button>
+                                            )}
+                                            {isAdmin && record.status === MaintenanceStatus.Submitted && (
+                                                <Button size="sm" onClick={() => handleVerifyClick(record)}>Verify</Button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </Card>
+            )}
 
             {/* Resident Payment Modal */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Submit Payment">

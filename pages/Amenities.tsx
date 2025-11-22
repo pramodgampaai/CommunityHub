@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createBooking, getAmenities, createAmenity } from '../services/api';
 import type { Amenity } from '../types';
@@ -131,7 +132,7 @@ const Amenities: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
         <div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Amenity Booking</h2>
+            <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Amenity Booking</h2>
             <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-lg mt-1">Book community facilities for your use.</p>
         </div>
         {user?.role === UserRole.Admin && (

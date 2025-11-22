@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createComplaint, getComplaints, updateComplaintStatus, getResidents, assignComplaint } from '../services/api';
 import type { Complaint, User } from '../types';
@@ -166,7 +167,7 @@ const HelpDesk: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
-        <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Help Desk</h2>
+        <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Help Desk</h2>
         {user?.role === UserRole.Resident && (
             <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Raise New Complaint" variant="fab">
                 <span className="hidden sm:inline">New Complaint</span>

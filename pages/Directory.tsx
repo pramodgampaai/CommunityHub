@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon, PencilIcon, TrashIcon, AlertTriangleIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
+import { useScreen } from '../hooks/useScreen';
 
 const DirectoryRowSkeleton: React.FC = () => (
     <tr className="animate-pulse">
@@ -24,6 +25,22 @@ const DirectoryRowSkeleton: React.FC = () => (
     </tr>
 );
 
+const MobileCardSkeleton: React.FC = () => (
+    <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 animate-pulse mb-4">
+        <div className="flex items-center justify-between mb-4">
+             <div className="flex items-center">
+                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                <div className="ml-3 h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            </div>
+            <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+        </div>
+        <div className="space-y-2">
+            <div className="h-4 w-full bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="h-4 w-2/3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+        </div>
+    </div>
+);
+
 interface UnitFormData {
     block: string;
     floor: string;
@@ -38,6 +55,7 @@ const Directory: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { user } = useAuth();
+    const { isMobile } = useScreen();
     
     // View Controls
     const [filterRole, setFilterRole] = useState<UserRole | 'All'>('All');
@@ -468,10 +486,82 @@ const Directory: React.FC = () => {
         </Card>
     );
 
+    const renderMobileCards = (users: User[]) => (
+        <div className="space-y-4">
+            {users.length > 0 ? (
+                users.map(resident => (
+                    <div key={resident.id} className="p-4 rounded-xl bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] shadow-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
+                        {/* Header: Avatar + Name + Role */}
+                        <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                                <img className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)]" src={resident.avatarUrl} alt={resident.name} />
+                                <div>
+                                    <h4 className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{resident.name}</h4>
+                                    <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{resident.email}</p>
+                                </div>
+                            </div>
+                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full 
+                                ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
+                                  resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
+                                  resident.role === UserRole.Helpdesk ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
+                                  resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
+                                  'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
+                                {resident.role}
+                            </span>
+                        </div>
+
+                        {/* Units / Location Info */}
+                        <div className="bg-black/5 dark:bg-white/5 rounded-lg p-3 mb-3">
+                             {resident.role === UserRole.Resident && resident.units && resident.units.length > 0 ? (
+                                <div className="space-y-2">
+                                    {resident.units.map((u) => (
+                                        <div key={u.id} className="flex items-center justify-between text-sm">
+                                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                {u.block ? `${u.block} - ` : ''}{u.flatNumber}
+                                            </span>
+                                            {canViewMaintenanceStart && (
+                                                <button 
+                                                    onClick={() => handleEditClick(resident, u)}
+                                                    className="text-[var(--accent)] text-xs"
+                                                >
+                                                    Edit Date
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                             ) : (
+                                <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                    <span className="font-medium">Location:</span> {resident.flatNumber || 'N/A'}
+                                </div>
+                             )}
+                        </div>
+
+                        {/* Footer: Status + Actions */}
+                        <div className="flex items-center justify-between pt-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                             <span className={`px-2 py-1 text-xs font-medium rounded-full ${resident.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                {resident.status}
+                            </span>
+                             {canViewHistory && resident.role === UserRole.Resident && (
+                                <Button size="sm" variant="outlined" onClick={() => handleViewHistory(resident)}>
+                                    History
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                ))
+            ) : (
+                <div className="p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                    No users found.
+                </div>
+            )}
+        </div>
+    );
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center animated-card">
-                <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
+                <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
                 {canAddUser && (
                     <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add New User" variant="fab">
                         <span className="hidden sm:inline">Add User</span>
@@ -480,7 +570,7 @@ const Directory: React.FC = () => {
                 )}
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4 items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
                 <div className="relative flex-1 w-full">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <MagnifyingGlassIcon className="h-5 w-5 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]" />
@@ -493,7 +583,7 @@ const Directory: React.FC = () => {
                         className="block w-full pl-10 pr-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
                     />
                 </div>
-                <div className="flex gap-4 w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
                     <div className="relative flex-1 md:flex-none">
                          <select 
                             value={filterRole} 
@@ -525,7 +615,7 @@ const Directory: React.FC = () => {
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 justify-between sm:justify-start">
                         <label className="text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Group</label>
                          <button 
                             onClick={() => setIsGrouped(!isGrouped)}
@@ -538,18 +628,22 @@ const Directory: React.FC = () => {
             </div>
 
             {loading ? (
-                <Card className="overflow-hidden">
-                    <table className="w-full">
-                        <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                            {Array.from({ length: 5 }).map((_, i) => <DirectoryRowSkeleton key={i} />)}
-                        </tbody>
-                    </table>
-                </Card>
+                isMobile ? (
+                    <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <MobileCardSkeleton key={i} />)}</div>
+                ) : (
+                    <Card className="overflow-hidden">
+                        <table className="w-full">
+                            <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                                {Array.from({ length: 5 }).map((_, i) => <DirectoryRowSkeleton key={i} />)}
+                            </tbody>
+                        </table>
+                    </Card>
+                )
             ) : isGrouped ? (
                  Object.entries(groupedResidents).map(([role, users]) => (
                      <div key={role} className="space-y-2 animated-card">
                          <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] px-2 capitalize">{role}s ({(users as User[]).length})</h3>
-                         {renderTable(users as User[])}
+                         {isMobile ? renderMobileCards(users as User[]) : renderTable(users as User[])}
                      </div>
                  ))
             ) : (
@@ -557,7 +651,7 @@ const Directory: React.FC = () => {
                    <div className="text-right text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
                        Showing {filteredResidents.length} users
                    </div>
-                   {renderTable(filteredResidents)}
+                   {isMobile ? renderMobileCards(filteredResidents) : renderTable(filteredResidents)}
                 </>
             )}
 

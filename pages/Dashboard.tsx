@@ -183,7 +183,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
   if (error) {
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Dashboard</h2>
+            <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Dashboard</h2>
             <ErrorCard title="Failed to Load Dashboard Data" message={error} />
         </div>
     );
@@ -197,8 +197,8 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-3xl sm:text-4xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2 animated-card">Dashboard</h2>
-        <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-lg animated-card" style={{ animationDelay: '100ms' }}>Here's a quick overview of your community.</p>
+        <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2 animated-card">Dashboard</h2>
+        <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base animated-card" style={{ animationDelay: '100ms' }}>Here's a quick overview of your community.</p>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -246,7 +246,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         )}
 
         <Card className="p-6 col-span-1 md:col-span-2 animated-card" style={{ animationDelay: '200ms' }}>
-          <h3 className="text-md font-medium mb-2 text-googleBlue-600 dark:text-blue-300">Latest Notice</h3>
+          <h3 className="text-md font-medium mb-2 text-brand-600 dark:text-blue-300">Latest Notice</h3>
           {latestNotice ? (
             <div>
               <h4 className="font-bold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">{latestNotice.title}</h4>
@@ -266,7 +266,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         </Card>
 
         <Card className="p-6 col-span-1 md:col-span-2 lg:col-span-3 animated-card" style={{ animationDelay: '500ms' }}>
-          <h3 className="text-md font-medium mb-2 text-googleBlue-600 dark:text-blue-300">Upcoming Visitors</h3>
+          <h3 className="text-md font-medium mb-2 text-brand-600 dark:text-blue-300">Upcoming Visitors</h3>
           {expectedVisitors.length > 0 ? (
             <ul className="space-y-3 divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
               {expectedVisitors.slice(0, 3).map((v) => (
