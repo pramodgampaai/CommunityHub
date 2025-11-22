@@ -80,7 +80,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
         <Modal isOpen={isOpen} onClose={handleClose} title="My Profile">
             <div className="space-y-6">
                 <div className="flex items-center space-x-4 pb-4 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                    <img className="w-16 h-16 rounded-full ring-2 ring-[var(--accent)]" src={user.avatarUrl} alt={user.name} />
+                    <img className="w-16 h-16 rounded-full ring-2 ring-[var(--accent)] object-cover" src={user.avatarUrl} alt={user.name} />
                     <div>
                         <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{user.name}</h3>
                         <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{user.email}</p>
@@ -92,24 +92,37 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
 
                 {/* Units Information Section */}
                 {user.role === 'Resident' && user.units && user.units.length > 0 && (
-                    <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg p-4 border border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                        <h4 className="font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-3 uppercase tracking-wider">My Units ({user.units.length})</h4>
-                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto pr-1">
+                    <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg border border-[var(--border-light)] dark:border-[var(--border-dark)] overflow-hidden">
+                        <div className="bg-black/5 dark:bg-white/5 px-4 py-2 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                            <h4 className="font-semibold text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">
+                                My Properties ({user.units.length})
+                            </h4>
+                        </div>
+                        <div className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)] max-h-60 overflow-y-auto">
                             {user.units.map((unit) => (
-                                <div key={unit.id} className="flex justify-between items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-3 rounded border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-sm">
-                                    <div>
-                                        <p className="font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                            {unit.block ? `${unit.block} - ` : ''}{unit.flatNumber}
-                                        </p>
-                                        <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                            {unit.floor ? `Floor ${unit.floor}` : ''} 
-                                            {unit.floor && unit.flatSize ? ' • ' : ''}
-                                            {unit.flatSize ? `${unit.flatSize} sq ft` : ''}
-                                        </p>
+                                <div key={unit.id} className="p-4 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] text-lg">
+                                                    {unit.block ? `${unit.block} - ` : ''}{unit.flatNumber}
+                                                </p>
+                                                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                    Owned
+                                                </span>
+                                            </div>
+                                            <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1 space-x-2">
+                                                 {unit.floor && <span>Floor {unit.floor}</span>} 
+                                                 {unit.floor && unit.flatSize && <span>•</span>}
+                                                 {unit.flatSize && <span>{unit.flatSize} sq ft</span>}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="text-xs font-medium px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">Active</span>
-                                    </div>
+                                    {unit.maintenanceStartDate && (
+                                        <div className="mt-2 text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                            Maintenance Start: <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{new Date(unit.maintenanceStartDate).toLocaleDateString()}</span>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

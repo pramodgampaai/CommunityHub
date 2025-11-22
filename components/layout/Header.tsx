@@ -19,14 +19,22 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
       if (!user) return '';
       
       if (user.units && user.units.length > 0) {
-          if (user.units.length === 1) {
-              const u = user.units[0];
-              return `Flat: ${u.block ? u.block + '-' : ''}${u.flatNumber}`;
-          } else {
-              // Multiple units
-              return `${user.units.length} Units Owned`;
+          const primary = user.units[0];
+          const primaryStr = `Flat: ${primary.block ? primary.block + '-' : ''}${primary.flatNumber}`;
+          
+          if (user.units.length > 1) {
+              return (
+                  <span className="flex items-center gap-1">
+                      {primaryStr}
+                      <span className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                          +{user.units.length - 1}
+                      </span>
+                  </span>
+              );
           }
+          return primaryStr;
       }
+      
       // Fallback for staff or legacy
       return user.flatNumber ? (user.role === 'Resident' ? `Flat: ${user.flatNumber}` : `${user.flatNumber}`) : '';
   };
@@ -50,19 +58,26 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
           </button>
           {user && (
             <div 
-              className="flex items-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-lg transition-colors"
+              className="flex items-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-lg transition-colors border border-transparent hover:border-[var(--border-light)] dark:hover:border-[var(--border-dark)]"
               onClick={() => setIsProfileOpen(true)}
               role="button"
               tabIndex={0}
               title={getTooltip()}
             >
               <div className="text-right mr-3 hidden sm:block">
-                <p className="font-semibold text-sm text-[var(--text-light)] dark:text-[var(--text-dark)]">{user.name}</p>
-                <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium">
+                <p className="font-semibold text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] leading-tight">{user.name}</p>
+                <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium mt-0.5">
                     {getUnitDisplay()}
-                </p>
+                </div>
               </div>
-              <img className="w-10 h-10 rounded-full ring-2 ring-offset-2 ring-offset-[var(--card-bg-light)] dark:ring-offset-[var(--card-bg-dark)] ring-[var(--accent)]" src={user?.avatarUrl} alt="User Avatar" />
+              <div className="relative">
+                <img className="w-10 h-10 rounded-full ring-2 ring-offset-2 ring-offset-[var(--card-bg-light)] dark:ring-offset-[var(--card-bg-dark)] ring-[var(--accent)] object-cover" src={user?.avatarUrl} alt="User Avatar" />
+                {user.role !== 'Resident' && (
+                    <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] ring-1 ring-[var(--border-light)] dark:ring-[var(--border-dark)]">
+                       <span className={`h-2.5 w-2.5 rounded-full ${user.role === 'Admin' ? 'bg-purple-500' : 'bg-orange-500'}`}></span>
+                    </span>
+                )}
+              </div>
             </div>
           )}
           <button

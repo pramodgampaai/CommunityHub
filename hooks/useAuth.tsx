@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import type { User } from '../types';
+import type { User, Unit } from '../types';
 import { UserRole } from '../types';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -59,9 +59,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const fetchProfile = async (session: Session) => {
       try {
         // Add a timestamp to bust any browser GET cache
+        // CRITICAL UPDATE: Select units relation
         const { data: profile, error } = await supabase
           .from('users')
-          .select('*')
+          .select('*, units(*)')
           .eq('id', session.user.id)
           .single();
 
@@ -71,16 +72,29 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         }
 
         if (profile) {
+          // Map Units from DB (snake_case) to Type (camelCase)
+          const mappedUnits: Unit[] = profile.units?.map((u: any) => ({
+              id: u.id,
+              userId: u.user_id,
+              communityId: u.community_id,
+              flatNumber: u.flat_number,
+              block: u.block,
+              floor: u.floor,
+              flatSize: u.flat_size,
+              maintenanceStartDate: u.maintenance_start_date
+          })) || [];
+
           return {
             id: profile.id,
             name: profile.name || 'User',
             email: profile.email || session.user.email || '',
             avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
-            flatNumber: profile.flat_number,
+            flatNumber: profile.flat_number, // Legacy/Fallback
             role: profile.role as UserRole || UserRole.Resident,
             communityId: profile.community_id,
             status: profile.status || 'active',
-            maintenanceStartDate: profile.maintenance_start_date
+            maintenanceStartDate: profile.maintenance_start_date,
+            units: mappedUnits // Now populated
           } as User;
         }
         return null;
