@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { getResidents, createCommunityUser, getCommunity } from '../services/api';
-import type { User, Community, Block } from '../types';
-import { UserRole } from '../types';
+import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords } from '../services/api';
+import type { User, Community, Block, MaintenanceRecord } from '../types';
+import { UserRole, MaintenanceStatus } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '../components/icons';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const DirectoryRowSkeleton: React.FC = () => (
@@ -48,6 +48,12 @@ const Directory: React.FC = () => {
     const [newMaintenanceStartDate, setNewMaintenanceStartDate] = useState('');
     
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Maintenance History Modal State
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [historyUser, setHistoryUser] = useState<User | null>(null);
+    const [maintenanceHistory, setMaintenanceHistory] = useState<MaintenanceRecord[]>([]);
+    const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
     const fetchResidents = async (communityId: string) => {
         try {
@@ -153,6 +159,32 @@ const Directory: React.FC = () => {
         }
     };
 
+    // Handle View History
+    const handleViewHistory = async (resident: User) => {
+        if (!user?.communityId) return;
+        
+        setHistoryUser(resident);
+        setIsHistoryModalOpen(true);
+        setIsHistoryLoading(true);
+        setMaintenanceHistory([]);
+
+        try {
+            const history = await getMaintenanceRecords(user.communityId, resident.id);
+            setMaintenanceHistory(history);
+        } catch (error) {
+            console.error("Failed to fetch history", error);
+            alert("Could not load maintenance history.");
+        } finally {
+            setIsHistoryLoading(false);
+        }
+    };
+
+    const closeHistoryModal = () => {
+        setIsHistoryModalOpen(false);
+        setHistoryUser(null);
+        setMaintenanceHistory([]);
+    };
+
     // Filtering logic
     const getFilteredResidents = () => {
         let filtered = residents;
@@ -191,6 +223,9 @@ const Directory: React.FC = () => {
         return acc;
     }, {} as Record<string, User[]>);
 
+    // Permission Checks
+    const canViewHistory = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+
     const renderTable = (users: User[]) => (
         <Card className="overflow-x-auto animated-card">
             <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -202,6 +237,7 @@ const Directory: React.FC = () => {
                          <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance Start</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                        {canViewHistory && <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-right">Actions</th>}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
@@ -260,6 +296,19 @@ const Directory: React.FC = () => {
                                     {resident.status}
                                 </span>
                             </td>
+                             {canViewHistory && (
+                                <td className="p-4 text-right">
+                                    {resident.role === UserRole.Resident && (
+                                        <button 
+                                            onClick={() => handleViewHistory(resident)}
+                                            className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] p-1 rounded transition-colors"
+                                            title="View Maintenance History"
+                                        >
+                                            <ClockIcon className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </td>
+                            )}
                         </tr>
                     ))}
                 </tbody>
@@ -364,6 +413,7 @@ const Directory: React.FC = () => {
                                 <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
                                 <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
                                 <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                                {canViewHistory && <th className="p-4"></th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
@@ -405,6 +455,7 @@ const Directory: React.FC = () => {
                 </>
             )}
 
+            {/* Add User Modal */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New User">
                 <form className="space-y-4" onSubmit={handleAddResident}>
                     
@@ -524,6 +575,59 @@ const Directory: React.FC = () => {
                         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add User'}</Button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* Maintenance History Modal */}
+            <Modal isOpen={isHistoryModalOpen} onClose={closeHistoryModal} title={`Maintenance History: ${historyUser?.name}`}>
+                <div className="space-y-4">
+                    {isHistoryLoading ? (
+                        <div className="text-center py-8 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                            Loading history...
+                        </div>
+                    ) : maintenanceHistory.length > 0 ? (
+                         <div className="overflow-x-auto border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-black/5 dark:bg-white/5">
+                                    <tr>
+                                        <th className="p-3 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Month</th>
+                                        <th className="p-3 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Amount</th>
+                                        <th className="p-3 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                                        <th className="p-3 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Paid Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                                    {maintenanceHistory.map(record => (
+                                        <tr key={record.id} className="hover:bg-black/5 dark:hover:bg-white/5">
+                                            <td className="p-3 text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                 {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
+                                            </td>
+                                            <td className="p-3 text-[var(--text-light)] dark:text-[var(--text-dark)] font-medium">₹{record.amount}</td>
+                                            <td className="p-3">
+                                                 <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                                    record.status === MaintenanceStatus.Paid ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' :
+                                                    record.status === MaintenanceStatus.Submitted ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300' :
+                                                    'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                                                }`}>
+                                                    {record.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                {record.transactionDate ? new Date(record.transactionDate).toLocaleDateString() : '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                         <div className="text-center py-8 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                            No maintenance records found.
+                        </div>
+                    )}
+                    <div className="flex justify-end pt-2">
+                        <Button onClick={closeHistoryModal} variant="outlined">Close</Button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

@@ -116,3 +116,9 @@ export const CurrencyRupeeIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 8.25H9m6 3H9m3 6l-3.25 1.5m0 0a.75.75 0 01-.5-.29l-3.25-4.56M9 6a2.25 2.25 0 012.25-2.25h1.5A2.25 2.25 0 0115 6v.75" />
     </svg>
 );
+
+export const ClockIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
