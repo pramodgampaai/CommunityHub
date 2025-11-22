@@ -20,6 +20,7 @@ export type Theme = 'light' | 'dark';
 
 function App() {
   const { user, loading } = useAuth();
+  // Initialize activePage safely
   const [activePage, setActivePage] = useState<Page>('Dashboard');
   const [pageParams, setPageParams] = useState<any>(null);
   
@@ -37,28 +38,24 @@ function App() {
 
   useEffect(() => {
     const root = window.document.documentElement;
-    // Remove both potential classes to ensure a clean state before adding the current one
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Enforce Role-Based Page Access
+  // Enforce Role-Based Page Access (Redirect Logic)
   useEffect(() => {
     if (user) {
-      // Base allowed pages for Residents/Admins
-      const allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance'];
-      
       if (user.role === UserRole.HelpdeskAgent) {
-          // Agents only see work items
-          const agentPages: Page[] = ['Notices', 'Help Desk'];
-           if (!agentPages.includes(activePage)) {
+          // Agents only allowed on Notices and Help Desk
+          const allowed = ['Notices', 'Help Desk'];
+          if (!allowed.includes(activePage)) {
             setActivePage('Help Desk');
           }
       } else if (user.role === UserRole.Helpdesk) {
-          // Helpdesk Admins see work items + Directory (to manage agents) + Maintenance (Optional view, but usually restricted. Assuming Helpdesk acts as Admin for now)
-          const helpdeskAdminPages: Page[] = ['Notices', 'Help Desk', 'Directory', 'Maintenance'];
-          if (!helpdeskAdminPages.includes(activePage)) {
+          // Helpdesk Admin allowed on these pages
+          const allowed = ['Notices', 'Help Desk', 'Directory', 'Maintenance'];
+          if (!allowed.includes(activePage)) {
             setActivePage('Help Desk');
           }
       }
@@ -82,22 +79,6 @@ function App() {
           <p className="mt-4 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
             Your Supabase URL and Key are needed to connect to the backend.
           </p>
-           <div className="mt-4 text-sm text-left bg-black/5 dark:bg-white/5 p-4 rounded-md space-y-3">
-            <div>
-              <strong className="font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">For Vercel/Netlify Deployment:</strong>
-              <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Set these environment variables in your project settings:</p>
-              <ul className="list-disc list-inside mt-1 pl-2 font-mono">
-                <li>VITE_SUPABASE_URL</li>
-                <li>VITE_SUPABASE_KEY</li>
-              </ul>
-            </div>
-             <div>
-              <strong className="font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">For AI Studio Preview:</strong>
-               <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                Open <code className="font-mono bg-gray-200 dark:bg-gray-700 p-1 rounded">services/supabase.ts</code> and replace the placeholder values.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -120,24 +101,25 @@ function App() {
     return <AdminPanel theme={theme} toggleTheme={toggleTheme} />;
   }
   
-  // Security check for restricted users (Helpdesk/Agents)
-  // Prevents rendering unauthorized pages even for a split second
-  if (user.role === UserRole.Helpdesk || user.role === UserRole.HelpdeskAgent) {
-      let allowedPages: Page[] = ['Notices', 'Help Desk'];
-      if (user.role === UserRole.Helpdesk) {
-          allowedPages.push('Directory');
-          allowedPages.push('Maintenance');
-      }
+  // Define allowed pages per role for rendering check
+  let allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance'];
+  
+  if (user.role === UserRole.HelpdeskAgent) {
+      allowedPages = ['Notices', 'Help Desk'];
+  } else if (user.role === UserRole.Helpdesk) {
+      allowedPages = ['Notices', 'Help Desk', 'Directory', 'Maintenance'];
+  }
 
-      if (!allowedPages.includes(activePage)) {
-          return (
-            <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-                 <div className="flex justify-center items-center h-64">
-                    <Spinner />
-                 </div>
-            </Layout>
-          );
-      }
+  // If the user is on a restricted page, don't render content, just wait for useEffect to redirect
+  // We render the Layout with a spinner to maintain context/theme
+  if (!allowedPages.includes(activePage)) {
+      return (
+        <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
+             <div className="flex justify-center items-center h-64">
+                <Spinner />
+             </div>
+        </Layout>
+      );
   }
 
   const renderContent = () => {

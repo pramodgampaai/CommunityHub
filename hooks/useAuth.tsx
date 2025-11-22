@@ -70,11 +70,11 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         if (!mounted) return;
 
         if (error) {
-            console.error("Error fetching profile from public.users:", error);
+            console.error("CRITICAL: Error fetching profile from public.users:", error);
             // If we have a session but can't read the profile (RLS error or missing row),
             // we must logout to prevent getting stuck.
             if (error.code === 'PGRST116' || error.code === '42501') { // Not found or Permission denied
-                console.warn("Profile missing or inaccessible. Logging out.");
+                console.warn("Profile missing or inaccessible (RLS Policy Error). Logging out to prevent loop.");
                 await logout();
                 return;
             }
@@ -90,10 +90,11 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             role: profile.role as UserRole || UserRole.Resident,
             communityId: profile.community_id,
             status: profile.status || 'active',
+            maintenanceStartDate: profile.maintenance_start_date
           };
           setUser(appUser);
         } else {
-          console.warn('Profile missing for authenticated user.');
+          console.warn('Profile missing for authenticated user (Row not found).');
           // Force cleanup if profile doesn't exist
           await logout();
         }
