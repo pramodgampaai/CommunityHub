@@ -1,3 +1,4 @@
+
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit } from '../types';
 
@@ -143,11 +144,11 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     // This guarantees the directory loads even if the 'units' table or relationship is broken.
     
     // Step 1: Fetch Users (Guaranteed to exist)
+    // Removed .order('created_at') to prevent 400 Bad Request if column is missing
     const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: true });
+        .eq('community_id', communityId);
     
     if (userError) throw userError;
     if (!users) return [];
@@ -168,7 +169,10 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     }
 
     // Step 3: Combine
-    return users.map(user => mapUserFromDB(user, allUnits));
+    const mappedUsers = users.map(user => mapUserFromDB(user, allUnits));
+
+    // Sort by Name client-side for stability
+    return mappedUsers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
 export const getCommunity = async (communityId: string): Promise<Community> => {
