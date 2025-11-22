@@ -59,21 +59,34 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const fetchProfile = async (session: Session) => {
       try {
         // Add a timestamp to bust any browser GET cache
-        // CRITICAL UPDATE: Select units relation
+        // CRITICAL UPDATE: Try selecting with units first
         const { data: profile, error } = await supabase
           .from('users')
           .select('*, units(*)')
           .eq('id', session.user.id)
           .single();
 
-        if (error) {
-            console.error("Error fetching profile:", error);
-            return null;
+        let userProfileData = profile;
+
+        // Fallback: If fetching with units fails (schema mismatch), fetch just the user
+        if (error || !profile) {
+             console.warn("Fetching profile with units failed, trying fallback.", error);
+             const { data: fallbackProfile, error: fallbackError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+            
+             if (fallbackError || !fallbackProfile) {
+                 console.error("Error fetching profile (fallback):", fallbackError);
+                 return null;
+             }
+             userProfileData = fallbackProfile;
         }
 
-        if (profile) {
+        if (userProfileData) {
           // Map Units from DB (snake_case) to Type (camelCase)
-          const mappedUnits: Unit[] = profile.units?.map((u: any) => ({
+          const mappedUnits: Unit[] = userProfileData.units?.map((u: any) => ({
               id: u.id,
               userId: u.user_id,
               communityId: u.community_id,
@@ -85,16 +98,16 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           })) || [];
 
           return {
-            id: profile.id,
-            name: profile.name || 'User',
-            email: profile.email || session.user.email || '',
-            avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
-            flatNumber: profile.flat_number, // Legacy/Fallback
-            role: profile.role as UserRole || UserRole.Resident,
-            communityId: profile.community_id,
-            status: profile.status || 'active',
-            maintenanceStartDate: profile.maintenance_start_date,
-            units: mappedUnits // Now populated
+            id: userProfileData.id,
+            name: userProfileData.name || 'User',
+            email: userProfileData.email || session.user.email || '',
+            avatarUrl: userProfileData.avatar_url || `https://i.pravatar.cc/150?u=${userProfileData.id}`,
+            flatNumber: userProfileData.flat_number, // Legacy/Fallback
+            role: userProfileData.role as UserRole || UserRole.Resident,
+            communityId: userProfileData.community_id,
+            status: userProfileData.status || 'active',
+            maintenanceStartDate: userProfileData.maintenance_start_date,
+            units: mappedUnits // Now populated (or empty if fallback used)
           } as User;
         }
         return null;

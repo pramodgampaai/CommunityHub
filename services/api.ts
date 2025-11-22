@@ -124,33 +124,31 @@ const mapUserFromDB = (u: any): User => {
 };
 
 export const getResidents = async (communityId: string): Promise<User[]> => {
-    try {
-        // Fetch users and JOIN their units
-        const { data, error } = await supabase
-            .from('users')
-            .select('*, units(*)')
-            .eq('community_id', communityId)
-            .order('created_at', { ascending: true }); 
-        
-        if (error) throw error;
+    // Strategy: Try the optimized JOIN query first.
+    // If it fails for ANY reason (Schema mismatch, RLS, API cache), fall back to the simple query.
+    
+    // Attempt 1: Join with Units
+    const { data, error } = await supabase
+        .from('users')
+        .select('*, units(*)')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: true }); 
+    
+    if (!error && data) {
         return data.map(mapUserFromDB);
-
-    } catch (error: any) {
-        // Fallback: If units table doesn't exist or relationship issue, fetch users only
-        // This ensures the directory still works even if DB migration is pending
-        if (error.code === 'PGRST200' || error.message?.includes('units') || error.message?.includes('relation')) {
-            console.warn("Fetching residents without units (Schema mismatch or missing table).");
-            const { data, error: retryError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('community_id', communityId)
-                .order('created_at', { ascending: true });
-            
-            if (retryError) throw retryError;
-            return data.map(mapUserFromDB);
-        }
-        throw error;
     }
+
+    // Attempt 2: Fallback (Simple Select)
+    console.warn("Fetching residents with units failed, falling back to simple fetch.", error);
+    
+    const { data: fallbackData, error: fallbackError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: true });
+    
+    if (fallbackError) throw fallbackError;
+    return fallbackData.map(mapUserFromDB);
 };
 
 export const getCommunity = async (communityId: string): Promise<Community> => {
