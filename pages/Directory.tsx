@@ -225,6 +225,8 @@ const Directory: React.FC = () => {
 
     // Permission Checks
     const canViewHistory = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+    // Only show maintenance start date to Admin users
+    const canViewMaintenanceStart = user?.role === UserRole.Admin;
 
     const renderTable = (users: User[]) => (
         <Card className="overflow-x-auto animated-card">
@@ -234,7 +236,7 @@ const Directory: React.FC = () => {
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Name</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Details</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
-                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance Start</th>
+                         {canViewMaintenanceStart && <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance Start</th>}
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
                         {canViewHistory && <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-right">Actions</th>}
@@ -271,15 +273,17 @@ const Directory: React.FC = () => {
                             <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                 {resident.email}
                             </td>
-                             <td className="p-4">
-                                {resident.role === UserRole.Resident && (
-                                    <span className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                        {resident.maintenanceStartDate 
-                                            ? new Date(resident.maintenanceStartDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) 
-                                            : '-'}
-                                    </span>
-                                )}
-                            </td>
+                             {canViewMaintenanceStart && (
+                                <td className="p-4">
+                                    {resident.role === UserRole.Resident && (
+                                        <span className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {resident.maintenanceStartDate 
+                                                ? new Date(resident.maintenanceStartDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) 
+                                                : '-'}
+                                        </span>
+                                    )}
+                                </td>
+                            )}
                             <td className="p-4">
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                     ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
