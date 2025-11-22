@@ -9,6 +9,10 @@ import Modal from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { CurrencyRupeeIcon, MagnifyingGlassIcon, FunnelIcon } from '../components/icons';
 
+interface MaintenanceProps {
+    initialFilter?: MaintenanceStatus;
+}
+
 const StatusPill: React.FC<{ status: MaintenanceStatus }> = ({ status }) => {
     const statusStyles: Record<MaintenanceStatus, string> = {
         [MaintenanceStatus.Pending]: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
@@ -28,7 +32,7 @@ const MaintenanceSkeleton: React.FC = () => (
     </tr>
 );
 
-const Maintenance: React.FC = () => {
+const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
     const [records, setRecords] = useState<MaintenanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,6 +50,13 @@ const Maintenance: React.FC = () => {
     // Admin Filters
     const [filterStatus, setFilterStatus] = useState<MaintenanceStatus | 'All'>('All');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Apply initial filter if provided (e.g. navigation from Dashboard)
+    useEffect(() => {
+        if (initialFilter) {
+            setFilterStatus(initialFilter);
+        }
+    }, [initialFilter]);
 
     const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.Helpdesk;
 

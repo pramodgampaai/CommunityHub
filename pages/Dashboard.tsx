@@ -1,10 +1,17 @@
+
 import React, { useState, useEffect } from 'react';
-import { getNotices, getComplaints, getVisitors } from '../services/api';
-import type { Notice, Complaint, Visitor } from '../types';
-import { ComplaintStatus, VisitorStatus } from '../types';
+import { getNotices, getComplaints, getVisitors, getMaintenanceRecords } from '../services/api';
+import type { Notice, Complaint, Visitor, MaintenanceRecord } from '../types';
+import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
 import { useAuth } from '../hooks/useAuth';
+import { CurrencyRupeeIcon } from '../components/icons';
+import { Page } from '../types';
+
+interface DashboardProps {
+    navigateToPage: (page: Page, params?: any) => void;
+}
 
 const useCountUp = (end: number, duration: number = 1.5) => {
     const [count, setCount] = useState(0);
@@ -50,10 +57,17 @@ const SkeletonText: React.FC<{ className?: string }> = ({ className }) => (
     </div>
 );
 
-const Dashboard: React.FC = () => {
+const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [maintenanceStats, setMaintenanceStats] = useState({
+      monthlyCollected: 0,
+      monthlyPaidCount: 0,
+      monthlyDue: 0,
+      monthlyPendingCount: 0,
+      lifetimeCollected: 0
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -68,17 +82,31 @@ const Dashboard: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
-        const [noticesData, complaintsData, visitorsData] = await Promise.all([
-          getNotices(user.communityId),
-          getComplaints(user.communityId),
-          getVisitors(user.communityId),
-        ]);
-        setNotices(noticesData);
-        setComplaints(complaintsData);
-        setVisitors(visitorsData);
+        
+        const promises: Promise<any>[] = [
+            getNotices(user.communityId),
+            getComplaints(user.communityId),
+            getVisitors(user.communityId)
+        ];
+
+        // Only Admin/Helpdesk should see maintenance stats on dashboard
+        const isAdmin = user.role === UserRole.Admin || user.role === UserRole.Helpdesk;
+        if (isAdmin) {
+            promises.push(getMaintenanceRecords(user.communityId));
+        }
+
+        const results = await Promise.all(promises);
+        
+        setNotices(results[0]);
+        setComplaints(results[1]);
+        setVisitors(results[2]);
+        
+        if (isAdmin && results[3]) {
+            calculateMaintenanceStats(results[3]);
+        }
+
       } catch (err: any) {
         console.error("Failed to fetch dashboard data:", err);
-        // Robustly extract the error message from the Supabase error object
         let errorMessage = 'An unknown error occurred. This might be due to database security policies.';
         if (err && typeof err === 'object' && 'message' in err) {
             errorMessage = err.message as string;
@@ -92,6 +120,48 @@ const Dashboard: React.FC = () => {
     };
     fetchData();
   }, [user]);
+
+  const calculateMaintenanceStats = (records: MaintenanceRecord[]) => {
+      const now = new Date();
+      const currentMonthStr = now.toISOString().slice(0, 7); // YYYY-MM
+
+      let monthlyCollected = 0;
+      let monthlyPaidCount = new Set<string>();
+      let monthlyDue = 0;
+      let monthlyPendingCount = new Set<string>();
+      let lifetimeCollected = 0;
+
+      records.forEach(record => {
+          const recordMonthStr = record.periodDate.slice(0, 7);
+          const isCurrentMonth = recordMonthStr === currentMonthStr;
+          const isPaid = record.status === MaintenanceStatus.Paid;
+          
+          // Lifetime
+          if (isPaid) {
+              lifetimeCollected += Number(record.amount);
+          }
+
+          // Monthly
+          if (isCurrentMonth) {
+              if (isPaid) {
+                  monthlyCollected += Number(record.amount);
+                  monthlyPaidCount.add(record.userId);
+              } else {
+                  // Pending or Submitted counts as Due for dashboard overview
+                  monthlyDue += Number(record.amount);
+                  monthlyPendingCount.add(record.userId);
+              }
+          }
+      });
+
+      setMaintenanceStats({
+          monthlyCollected,
+          monthlyPaidCount: monthlyPaidCount.size,
+          monthlyDue,
+          monthlyPendingCount: monthlyPendingCount.size,
+          lifetimeCollected
+      });
+  };
 
   if (loading) {
       return (
@@ -122,7 +192,7 @@ const Dashboard: React.FC = () => {
   const latestNotice = notices[0];
   const pendingComplaints = complaints.filter(c => c.status !== ComplaintStatus.Resolved);
   const expectedVisitors = visitors.filter(v => v.status === VisitorStatus.Expected);
-
+  const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
 
   return (
     <div className="space-y-8">
@@ -132,6 +202,49 @@ const Dashboard: React.FC = () => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        {/* Maintenance Overview Widget (Admin Only) */}
+        {isAdmin && (
+            <Card className="col-span-1 md:col-span-3 p-6 animated-card border-l-4 border-l-blue-500" style={{ animationDelay: '150ms' }}>
+                 <h3 className="text-lg font-medium mb-4 flex items-center gap-2 text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                    <CurrencyRupeeIcon className="w-5 h-5 text-[var(--accent)]"/> 
+                    Maintenance Overview <span className="text-xs font-normal text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] ml-2 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">Current Month</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Collected */}
+                    <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-100 dark:border-green-900/30">
+                        <p className="text-sm text-green-800 dark:text-green-300 mb-1">Collected This Month</p>
+                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">₹{maintenanceStats.monthlyCollected.toLocaleString()}</p>
+                        <div 
+                            className="text-xs mt-2 text-green-600 dark:text-green-400/80 cursor-pointer hover:underline flex items-center gap-1"
+                            onClick={() => navigateToPage('Maintenance', { filter: MaintenanceStatus.Paid })}
+                        >
+                            From <span className="font-bold">{maintenanceStats.monthlyPaidCount}</span> residents →
+                        </div>
+                    </div>
+
+                    {/* Due */}
+                    <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
+                        <p className="text-sm text-red-800 dark:text-red-300 mb-1">Due This Month</p>
+                        <p className="text-2xl font-bold text-red-700 dark:text-red-400">₹{maintenanceStats.monthlyDue.toLocaleString()}</p>
+                         <div 
+                            className="text-xs mt-2 text-red-600 dark:text-red-400/80 cursor-pointer hover:underline flex items-center gap-1"
+                            onClick={() => navigateToPage('Maintenance', { filter: MaintenanceStatus.Pending })}
+                        >
+                            Pending from <span className="font-bold">{maintenanceStats.monthlyPendingCount}</span> residents →
+                        </div>
+                    </div>
+
+                    {/* Lifetime */}
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                        <p className="text-sm text-blue-800 dark:text-blue-300 mb-1">Lifetime Collected</p>
+                        <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">₹{maintenanceStats.lifetimeCollected.toLocaleString()}</p>
+                        <p className="text-xs mt-2 text-blue-600 dark:text-blue-400/80">Total since inception</p>
+                    </div>
+                </div>
+            </Card>
+        )}
+
         <Card className="p-6 col-span-1 md:col-span-2 animated-card" style={{ animationDelay: '200ms' }}>
           <h3 className="text-md font-medium mb-2 text-googleBlue-600 dark:text-blue-300">Latest Notice</h3>
           {latestNotice ? (

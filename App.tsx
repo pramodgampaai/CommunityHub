@@ -21,6 +21,7 @@ export type Theme = 'light' | 'dark';
 function App() {
   const { user, loading } = useAuth();
   const [activePage, setActivePage] = useState<Page>('Dashboard');
+  const [pageParams, setPageParams] = useState<any>(null);
   
   // Initialize theme from localStorage or fallback to system preference
   const [theme, setTheme] = useState<Theme>(() => {
@@ -66,6 +67,11 @@ function App() {
 
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+
+  const navigateToPage = (page: Page, params?: any) => {
+      setPageParams(params || null);
+      setActivePage(page);
   };
 
   if (!isSupabaseConfigured) {
@@ -137,7 +143,7 @@ function App() {
   const renderContent = () => {
     switch (activePage) {
       case 'Dashboard':
-        return <Dashboard />;
+        return <Dashboard navigateToPage={navigateToPage} />;
       case 'Notices':
         return <NoticeBoard />;
       case 'Help Desk':
@@ -149,9 +155,9 @@ function App() {
       case 'Directory':
         return <Directory />;
       case 'Maintenance':
-        return <Maintenance />;
+        return <Maintenance initialFilter={pageParams?.filter} />;
       default:
-        return <Dashboard />;
+        return <Dashboard navigateToPage={navigateToPage} />;
     }
   };
 
