@@ -202,7 +202,9 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead className="bg-black/5 dark:bg-white/5">
                         <tr>
-                            {isAdmin && <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Resident</th>}
+                            <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                {isAdmin ? 'Resident' : 'Unit'}
+                            </th>
                             <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Month</th>
                             <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Amount</th>
                             <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
@@ -214,16 +216,22 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                         {loading ? (
                              Array.from({ length: 5 }).map((_, i) => <MaintenanceSkeleton key={i} />)
                         ) : filteredRecords.length === 0 ? (
-                            <tr><td colSpan={isAdmin ? 6 : 5} className="p-4 text-center text-[var(--text-secondary-light)]">No records found.</td></tr>
+                            <tr><td colSpan={6} className="p-4 text-center text-[var(--text-secondary-light)]">No records found.</td></tr>
                         ) : (
                             filteredRecords.map(record => (
                                 <tr key={record.id}>
-                                    {isAdmin && (
-                                        <td className="p-4">
-                                            <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.userName}</div>
-                                            <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.flatNumber}</div>
-                                        </td>
-                                    )}
+                                    <td className="p-4">
+                                        {isAdmin ? (
+                                            <div>
+                                                <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.userName}</div>
+                                                <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.flatNumber}</div>
+                                            </div>
+                                        ) : (
+                                            <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                {record.flatNumber}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
                                         {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
                                     </td>
@@ -254,9 +262,20 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
             {/* Resident Payment Modal */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Submit Payment">
                 <form className="space-y-4" onSubmit={handlePaymentSubmit}>
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md mb-4">
-                        <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">Amount Due: ₹{selectedRecord?.amount}</p>
-                        <p className="text-xs text-blue-600 dark:text-blue-300">For {selectedRecord && new Date(selectedRecord.periodDate).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md mb-4 border border-blue-100 dark:border-blue-900/30">
+                        <div className="flex justify-between items-start mb-2">
+                             <div>
+                                <p className="text-xs text-blue-600 dark:text-blue-300 uppercase tracking-wide font-semibold">Payment For</p>
+                                <p className="text-lg font-bold text-blue-900 dark:text-blue-100">{selectedRecord?.flatNumber}</p>
+                             </div>
+                             <div className="text-right">
+                                <p className="text-xs text-blue-600 dark:text-blue-300 uppercase tracking-wide font-semibold">Amount Due</p>
+                                <p className="text-lg font-bold text-blue-900 dark:text-blue-100">₹{selectedRecord?.amount}</p>
+                             </div>
+                        </div>
+                        <p className="text-sm text-blue-700 dark:text-blue-300/80 border-t border-blue-200 dark:border-blue-800 pt-2 mt-1">
+                            Billing Month: <span className="font-semibold">{selectedRecord && new Date(selectedRecord.periodDate).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+                        </p>
                     </div>
 
                     <div>
@@ -288,8 +307,11 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                     <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-md">
                         <div className="grid grid-cols-2 gap-2 text-sm">
                             <span className="text-[var(--text-secondary-light)]">Resident:</span>
-                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.userName} ({selectedRecord?.flatNumber})</span>
+                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.userName}</span>
                             
+                            <span className="text-[var(--text-secondary-light)]">Unit:</span>
+                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.flatNumber}</span>
+
                             <span className="text-[var(--text-secondary-light)]">Amount:</span>
                             <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{selectedRecord?.amount}</span>
 
