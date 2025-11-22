@@ -1,4 +1,3 @@
-
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit } from '../types';
 
@@ -223,9 +222,27 @@ export const createNotice = async (noticeData: { title: string; content: string;
     } as Notice;
 };
 
-export const createComplaint = async (complaintData: { title: string; description: string; category: ComplaintCategory; }, user: User): Promise<Complaint> => {
-    // If user has units, try to find default, otherwise user legacy flat
-    const displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
+export const createComplaint = async (
+    complaintData: { title: string; description: string; category: ComplaintCategory; }, 
+    user: User,
+    specificUnitId?: string,
+    specificFlatNumber?: string
+): Promise<Complaint> => {
+    
+    // Determine the flat number to display on the ticket
+    // 1. Use the specific one selected by the user
+    // 2. Or fallback to their first unit
+    // 3. Or fallback to legacy flat_number
+    let displayFlat = specificFlatNumber;
+    
+    if (!displayFlat) {
+        if (user.units && user.units.length > 0) {
+            const u = user.units[0];
+            displayFlat = u.block ? `${u.block}-${u.flatNumber}` : u.flatNumber;
+        } else {
+            displayFlat = user.flatNumber || 'N/A';
+        }
+    }
 
     const newComplaint = {
         title: complaintData.title,
@@ -236,7 +253,9 @@ export const createComplaint = async (complaintData: { title: string; descriptio
         flat_number: displayFlat,
         user_id: user.id,
         community_id: user.communityId,
+        unit_id: specificUnitId // Optional link to specific unit
     };
+
     const { data, error } = await supabase.from('complaints').insert(newComplaint).select().single();
     if (error) throw error;
     

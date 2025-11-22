@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { createComplaint, getComplaints, updateComplaintStatus, getResidents, assignComplaint } from '../services/api';
 import type { Complaint, User } from '../types';
@@ -48,6 +47,7 @@ const HelpDesk: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ComplaintCategory>(ComplaintCategory.Other);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>(''); // For multi-unit owners
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const fetchComplaints = async (communityId: string) => {
@@ -80,13 +80,44 @@ const HelpDesk: React.FC = () => {
         }
     }
   }, [user]);
+
+  // Set default unit selection when modal opens
+  useEffect(() => {
+      if (isModalOpen && user?.units && user.units.length > 0) {
+          // Default to first unit
+          setSelectedUnitId(user.units[0].id);
+      }
+  }, [isModalOpen, user]);
   
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setIsSubmitting(true);
     try {
-        await createComplaint({ title, description, category }, user);
+        let specificFlatNumber = undefined;
+        let specificUnitId = undefined;
+
+        // Determine specific unit details if resident has multiple
+        if (user.role === UserRole.Resident && user.units && user.units.length > 0) {
+            const unit = user.units.find(u => u.id === selectedUnitId);
+            if (unit) {
+                specificUnitId = unit.id;
+                specificFlatNumber = unit.block ? `${unit.block}-${unit.flatNumber}` : unit.flatNumber;
+            } else {
+                // Fallback to first unit if logic fails
+                const first = user.units[0];
+                specificUnitId = first.id;
+                specificFlatNumber = first.block ? `${first.block}-${first.flatNumber}` : first.flatNumber;
+            }
+        }
+
+        await createComplaint(
+            { title, description, category }, 
+            user, 
+            specificUnitId, 
+            specificFlatNumber
+        );
+
         setIsModalOpen(false);
         setTitle('');
         setDescription('');
@@ -232,17 +263,47 @@ const HelpDesk: React.FC = () => {
 
        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Raise a New Complaint">
         <form className="space-y-4" onSubmit={handleFormSubmit}>
+            {/* Unit Selection for Multi-Unit Owners */}
+            {user?.units && user.units.length > 1 && (
+                <div>
+                    <label htmlFor="unitSelect" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Select Property</label>
+                    <div className="relative">
+                        <select 
+                            id="unitSelect" 
+                            value={selectedUnitId} 
+                            onChange={e => setSelectedUnitId(e.target.value)}
+                            required
+                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] appearance-none"
+                        >
+                            {user.units.map(unit => (
+                                <option key={unit.id} value={unit.id}>
+                                    {unit.block ? `${unit.block} - ` : ''}{unit.flatNumber}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                            <ChevronDownIcon className="w-4 h-4" />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div>
                 <label htmlFor="title" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Subject</label>
                 <input type="text" id="title" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Leaky Faucet" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
             </div>
             <div>
                 <label htmlFor="category" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Category</label>
-                <select id="category" value={category} onChange={e => setCategory(e.target.value as ComplaintCategory)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent">
-                    {Object.values(ComplaintCategory).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                </select>
+                <div className="relative">
+                    <select id="category" value={category} onChange={e => setCategory(e.target.value as ComplaintCategory)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] appearance-none">
+                        {Object.values(ComplaintCategory).map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
+                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                        <ChevronDownIcon className="w-4 h-4" />
+                    </div>
+                </div>
             </div>
              <div>
                 <label htmlFor="description" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Description</label>
