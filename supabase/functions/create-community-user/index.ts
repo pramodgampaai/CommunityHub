@@ -166,11 +166,15 @@ serve(async (req: any) => {
         
         if (!commError && community) {
             let monthlyAmount = 0;
-            if (community.community_type === 'Standalone') {
-                monthlyAmount = community.fixed_maintenance_amount || 0;
+            
+            // Robust check: Ensure case-insensitive comparison and numeric conversion
+            const type = community.community_type ? community.community_type.toLowerCase() : 'gated';
+            
+            if (type === 'standalone') {
+                monthlyAmount = Number(community.fixed_maintenance_amount) || 0;
             } else {
                 // Gated
-                monthlyAmount = (community.maintenance_rate || 0) * (flat_size || 0);
+                monthlyAmount = (Number(community.maintenance_rate) || 0) * (Number(flat_size) || 0);
             }
 
             if (monthlyAmount > 0) {

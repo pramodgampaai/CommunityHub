@@ -114,19 +114,6 @@ const Directory: React.FC = () => {
         return Array.from({ length: floorCount }, (_, i) => i + 1);
     };
 
-    const calculateMaintenance = (resident: User) => {
-        if (!community) return 0;
-        
-        if (community.communityType === 'Standalone') {
-            return community.fixedMaintenanceAmount || 0;
-        } else {
-            // Gated: Rate * Flat Size
-            const rate = community.maintenanceRate || 0;
-            const size = resident.flatSize || 0;
-            return rate * size;
-        }
-    };
-
     const handleAddResident = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !user.communityId) return;
@@ -212,7 +199,7 @@ const Directory: React.FC = () => {
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Name</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Details</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Contact</th>
-                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance</th>
+                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Maintenance Start</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Role</th>
                         <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
                     </tr>
@@ -251,7 +238,9 @@ const Directory: React.FC = () => {
                              <td className="p-4">
                                 {resident.role === UserRole.Resident && (
                                     <span className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                        ₹{calculateMaintenance(resident).toLocaleString()}
+                                        {resident.maintenanceStartDate 
+                                            ? new Date(resident.maintenanceStartDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) 
+                                            : '-'}
                                     </span>
                                 )}
                             </td>
