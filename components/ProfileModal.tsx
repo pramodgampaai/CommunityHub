@@ -20,6 +20,15 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
 
     if (!user) return null;
 
+    const getInitials = (name: string) => {
+        return name
+            .split(' ')
+            .map(part => part[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase();
+    };
+
     const validatePassword = (pwd: string) => {
         if (pwd.length < 8) return "Password must be at least 8 characters long.";
         if (!/\d/.test(pwd)) return "Password must contain at least one digit.";
@@ -48,14 +57,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
         setIsSubmitting(true);
 
         try {
-            // 1. Update password via Edge Function (Server Side)
             await updateUserPassword(newPassword);
-            
-            // 2. Show success message
             setSuccess("Password updated successfully. You will be logged out.");
-            
-            // 3. Logout after delay
-            // We use the robust logout function from useAuth which handles the hard reload
             setTimeout(async () => {
                 await logout();
             }, 2000);
@@ -80,19 +83,21 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
         <Modal isOpen={isOpen} onClose={handleClose} title="My Profile">
             <div className="space-y-6">
                 <div className="flex items-center space-x-4 pb-4 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                    <img className="w-16 h-16 rounded-full ring-2 ring-[var(--accent)] object-cover" src={user.avatarUrl} alt={user.name} />
+                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
+                        {getInitials(user.name)}
+                    </div>
                     <div>
                         <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{user.name}</h3>
                         <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{user.email}</p>
                         <div className="flex gap-2 mt-1">
-                             <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">{user.role}</span>
+                             <span className="px-2 py-0.5 text-xs font-medium rounded-md bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800">{user.role}</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Units Information Section */}
                 {user.role === 'Resident' && user.units && user.units.length > 0 && (
-                    <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg border border-[var(--border-light)] dark:border-[var(--border-dark)] overflow-hidden">
+                    <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] overflow-hidden">
                         <div className="bg-black/5 dark:bg-white/5 px-4 py-2 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
                             <h4 className="font-semibold text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">
                                 My Properties ({user.units.length})

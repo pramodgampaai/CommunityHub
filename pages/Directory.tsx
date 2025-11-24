@@ -14,7 +14,7 @@ const DirectoryRowSkeleton: React.FC = () => (
     <tr className="animate-pulse">
         <td className="p-4">
             <div className="flex items-center">
-                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
                 <div className="ml-3 h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
             </div>
         </td>
@@ -29,7 +29,7 @@ const MobileCardSkeleton: React.FC = () => (
     <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 animate-pulse mb-4">
         <div className="flex items-center justify-between mb-4">
              <div className="flex items-center">
-                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
                 <div className="ml-3 h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
             </div>
             <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
@@ -290,6 +290,15 @@ const Directory: React.FC = () => {
         }
     };
 
+    const getInitials = (name: string) => {
+        return name
+            .split(' ')
+            .map(part => part[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase();
+    };
+
 
     // ---------------------------------------------------------
     // ROLE-BASED VISIBILITY LOGIC (STRICT)
@@ -388,7 +397,10 @@ const Directory: React.FC = () => {
                                 <td className="p-4">
                                     <div className="flex items-center">
                                         <div className="relative flex-shrink-0">
-                                            <img className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)]" src={resident.avatarUrl} alt={resident.name} />
+                                            {/* Modern Initials Avatar */}
+                                            <div className="w-10 h-10 rounded-lg bg-[var(--bg-light)] dark:bg-gray-800 border border-[var(--border-light)] dark:border-[var(--border-dark)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                {getInitials(resident.name)}
+                                            </div>
                                             <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${resident.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                                         </div>
                                         <div className="ml-3">
@@ -494,7 +506,9 @@ const Directory: React.FC = () => {
                         {/* Header: Avatar + Name + Role */}
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-3">
-                                <img className="w-10 h-10 rounded-full object-cover ring-2 ring-[var(--border-light)] dark:ring-[var(--border-dark)]" src={resident.avatarUrl} alt={resident.name} />
+                                <div className="w-10 h-10 rounded-lg bg-[var(--bg-light)] dark:bg-gray-800 border border-[var(--border-light)] dark:border-[var(--border-dark)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                    {getInitials(resident.name)}
+                                </div>
                                 <div>
                                     <h4 className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{resident.name}</h4>
                                     <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{resident.email}</p>

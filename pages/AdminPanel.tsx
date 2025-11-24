@@ -11,33 +11,48 @@ import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Spinner from '../components/ui/Spinner';
 import ProfileModal from '../components/ProfileModal';
+import Logo from '../components/ui/Logo';
 
 const AdminHeader: React.FC<{ theme: Theme; toggleTheme: () => void; }> = ({ theme, toggleTheme }) => {
     const { user, logout } = useAuth();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+    const getInitials = (name: string) => {
+        return name
+            .split(' ')
+            .map(part => part[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase();
+    };
+
     return (
         <>
             <header className="flex justify-between items-center p-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-b border-[var(--border-light)] dark:border-[var(--border-dark)] z-10 sticky top-0">
-                <div className="flex flex-col">
-                    <h1 className="text-2xl font-bold text-[var(--accent)]">Elevate - Super Admin</h1>
-                    <span className="text-[10px] text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium uppercase tracking-wide">Raising the Standard of Community Living</span>
+                <div className="flex items-center gap-3">
+                    <Logo className="w-10 h-10 text-[var(--accent)]" />
+                    <div className="flex flex-col">
+                        <h1 className="text-3xl font-brand font-bold text-brand-500 tracking-wide leading-none">Elevate</h1>
+                        <span className="text-[10px] text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium uppercase tracking-wide">Super Admin Platform</span>
+                    </div>
                 </div>
                 <div className="flex items-center">
                     <button
                         onClick={toggleTheme}
-                        className="mr-4 p-2 rounded-full text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-200"
+                        className="mr-4 p-2 rounded-lg text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-200"
                         aria-label="Toggle theme"
                     >
                         {theme === 'light' ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
                     </button>
                      <div 
-                        className="flex items-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-lg transition-colors"
+                        className="flex items-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-xl transition-colors"
                         onClick={() => setIsProfileOpen(true)}
                         role="button"
                         tabIndex={0}
                      >
-                        <img className="w-10 h-10 rounded-full ring-2 ring-offset-2 ring-offset-[var(--card-bg-light)] dark:ring-offset-[var(--card-bg-dark)] ring-[var(--accent)]" src={user?.avatarUrl} alt="User Avatar" />
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 text-white flex items-center justify-center text-sm font-bold shadow-sm">
+                            {getInitials(user?.name || 'SA')}
+                        </div>
                      </div>
                     <button
                         onClick={logout}
