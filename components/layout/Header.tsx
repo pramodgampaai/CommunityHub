@@ -74,30 +74,40 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
               {theme === 'light' ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
           </button>
           {user && (
-            <div 
-              className="flex items-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-xl transition-colors border border-transparent hover:border-[var(--border-light)] dark:hover:border-[var(--border-dark)]"
-              onClick={() => setIsProfileOpen(true)}
-              role="button"
-              tabIndex={0}
-              title={getTooltip()}
-            >
-              <div className="text-right mr-3 hidden sm:block">
-                <p className="font-semibold text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] leading-tight">{user.name}</p>
-                <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium mt-0.5">
-                    {getUnitDisplay()}
+            <>
+                <div 
+                className="flex items-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-xl transition-colors border border-transparent hover:border-[var(--border-light)] dark:border-[var(--border-dark)]"
+                onClick={() => setIsProfileOpen(true)}
+                role="button"
+                tabIndex={0}
+                title={getTooltip()}
+                >
+                <div className="text-right mr-3 hidden sm:block">
+                    <p className="font-semibold text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] leading-tight">{user.name}</p>
+                    <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium mt-0.5">
+                        {getUnitDisplay()}
+                    </div>
                 </div>
-              </div>
-              
-              {/* Modern Square-Rounded Avatar */}
-              <div className="relative">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 text-white flex items-center justify-center text-sm font-bold shadow-sm ring-2 ring-transparent group-hover:ring-[var(--accent)] transition-all">
-                    {getInitials(user.name)}
+                
+                {/* Modern Square-Rounded Avatar */}
+                <div className="relative">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 text-white flex items-center justify-center text-sm font-bold shadow-sm ring-2 ring-transparent group-hover:ring-[var(--accent)] transition-all">
+                        {getInitials(user.name)}
+                    </div>
+                    {/* Status Dot */}
+                    <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${user.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                 </div>
-                {/* Status Dot */}
-                <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[var(--card-bg-light)] dark:border-[var(--card-bg-dark)] ${user.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-              </div>
 
-            </div>
+                </div>
+                <button
+                    onClick={logout}
+                    className="ml-3 p-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    aria-label="Logout"
+                    title="Sign Out"
+                >
+                    <LogOutIcon className="w-6 h-6" />
+                </button>
+            </>
           )}
         </div>
       </header>
