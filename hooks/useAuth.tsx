@@ -47,9 +47,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const fetchProfile = async (session: Session) => {
       try {
         // Step 1: Fetch User Profile (Guaranteed to exist if logged in)
+        // We join with communities table to get the name
         const { data: profile, error } = await supabase
           .from('users')
-          .select('*')
+          .select('*, communities(name)')
           .eq('id', session.user.id)
           .single();
 
@@ -92,6 +93,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             flatNumber: primaryUnit ? primaryUnit.flatNumber : profile.flat_number,
             role: profile.role as UserRole || UserRole.Resident,
             communityId: profile.community_id,
+            // Safely access nested community name (it might be an object or array depending on Supabase client version/types, usually object for single relation)
+            communityName: (profile.communities as any)?.name, 
             status: profile.status || 'active',
             maintenanceStartDate: profile.maintenance_start_date,
             units: mappedUnits

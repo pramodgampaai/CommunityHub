@@ -51,6 +51,7 @@ export interface User {
   flatNumber?: string; 
   role: UserRole;
   communityId?: string;
+  communityName?: string; // Display name of the community
   status: 'active' | 'disabled';
   units?: Unit[]; // One-to-Many relationship
   maintenanceStartDate?: string; // Legacy field
