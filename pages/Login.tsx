@@ -63,11 +63,12 @@ const LoginPage: React.FC = () => {
     <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4">
       <div className="w-full max-w-md p-6 sm:p-8 space-y-6 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-sm">
         <div className="text-center">
-            <h1 className="text-2xl sm:text-3xl font-bold text-[var(--accent)]">CommunityHub</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-[var(--accent)]">Elevate</h1>
+            <p className="text-xs sm:text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1 uppercase tracking-wide">Raising the Standard of Community Living</p>
             {view === 'login' ? (
-                <p className="mt-2 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Welcome back! Please sign in.</p>
+                <p className="mt-6 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Welcome back! Please sign in.</p>
             ) : (
-                <p className="mt-2 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Reset your password</p>
+                <p className="mt-6 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Reset your password</p>
             )}
         </div>
         

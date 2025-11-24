@@ -47,7 +47,10 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
   return (
     <>
       <header className="flex justify-between items-center p-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-b border-[var(--border-light)] dark:border-[var(--border-dark)] z-10 sticky top-0">
-        <h1 className="text-2xl font-bold text-[var(--accent)] tracking-tight">CommunityHub</h1>
+        <div className="flex flex-col">
+            <h1 className="text-2xl font-extrabold text-[var(--accent)] tracking-tight leading-none">Elevate</h1>
+            <span className="text-[10px] text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium uppercase tracking-wide hidden sm:block">Raising the Standard of Community Living</span>
+        </div>
         <div className="flex items-center">
           <button
             onClick={toggleTheme}
