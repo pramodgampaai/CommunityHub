@@ -128,6 +128,8 @@ export interface Amenity {
   imageUrl: string;
   capacity: number;
   communityId: string;
+  maxDuration?: number; // Max duration in hours (0 or null = unlimited)
+  status?: 'Active' | 'Maintenance'; // Maintenance = Disabled
 }
 
 export interface Booking {

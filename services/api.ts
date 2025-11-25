@@ -75,7 +75,9 @@ export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
         description: a.description,
         imageUrl: a.image_url,
         capacity: a.capacity,
-        communityId: a.community_id
+        communityId: a.community_id,
+        maxDuration: a.max_duration,
+        status: a.status || 'Active'
     })) as Amenity[];
 };
 
@@ -408,13 +410,20 @@ export const createBooking = async (bookingData: { amenityId: string; startTime:
     } as Booking;
 };
 
-export const createAmenity = async (amenityData: { name: string; description: string; imageUrl: string; capacity: number; }, user: User): Promise<Amenity> => {
+export const deleteBooking = async (bookingId: string): Promise<void> => {
+    const { error } = await supabase.from('bookings').delete().eq('id', bookingId);
+    if (error) throw error;
+}
+
+export const createAmenity = async (amenityData: { name: string; description: string; imageUrl: string; capacity: number; maxDuration?: number }, user: User): Promise<Amenity> => {
     const newAmenity = {
         name: amenityData.name,
         description: amenityData.description,
         image_url: amenityData.imageUrl,
         capacity: amenityData.capacity,
         community_id: user.communityId,
+        max_duration: amenityData.maxDuration || 0,
+        status: 'Active'
     };
     const { data, error } = await supabase.from('amenities').insert(newAmenity).select().single();
     if (error) throw error;
@@ -425,9 +434,27 @@ export const createAmenity = async (amenityData: { name: string; description: st
         description: data.description,
         imageUrl: data.image_url,
         capacity: data.capacity,
-        communityId: data.community_id
+        communityId: data.community_id,
+        maxDuration: data.max_duration,
+        status: data.status
     } as Amenity;
 };
+
+export const updateAmenity = async (id: string, updates: Partial<Amenity>): Promise<void> => {
+    // Map camelCase to snake_case for DB
+    const dbUpdates: any = {};
+    if (updates.status) dbUpdates.status = updates.status;
+    if (updates.name) dbUpdates.name = updates.name;
+    // Add other fields as needed
+
+    const { error } = await supabase.from('amenities').update(dbUpdates).eq('id', id);
+    if (error) throw error;
+}
+
+export const deleteAmenity = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('amenities').delete().eq('id', id);
+    if (error) throw error;
+}
 
 export const createExpense = async (
     expenseData: { title: string; amount: number; category: ExpenseCategory; description: string; date: string; receiptUrl?: string },

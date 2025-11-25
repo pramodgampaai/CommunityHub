@@ -6,6 +6,7 @@ import { ExpenseCategory, ExpenseStatus, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 import { PlusIcon, BanknotesIcon, FunnelIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useScreen } from '../hooks/useScreen';
@@ -34,10 +35,6 @@ const Expenses: React.FC = () => {
     const [expenseToReject, setExpenseToReject] = useState<Expense | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
 
-    // Approve Modal State
-    const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
-    const [expenseToApprove, setExpenseToApprove] = useState<Expense | null>(null);
-
     // Form State
     const [title, setTitle] = useState('');
     const [amount, setAmount] = useState<string>('');
@@ -51,6 +48,22 @@ const Expenses: React.FC = () => {
     
     // Filter State
     const [filterStatus, setFilterStatus] = useState<ExpenseStatus | 'All'>('All');
+
+    // Generic Confirmation State
+    const [confirmConfig, setConfirmConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        action: () => Promise<void>;
+        isDestructive?: boolean;
+        confirmLabel?: string;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        action: async () => {},
+        isDestructive: false
+    });
 
     const fetchExpensesData = async () => {
         if (!user?.communityId) return;
@@ -107,24 +120,30 @@ const Expenses: React.FC = () => {
             alert("Action Restricted: You cannot approve your own expense. It must be verified by another admin.");
             return;
         }
-        setExpenseToApprove(expense);
-        setIsApproveModalOpen(true);
+
+        setConfirmConfig({
+            isOpen: true,
+            title: "Approve Expense",
+            message: `Are you sure you want to approve "${expense.title}" for ₹${expense.amount}? This amount will be deducted from the community net balance.`,
+            confirmLabel: "Approve",
+            isDestructive: false,
+            action: async () => {
+                 await approveExpense(expense.id, user.id);
+                 // Force a small delay to ensure DB write is propagated before read
+                 await new Promise(resolve => setTimeout(resolve, 500));
+                 await fetchExpensesData();
+            }
+        });
     };
 
-    const handleConfirmApprove = async () => {
-        if (!expenseToApprove || !user) return;
-        
+    const handleConfirmAction = async () => {
         setIsSubmitting(true);
         try {
-            await approveExpense(expenseToApprove.id, user.id);
-            setIsApproveModalOpen(false);
-            setExpenseToApprove(null);
-            // Force a small delay to ensure DB write is propagated before read
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await fetchExpensesData();
+            await confirmConfig.action();
+            setConfirmConfig(prev => ({ ...prev, isOpen: false }));
         } catch (error: any) {
-            console.error("Approve error:", error);
-            alert("Failed to approve expense: " + (error.message || "Unknown error"));
+            console.error("Action error:", error);
+            alert("Failed to perform action: " + (error.message || "Unknown error"));
         } finally {
             setIsSubmitting(false);
         }
@@ -244,7 +263,7 @@ const Expenses: React.FC = () => {
                         <option value={ExpenseStatus.Approved}>Approved</option>
                         <option value={ExpenseStatus.Rejected}>Rejected</option>
                     </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
                         <FunnelIcon className="w-4 h-4" />
                     </div>
                 </div>
@@ -373,33 +392,19 @@ const Expenses: React.FC = () => {
                 </form>
             </Modal>
             
-            {/* Approve Confirm Modal */}
-            <Modal isOpen={isApproveModalOpen} onClose={() => setIsApproveModalOpen(false)} title="Approve Expense">
-                <div className="space-y-4">
-                     <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-md mb-2 border border-green-100 dark:border-green-900/30">
-                        <p className="text-sm font-semibold text-green-800 dark:text-green-200">
-                            Approving: {expenseToApprove?.title}
-                        </p>
-                        <p className="text-2xl font-bold text-green-900 dark:text-green-100 mt-1">
-                            ₹{expenseToApprove?.amount}
-                        </p>
-                        <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                            Submitted by: {expenseToApprove?.submittedByName}
-                        </p>
-                    </div>
-                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                        Are you sure you want to approve this expense? This amount will be deducted from the community net balance.
-                    </p>
-                    <div className="flex justify-end pt-4 space-x-2">
-                         <Button type="button" variant="outlined" onClick={() => setIsApproveModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                         <Button type="button" onClick={handleConfirmApprove} disabled={isSubmitting} className="bg-green-600 hover:bg-green-700 text-white border-transparent">
-                            {isSubmitting ? 'Approving...' : 'Confirm Approval'}
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+            {/* Confirmation Modal (Generic) */}
+            <ConfirmationModal 
+                isOpen={confirmConfig.isOpen}
+                onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+                onConfirm={handleConfirmAction}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                isDestructive={confirmConfig.isDestructive}
+                confirmLabel={confirmConfig.confirmLabel}
+                isLoading={isSubmitting}
+            />
             
-            {/* Reject Reason Modal */}
+            {/* Reject Reason Modal (Custom) */}
             <Modal isOpen={isRejectModalOpen} onClose={() => setIsRejectModalOpen(false)} title="Reject Expense">
                 <form className="space-y-4" onSubmit={handleConfirmReject}>
                     <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-md mb-2 border border-red-100 dark:border-red-900/30">
