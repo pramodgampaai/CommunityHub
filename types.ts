@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   SuperAdmin = 'SuperAdmin',
   Admin = 'Admin',
@@ -162,4 +163,36 @@ export interface MaintenanceRecord {
     flatNumber?: string; // Display flat number
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance';
+export enum ExpenseCategory {
+    Electricity = 'Electricity',
+    Water = 'Water',
+    Fuel = 'Fuel',
+    Salary = 'Salary',
+    Maintenance = 'Maintenance',
+    Other = 'Other'
+}
+
+export enum ExpenseStatus {
+    Pending = 'Pending',
+    Approved = 'Approved',
+    Rejected = 'Rejected'
+}
+
+export interface Expense {
+    id: string;
+    title: string;
+    amount: number;
+    category: ExpenseCategory;
+    description: string;
+    date: string;
+    submittedBy: string; // User ID
+    submittedByName?: string;
+    status: ExpenseStatus;
+    approvedBy?: string; // User ID
+    approvedByName?: string;
+    communityId: string;
+    createdAt: string;
+    receiptUrl?: string;
+}
+
+export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses';

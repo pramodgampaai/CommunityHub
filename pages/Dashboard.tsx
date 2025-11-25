@@ -1,12 +1,13 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { getNotices, getComplaints, getVisitors, getMaintenanceRecords } from '../services/api';
-import type { Notice, Complaint, Visitor, MaintenanceRecord } from '../types';
-import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole } from '../types';
+import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses } from '../services/api';
+import type { Notice, Complaint, Visitor, MaintenanceRecord, Expense } from '../types';
+import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole, ExpenseStatus } from '../types';
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
 import { useAuth } from '../hooks/useAuth';
-import { CurrencyRupeeIcon } from '../components/icons';
+import { CurrencyRupeeIcon, BanknotesIcon } from '../components/icons';
 import { Page } from '../types';
 
 interface DashboardProps {
@@ -68,6 +69,13 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
       monthlyPendingCount: 0,
       lifetimeCollected: 0
   });
+  // Expense Stats for Admin
+  const [expenseStats, setExpenseStats] = useState({
+      monthlyExpenses: 0,
+      totalExpenses: 0,
+      monthlyPendingExpenses: 0
+  });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -93,6 +101,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         const isAdmin = user.role === UserRole.Admin;
         if (isAdmin) {
             promises.push(getMaintenanceRecords(user.communityId));
+            promises.push(getExpenses(user.communityId));
         }
 
         const results = await Promise.all(promises);
@@ -101,8 +110,9 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         setComplaints(results[1]);
         setVisitors(results[2]);
         
-        if (isAdmin && results[3]) {
-            calculateMaintenanceStats(results[3]);
+        if (isAdmin) {
+            if (results[3]) calculateMaintenanceStats(results[3]);
+            if (results[4]) calculateExpenseStats(results[4]);
         }
 
       } catch (err: any) {
@@ -162,6 +172,32 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
           lifetimeCollected
       });
   };
+  
+  const calculateExpenseStats = (expenses: Expense[]) => {
+      const now = new Date();
+      const currentMonthStr = now.toISOString().slice(0, 7); // YYYY-MM
+      
+      let monthlyExpenses = 0;
+      let totalExpenses = 0;
+      let monthlyPendingExpenses = 0;
+
+      expenses.forEach(expense => {
+           if (expense.status === ExpenseStatus.Approved) {
+               totalExpenses += expense.amount;
+               if (expense.date.startsWith(currentMonthStr)) {
+                   monthlyExpenses += expense.amount;
+               }
+           } else if (expense.status === ExpenseStatus.Pending && expense.date.startsWith(currentMonthStr)) {
+               monthlyPendingExpenses += expense.amount;
+           }
+      });
+
+      setExpenseStats({
+          monthlyExpenses,
+          totalExpenses,
+          monthlyPendingExpenses
+      });
+  }
 
   if (loading) {
       return (
@@ -193,6 +229,9 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
   const pendingComplaints = complaints.filter(c => c.status !== ComplaintStatus.Resolved);
   const expectedVisitors = visitors.filter(v => v.status === VisitorStatus.Expected);
   const isAdmin = user?.role === UserRole.Admin;
+  
+  // Calculate Net Funds available
+  const netFunds = maintenanceStats.lifetimeCollected - expenseStats.totalExpenses;
 
   return (
     <div className="space-y-8">
@@ -205,44 +244,71 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         
         {/* Maintenance Overview Widget (Admin Only) */}
         {isAdmin && (
-            <Card className="col-span-1 md:col-span-3 p-6 animated-card border-l-4 border-l-blue-500" style={{ animationDelay: '150ms' }}>
-                 <h3 className="text-lg font-medium mb-4 flex items-center gap-2 text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                    <CurrencyRupeeIcon className="w-5 h-5 text-[var(--accent)]"/> 
-                    Maintenance Overview <span className="text-xs font-normal text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] ml-2 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">Current Month</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Collected */}
-                    <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-100 dark:border-green-900/30">
-                        <p className="text-sm text-green-800 dark:text-green-300 mb-1">Collected This Month</p>
-                        <p className="text-2xl font-bold text-green-700 dark:text-green-400">₹{maintenanceStats.monthlyCollected.toLocaleString()}</p>
-                        <div 
-                            className="text-xs mt-2 text-green-600 dark:text-green-400/80 cursor-pointer hover:underline flex items-center gap-1"
-                            onClick={() => navigateToPage('Maintenance', { filter: MaintenanceStatus.Paid })}
-                        >
-                            From <span className="font-bold">{maintenanceStats.monthlyPaidCount}</span> residents →
+            <>
+                <Card className="col-span-1 md:col-span-3 p-6 animated-card border-l-4 border-l-brand-500" style={{ animationDelay: '150ms' }}>
+                    <div className="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-2">
+                        <h3 className="text-lg font-medium flex items-center gap-2 text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                            <CurrencyRupeeIcon className="w-5 h-5 text-[var(--accent)]"/> 
+                            Financial Overview
+                        </h3>
+                         <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+                                Net Balance: ₹{netFunds.toLocaleString()}
+                            </span>
                         </div>
                     </div>
 
-                    {/* Due */}
-                    <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
-                        <p className="text-sm text-red-800 dark:text-red-300 mb-1">Due This Month</p>
-                        <p className="text-2xl font-bold text-red-700 dark:text-red-400">₹{maintenanceStats.monthlyDue.toLocaleString()}</p>
-                         <div 
-                            className="text-xs mt-2 text-red-600 dark:text-red-400/80 cursor-pointer hover:underline flex items-center gap-1"
-                            onClick={() => navigateToPage('Maintenance', { filter: MaintenanceStatus.Pending })}
-                        >
-                            Pending from <span className="font-bold">{maintenanceStats.monthlyPendingCount}</span> residents →
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+                        {/* Collected */}
+                        <div className="p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-100 dark:border-green-900/30">
+                            <p className="text-sm text-green-800 dark:text-green-300 mb-1">Inflow (This Month)</p>
+                            <p className="text-2xl font-bold text-green-700 dark:text-green-400">₹{maintenanceStats.monthlyCollected.toLocaleString()}</p>
+                            <div 
+                                className="text-xs mt-2 text-green-600 dark:text-green-400/80 cursor-pointer hover:underline flex items-center gap-1"
+                                onClick={() => navigateToPage('Maintenance', { filter: MaintenanceStatus.Paid })}
+                            >
+                                From {maintenanceStats.monthlyPaidCount} residents
+                            </div>
+                        </div>
+                        
+                         {/* Expenses */}
+                        <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-100 dark:border-orange-900/30">
+                            <p className="text-sm text-orange-800 dark:text-orange-300 mb-1">Outflow (This Month)</p>
+                            <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">₹{expenseStats.monthlyExpenses.toLocaleString()}</p>
+                            <div 
+                                className="text-xs mt-2 text-orange-600 dark:text-orange-400/80 cursor-pointer hover:underline flex items-center gap-1"
+                                onClick={() => navigateToPage('Expenses')}
+                            >
+                                Total spent: ₹{expenseStats.totalExpenses.toLocaleString()}
+                            </div>
+                        </div>
+
+                        {/* Due */}
+                        <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
+                            <p className="text-sm text-red-800 dark:text-red-300 mb-1">Due (This Month)</p>
+                            <p className="text-2xl font-bold text-red-700 dark:text-red-400">₹{maintenanceStats.monthlyDue.toLocaleString()}</p>
+                             <div 
+                                className="text-xs mt-2 text-red-600 dark:text-red-400/80 cursor-pointer hover:underline flex items-center gap-1"
+                                onClick={() => navigateToPage('Maintenance', { filter: MaintenanceStatus.Pending })}
+                            >
+                                {maintenanceStats.monthlyPendingCount} residents pending
+                            </div>
+                        </div>
+                        
+                        {/* Pending Expenses (Action Item) */}
+                         <div className="p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border border-yellow-100 dark:border-yellow-900/30">
+                            <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-1">Pending Approval</p>
+                            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">₹{expenseStats.monthlyPendingExpenses.toLocaleString()}</p>
+                             <div 
+                                className="text-xs mt-2 text-yellow-600 dark:text-yellow-400/80 cursor-pointer hover:underline flex items-center gap-1"
+                                onClick={() => navigateToPage('Expenses')}
+                            >
+                                Expenses waiting
+                            </div>
                         </div>
                     </div>
-
-                    {/* Lifetime */}
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30">
-                        <p className="text-sm text-blue-800 dark:text-blue-300 mb-1">Lifetime Collected</p>
-                        <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">₹{maintenanceStats.lifetimeCollected.toLocaleString()}</p>
-                        <p className="text-xs mt-2 text-blue-600 dark:text-blue-400/80">Total since inception</p>
-                    </div>
-                </div>
-            </Card>
+                </Card>
+            </>
         )}
 
         <Card className="p-6 col-span-1 md:col-span-2 animated-card" style={{ animationDelay: '200ms' }}>

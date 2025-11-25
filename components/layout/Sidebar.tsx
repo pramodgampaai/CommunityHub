@@ -1,6 +1,7 @@
 
+
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -18,6 +19,7 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
   { name: 'Amenities', icon: SparklesIcon },
   { name: 'Directory', icon: UserGroupIcon },
   { name: 'Maintenance', icon: CurrencyRupeeIcon },
+  { name: 'Expenses', icon: BanknotesIcon },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
@@ -31,6 +33,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
       // Helpdesk Admin needs Directory to manage agents, but NOT Maintenance
       return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
     }
+    if (user?.role === UserRole.Admin) {
+       // Admins see everything
+       return true; 
+    }
+    // Residents and Security don't see Expenses
+    if (item.name === 'Expenses') return false;
+
     return true;
   });
 

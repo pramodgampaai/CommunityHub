@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
@@ -11,6 +12,7 @@ import Amenities from './pages/Amenities';
 import AdminPanel from './pages/AdminPanel';
 import Directory from './pages/Directory';
 import Maintenance from './pages/Maintenance';
+import Expenses from './pages/Expenses';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
@@ -58,6 +60,9 @@ function App() {
           if (!allowed.includes(activePage)) {
             setActivePage('Help Desk');
           }
+      } else if (user.role !== UserRole.Admin && activePage === 'Expenses') {
+          // Only Admin can see Expenses
+          setActivePage('Dashboard');
       }
     }
   }, [user, activePage]);
@@ -108,6 +113,9 @@ function App() {
       allowedPages = ['Notices', 'Help Desk'];
   } else if (user.role === UserRole.Helpdesk) {
       allowedPages = ['Notices', 'Help Desk', 'Directory'];
+  } else if (user.role === UserRole.Admin) {
+      // Admins have access to everything including Expenses
+      allowedPages.push('Expenses');
   }
 
   // If the user is on a restricted page, don't render content, just wait for useEffect to redirect
@@ -138,6 +146,8 @@ function App() {
         return <Directory />;
       case 'Maintenance':
         return <Maintenance initialFilter={pageParams?.filter} />;
+      case 'Expenses':
+        return <Expenses />;
       default:
         return <Dashboard navigateToPage={navigateToPage} />;
     }

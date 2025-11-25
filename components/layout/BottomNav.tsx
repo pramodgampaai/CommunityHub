@@ -1,6 +1,7 @@
 
+
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -18,6 +19,7 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
     { name: 'Amenities', icon: SparklesIcon },
     { name: 'Directory', icon: UserGroupIcon },
     { name: 'Maintenance', icon: CurrencyRupeeIcon },
+    { name: 'Expenses', icon: BanknotesIcon },
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
@@ -30,6 +32,11 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
     if (user?.role === UserRole.Helpdesk) {
       return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
     }
+    if (user?.role === UserRole.Admin) {
+       return true;
+    }
+    if (item.name === 'Expenses') return false;
+    
     return true;
   });
 

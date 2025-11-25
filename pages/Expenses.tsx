@@ -1,0 +1,447 @@
+
+import React, { useState, useEffect } from 'react';
+import { createExpense, getExpenses, approveExpense, rejectExpense } from '../services/api';
+import type { Expense } from '../types';
+import { ExpenseCategory, ExpenseStatus, UserRole } from '../types';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import { PlusIcon, BanknotesIcon, FunnelIcon } from '../components/icons';
+import { useAuth } from '../hooks/useAuth';
+import { useScreen } from '../hooks/useScreen';
+
+const StatusPill: React.FC<{ status: ExpenseStatus }> = ({ status }) => {
+    const statusStyles: Record<ExpenseStatus, string> = {
+        [ExpenseStatus.Pending]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+        [ExpenseStatus.Approved]: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+        [ExpenseStatus.Rejected]: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+    };
+    return <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusStyles[status]}`}>{status}</span>;
+}
+
+const Expenses: React.FC = () => {
+    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const { user } = useAuth();
+    const { isMobile } = useScreen();
+
+    // Receipt Modal State
+    const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
+    
+    // Reject Modal State
+    const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+    const [expenseToReject, setExpenseToReject] = useState<Expense | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
+
+    // Approve Modal State
+    const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
+    const [expenseToApprove, setExpenseToApprove] = useState<Expense | null>(null);
+
+    // Form State
+    const [title, setTitle] = useState('');
+    const [amount, setAmount] = useState<string>('');
+    const [category, setCategory] = useState<ExpenseCategory>(ExpenseCategory.Other);
+    const [description, setDescription] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [receiptUrl, setReceiptUrl] = useState('');
+    
+    // Loading States
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Filter State
+    const [filterStatus, setFilterStatus] = useState<ExpenseStatus | 'All'>('All');
+
+    const fetchExpensesData = async () => {
+        if (!user?.communityId) return;
+        try {
+            setLoading(true);
+            const data = await getExpenses(user.communityId);
+            setExpenses(data);
+        } catch (error) {
+            console.error("Failed to fetch expenses", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchExpensesData();
+    }, [user]);
+
+    const handleFormSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) return;
+        setIsSubmitting(true);
+        try {
+            await createExpense({
+                title,
+                amount: parseFloat(amount),
+                category,
+                description,
+                date,
+                receiptUrl
+            }, user);
+            
+            setIsModalOpen(false);
+            // Reset form
+            setTitle('');
+            setAmount('');
+            setCategory(ExpenseCategory.Other);
+            setDescription('');
+            setReceiptUrl('');
+            
+            alert("Expense submitted for approval.");
+            await fetchExpensesData();
+        } catch (error: any) {
+            console.error("Failed to create expense:", error);
+            alert("Failed to create expense. " + error.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    const handleApproveClick = (expense: Expense) => {
+        if (!user) return;
+        if (expense.submittedBy === user.id) {
+            alert("Action Restricted: You cannot approve your own expense. It must be verified by another admin.");
+            return;
+        }
+        setExpenseToApprove(expense);
+        setIsApproveModalOpen(true);
+    };
+
+    const handleConfirmApprove = async () => {
+        if (!expenseToApprove || !user) return;
+        
+        setIsSubmitting(true);
+        try {
+            await approveExpense(expenseToApprove.id, user.id);
+            setIsApproveModalOpen(false);
+            setExpenseToApprove(null);
+            // Force a small delay to ensure DB write is propagated before read
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await fetchExpensesData();
+        } catch (error: any) {
+            console.error("Approve error:", error);
+            alert("Failed to approve expense: " + (error.message || "Unknown error"));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRejectClick = (expense: Expense) => {
+        if (!user) return;
+        if (expense.submittedBy === user.id) {
+             alert("Action Restricted: You cannot reject your own expense.");
+             return;
+        }
+        setExpenseToReject(expense);
+        setRejectionReason('');
+        setIsRejectModalOpen(true);
+    }
+    
+    const handleConfirmReject = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!expenseToReject || !user) return;
+        
+        if (!rejectionReason.trim()) {
+            alert("Please provide a reason for rejection.");
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            await rejectExpense(expenseToReject.id, user.id, rejectionReason);
+            setIsRejectModalOpen(false);
+            setExpenseToReject(null);
+            setRejectionReason('');
+            await fetchExpensesData();
+        } catch (error: any) {
+             console.error("Reject error:", error);
+             alert("Failed to reject expense: " + (error.message || "Unknown error"));
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 1024 * 1024) {
+                alert("File too large. Max 1MB.");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setReceiptUrl(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    const filteredExpenses = expenses.filter(e => filterStatus === 'All' || e.status === filterStatus);
+
+    // Calculate totals for summary cards
+    const currentMonthStr = new Date().toISOString().slice(0, 7);
+    const approvedExpensesThisMonth = expenses
+        .filter(e => e.status === ExpenseStatus.Approved && e.date.startsWith(currentMonthStr))
+        .reduce((sum, e) => sum + e.amount, 0);
+        
+    const pendingAmount = expenses
+        .filter(e => e.status === ExpenseStatus.Pending)
+        .reduce((sum, e) => sum + e.amount, 0);
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center animated-card">
+                <div>
+                    <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Expenses</h2>
+                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base mt-1">Manage community expenditures.</p>
+                </div>
+                <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Log New Expense" variant="fab">
+                    <span className="hidden sm:inline">Log Expense</span>
+                    <span className="sm:hidden">Log</span>
+                </Button>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4 border-l-4 border-l-green-500 animated-card">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Approved (This Month)</p>
+                            <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mt-1">₹{approvedExpensesThisMonth.toLocaleString()}</p>
+                        </div>
+                        <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
+                            <BanknotesIcon className="w-6 h-6" />
+                        </div>
+                    </div>
+                </Card>
+                 <Card className="p-4 border-l-4 border-l-yellow-500 animated-card" style={{ animationDelay: '100ms' }}>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Pending Approval</p>
+                            <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mt-1">₹{pendingAmount.toLocaleString()}</p>
+                        </div>
+                        <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg text-yellow-600 dark:text-yellow-400">
+                            <BanknotesIcon className="w-6 h-6" />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+            
+            {/* Filter */}
+            <div className="flex justify-end">
+                <div className="relative w-full md:w-48">
+                    <select 
+                        value={filterStatus} 
+                        onChange={(e) => setFilterStatus(e.target.value as any)}
+                        className="appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
+                    >
+                        <option value="All">All Status</option>
+                        <option value={ExpenseStatus.Pending}>Pending</option>
+                        <option value={ExpenseStatus.Approved}>Approved</option>
+                        <option value={ExpenseStatus.Rejected}>Rejected</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                        <FunnelIcon className="w-4 h-4" />
+                    </div>
+                </div>
+            </div>
+
+            {/* List */}
+            {loading ? (
+                <div className="space-y-4">
+                    <div className="h-20 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse"></div>
+                    <div className="h-20 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse"></div>
+                </div>
+            ) : filteredExpenses.length === 0 ? (
+                <div className="p-12 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
+                    No expenses found.
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {filteredExpenses.map((expense, idx) => (
+                        <Card key={expense.id} className="p-4 animated-card" style={{ animationDelay: `${idx * 50}ms` }}>
+                            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start md:hidden mb-2">
+                                        <span className="font-bold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{expense.amount}</span>
+                                        <StatusPill status={expense.status} />
+                                    </div>
+                                    <h3 className="font-semibold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">{expense.title}</h3>
+                                    <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                                        <span>{expense.category}</span>
+                                        <span>•</span>
+                                        <span>{new Date(expense.date).toLocaleDateString()}</span>
+                                        <span>•</span>
+                                        <span>By {expense.submittedByName}</span>
+                                    </div>
+                                    {expense.description && <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-2 italic whitespace-pre-line">{expense.description}</p>}
+                                    {expense.status === ExpenseStatus.Approved && expense.approvedByName && (
+                                        <p className="text-xs text-green-600 dark:text-green-400 mt-2">Approved by {expense.approvedByName}</p>
+                                    )}
+                                    {expense.status === ExpenseStatus.Rejected && expense.approvedByName && (
+                                        <p className="text-xs text-red-600 dark:text-red-400 mt-2">Rejected by {expense.approvedByName}</p>
+                                    )}
+                                </div>
+                                
+                                <div className="flex flex-col items-end gap-3 min-w-[150px]">
+                                    <div className="hidden md:flex flex-col items-end">
+                                        <span className="font-bold text-xl text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{expense.amount}</span>
+                                        <div className="mt-1"><StatusPill status={expense.status} /></div>
+                                    </div>
+                                    
+                                    {/* Action Buttons for Pending Expenses */}
+                                    {expense.status === ExpenseStatus.Pending && (
+                                        expense.submittedBy !== user?.id ? (
+                                            <div className="flex gap-2 w-full md:w-auto">
+                                                <Button size="sm" variant="outlined" onClick={() => handleRejectClick(expense)} className="flex-1 md:flex-none border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                    Reject
+                                                </Button>
+                                                <Button size="sm" onClick={() => handleApproveClick(expense)} className="flex-1 md:flex-none">
+                                                    Approve
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-1 rounded">
+                                                Waiting for peer approval
+                                            </span>
+                                        )
+                                    )}
+                                    {expense.receiptUrl && (
+                                        <button 
+                                            onClick={() => setViewReceiptUrl(expense.receiptUrl || null)}
+                                            className="text-xs text-[var(--accent)] hover:underline focus:outline-none"
+                                        >
+                                            View Receipt
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            )}
+
+            {/* Log Expense Modal */}
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Log New Expense">
+                <form className="space-y-4" onSubmit={handleFormSubmit}>
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Title</label>
+                        <input type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Generator Fuel" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Amount (₹)</label>
+                            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} required min="0" step="0.01" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                        </div>
+                        <div>
+                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Date</label>
+                            <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Category</label>
+                        <div className="relative">
+                            <select value={category} onChange={e => setCategory(e.target.value as ExpenseCategory)} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] appearance-none">
+                                {Object.values(ExpenseCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
+                                <FunnelIcon className="w-4 h-4" />
+                            </div>
+                        </div>
+                    </div>
+
+                     <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Description</label>
+                        <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"></textarea>
+                    </div>
+
+                     <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Receipt (Optional)</label>
+                        <input type="file" accept="image/*" onChange={handleFileUpload} className="block w-full text-sm text-[var(--text-secondary-light)] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 dark:file:bg-teal-900/30 dark:file:text-teal-300" />
+                    </div>
+
+                    <div className="flex justify-end pt-4 space-x-2">
+                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Submitting...' : 'Submit for Approval'}</Button>
+                    </div>
+                </form>
+            </Modal>
+            
+            {/* Approve Confirm Modal */}
+            <Modal isOpen={isApproveModalOpen} onClose={() => setIsApproveModalOpen(false)} title="Approve Expense">
+                <div className="space-y-4">
+                     <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-md mb-2 border border-green-100 dark:border-green-900/30">
+                        <p className="text-sm font-semibold text-green-800 dark:text-green-200">
+                            Approving: {expenseToApprove?.title}
+                        </p>
+                        <p className="text-2xl font-bold text-green-900 dark:text-green-100 mt-1">
+                            ₹{expenseToApprove?.amount}
+                        </p>
+                        <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                            Submitted by: {expenseToApprove?.submittedByName}
+                        </p>
+                    </div>
+                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                        Are you sure you want to approve this expense? This amount will be deducted from the community net balance.
+                    </p>
+                    <div className="flex justify-end pt-4 space-x-2">
+                         <Button type="button" variant="outlined" onClick={() => setIsApproveModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                         <Button type="button" onClick={handleConfirmApprove} disabled={isSubmitting} className="bg-green-600 hover:bg-green-700 text-white border-transparent">
+                            {isSubmitting ? 'Approving...' : 'Confirm Approval'}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+            
+            {/* Reject Reason Modal */}
+            <Modal isOpen={isRejectModalOpen} onClose={() => setIsRejectModalOpen(false)} title="Reject Expense">
+                <form className="space-y-4" onSubmit={handleConfirmReject}>
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-md mb-2 border border-red-100 dark:border-red-900/30">
+                        <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                            Rejecting: {expenseToReject?.title} (₹{expenseToReject?.amount})
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Reason for Rejection <span className="text-red-500">*</span></label>
+                        <textarea 
+                            value={rejectionReason} 
+                            onChange={e => setRejectionReason(e.target.value)} 
+                            rows={3} 
+                            required
+                            placeholder="Please explain why this expense is being rejected..."
+                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-transparent"
+                        ></textarea>
+                    </div>
+                    <div className="flex justify-end pt-4 space-x-2">
+                        <Button type="button" variant="outlined" onClick={() => setIsRejectModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting || !rejectionReason.trim()} className="bg-red-500 hover:bg-red-600 border-transparent text-white focus:ring-red-500/30">
+                            {isSubmitting ? 'Rejecting...' : 'Confirm Rejection'}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* View Receipt Modal */}
+            <Modal isOpen={!!viewReceiptUrl} onClose={() => setViewReceiptUrl(null)} title="Expense Receipt">
+                 <div className="flex justify-center p-2 bg-gray-50 dark:bg-black/20 rounded border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                    {viewReceiptUrl ? (
+                        <img src={viewReceiptUrl} alt="Receipt" className="max-h-[60vh] object-contain" />
+                    ) : (
+                        <p className="text-red-500">Error loading image.</p>
+                    )}
+                </div>
+                 <div className="flex justify-end pt-4">
+                    <Button onClick={() => setViewReceiptUrl(null)}>Close</Button>
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
+export default Expenses;

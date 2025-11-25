@@ -1,6 +1,7 @@
 
+
 import { supabase, supabaseKey } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit } from '../types';
+import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus } from '../types';
 
 // =================================================================
 // USER / ADMIN / RESIDENT-FACING API
@@ -250,6 +251,39 @@ export const getMaintenanceRecords = async (communityId: string, userId?: string
     }) as MaintenanceRecord[];
 }
 
+export const getExpenses = async (communityId: string): Promise<Expense[]> => {
+    const { data, error } = await supabase
+        .from('expenses')
+        .select('*, submitted_user:users!submitted_by(name), approved_user:users!approved_by(name)')
+        .eq('community_id', communityId)
+        .order('date', { ascending: false });
+
+    if (error) {
+        // Check if error is because table doesn't exist (during dev/preview)
+        if (error.code === '42P01') { 
+            console.warn("Expenses table missing");
+            return [];
+        }
+        throw error;
+    }
+
+    return data.map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        amount: e.amount,
+        category: e.category,
+        description: e.description,
+        date: e.date,
+        submittedBy: e.submitted_by,
+        submittedByName: e.submitted_user?.name,
+        status: e.status,
+        approvedBy: e.approved_by,
+        approvedByName: e.approved_user?.name,
+        communityId: e.community_id,
+        createdAt: e.created_at,
+        receiptUrl: e.receipt_url
+    })) as Expense[];
+}
 
 // CREATE operations
 export const createNotice = async (noticeData: { title: string; content: string; type: Notice['type']; author: string; }, user: User): Promise<Notice> => {
@@ -395,6 +429,41 @@ export const createAmenity = async (amenityData: { name: string; description: st
     } as Amenity;
 };
 
+export const createExpense = async (
+    expenseData: { title: string; amount: number; category: ExpenseCategory; description: string; date: string; receiptUrl?: string },
+    user: User
+): Promise<Expense> => {
+    const newExpense = {
+        title: expenseData.title,
+        amount: expenseData.amount,
+        category: expenseData.category,
+        description: expenseData.description,
+        date: expenseData.date,
+        receipt_url: expenseData.receiptUrl,
+        submitted_by: user.id,
+        community_id: user.communityId,
+        status: ExpenseStatus.Pending
+    };
+
+    const { data, error } = await supabase.from('expenses').insert(newExpense).select().single();
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        title: data.title,
+        amount: data.amount,
+        category: data.category,
+        description: data.description,
+        date: data.date,
+        submittedBy: data.submitted_by,
+        submittedByName: user.name, // Local optimisation
+        status: data.status,
+        communityId: data.community_id,
+        createdAt: data.created_at,
+        receiptUrl: data.receipt_url
+    } as Expense;
+}
+
 // UPDATE operations
 export const updateComplaintStatus = async (id: string, status: ComplaintStatus): Promise<Complaint> => {
     const { data, error } = await supabase.from('complaints').update({ status }).eq('id', id).select('*, assigned_user:users!assigned_to(name)').single();
@@ -479,6 +548,46 @@ export const verifyMaintenancePayment = async (recordId: string): Promise<void> 
             status: 'Paid'
         })
         .eq('id', recordId);
+
+    if (error) throw error;
+}
+
+export const approveExpense = async (expenseId: string, userId: string): Promise<void> => {
+    const { error } = await supabase
+        .from('expenses')
+        .update({
+            status: ExpenseStatus.Approved,
+            approved_by: userId
+        })
+        .eq('id', expenseId);
+
+    if (error) throw error;
+}
+
+export const rejectExpense = async (expenseId: string, userId: string, reason: string): Promise<void> => {
+    // 1. Fetch current description to append the reason (safest approach without schema migration)
+    const { data: currentData, error: fetchError } = await supabase
+        .from('expenses')
+        .select('description')
+        .eq('id', expenseId)
+        .single();
+    
+    if (fetchError) throw fetchError;
+
+    // 2. Append Reason
+    const updatedDescription = currentData.description 
+        ? `${currentData.description}\n\n[REJECTION REASON]: ${reason}` 
+        : `[REJECTION REASON]: ${reason}`;
+
+    // 3. Update Status and Description
+    const { error } = await supabase
+        .from('expenses')
+        .update({
+            status: ExpenseStatus.Rejected,
+            approved_by: userId,
+            description: updatedDescription
+        })
+        .eq('id', expenseId);
 
     if (error) throw error;
 }
