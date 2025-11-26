@@ -1,5 +1,4 @@
 
-
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus } from '../types';
 
@@ -19,17 +18,26 @@ export const getNotices = async (communityId: string): Promise<Notice[]> => {
         author: n.author,
         createdAt: n.created_at,
         type: n.type,
-        communityId: n.community_id
+        communityId: n.community_id,
+        validFrom: n.valid_from,
+        validUntil: n.valid_until
     })) as Notice[];
 };
 
-export const getComplaints = async (communityId: string): Promise<Complaint[]> => {
+export const getComplaints = async (communityId: string, userId?: string, role?: UserRole): Promise<Complaint[]> => {
     // We use a join to get the name of the person assigned to the ticket
-    const { data, error } = await supabase
+    let query = supabase
         .from('complaints')
         .select('*, assigned_user:users!assigned_to(name)')
         .eq('community_id', communityId)
         .order('created_at', { ascending: false });
+
+    // Helpdesk Agents can only see tickets assigned to them
+    if (role === UserRole.HelpdeskAgent && userId) {
+        query = query.eq('assigned_to', userId);
+    }
+        
+    const { data, error } = await query;
         
     if (error) throw error;
     
@@ -288,13 +296,15 @@ export const getExpenses = async (communityId: string): Promise<Expense[]> => {
 }
 
 // CREATE operations
-export const createNotice = async (noticeData: { title: string; content: string; type: Notice['type']; author: string; }, user: User): Promise<Notice> => {
+export const createNotice = async (noticeData: { title: string; content: string; type: Notice['type']; author: string; validFrom?: string; validUntil?: string }, user: User): Promise<Notice> => {
     const newNotice = {
         title: noticeData.title,
         content: noticeData.content,
         type: noticeData.type,
         author: noticeData.author,
         community_id: user.communityId,
+        valid_from: noticeData.validFrom,
+        valid_until: noticeData.validUntil
     };
     const { data, error } = await supabase.from('notices').insert(newNotice).select().single();
     if (error) throw error;
@@ -306,7 +316,9 @@ export const createNotice = async (noticeData: { title: string; content: string;
         author: data.author,
         createdAt: data.created_at,
         type: data.type,
-        communityId: data.community_id
+        communityId: data.community_id,
+        validFrom: data.valid_from,
+        validUntil: data.valid_until
     } as Notice;
 };
 
@@ -455,6 +467,36 @@ export const deleteAmenity = async (id: string): Promise<void> => {
     const { error } = await supabase.from('amenities').delete().eq('id', id);
     if (error) throw error;
 }
+
+export const updateNotice = async (id: string, updates: Partial<Notice>): Promise<Notice> => {
+    const dbUpdates: any = {};
+    if (updates.title) dbUpdates.title = updates.title;
+    if (updates.content) dbUpdates.content = updates.content;
+    if (updates.type) dbUpdates.type = updates.type;
+    if (updates.validFrom) dbUpdates.valid_from = updates.validFrom;
+    // Explicitly allow setting valid_until to null if needed, but for now strict type mapping
+    if (updates.validUntil !== undefined) dbUpdates.valid_until = updates.validUntil;
+
+    const { data, error } = await supabase.from('notices').update(dbUpdates).eq('id', id).select().single();
+    if (error) throw error;
+
+    return {
+        id: data.id,
+        title: data.title,
+        content: data.content,
+        author: data.author,
+        createdAt: data.created_at,
+        type: data.type,
+        communityId: data.community_id,
+        validFrom: data.valid_from,
+        validUntil: data.valid_until
+    } as Notice;
+};
+
+export const deleteNotice = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('notices').delete().eq('id', id);
+    if (error) throw error;
+};
 
 export const createExpense = async (
     expenseData: { title: string; amount: number; category: ExpenseCategory; description: string; date: string; receiptUrl?: string },

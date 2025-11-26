@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses } from '../services/api';
 import type { Notice, Complaint, Visitor, MaintenanceRecord, Expense } from '../types';
@@ -93,7 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         
         const promises: Promise<any>[] = [
             getNotices(user.communityId),
-            getComplaints(user.communityId),
+            getComplaints(user.communityId, user.id, user.role),
             getVisitors(user.communityId)
         ];
 

@@ -73,6 +73,8 @@ export interface Notice {
   createdAt: string;
   type: NoticeType;
   communityId: string;
+  validFrom?: string;
+  validUntil?: string;
 }
 
 export enum ComplaintStatus {

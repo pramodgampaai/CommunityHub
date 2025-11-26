@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { createNotice, getNotices } from '../services/api';
+import { createNotice, getNotices, updateNotice, deleteNotice } from '../services/api';
 import type { Notice } from '../types';
 import { NoticeType, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon } from '../components/icons';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
+import { PlusIcon, ClockIcon, PencilIcon, TrashIcon, EyeSlashIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const NoticeTag: React.FC<{ type: NoticeType }> = ({ type }) => {
@@ -42,11 +43,35 @@ const NoticeBoard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { user } = useAuth();
   
+  // View State
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+  
   // Form state
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [noticeType, setNoticeType] = useState<NoticeType>(NoticeType.General);
+  const [validFrom, setValidFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [validUntil, setValidUntil] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit State
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Confirmation Modal State
+  const [confirmConfig, setConfirmConfig] = useState<{
+      isOpen: boolean;
+      title: string;
+      message: string;
+      action: () => Promise<void>;
+      isDestructive?: boolean;
+      confirmLabel?: string;
+  }>({
+      isOpen: false,
+      title: '',
+      message: '',
+      action: async () => {},
+      isDestructive: false
+  });
 
 
   const fetchNotices = async (communityId: string) => {
@@ -66,58 +91,230 @@ const NoticeBoard: React.FC = () => {
       fetchNotices(user.communityId);
     }
   }, [user]);
-  
+
+  // Handle Create or Update
   const handleFormSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user) return;
+      
+      if (validUntil && new Date(validFrom) > new Date(validUntil)) {
+          alert("End date cannot be before start date.");
+          return;
+      }
+
       setIsSubmitting(true);
       try {
-          await createNotice({ title, content, type: noticeType, author: user.name }, user);
+          if (editingId) {
+              await updateNotice(editingId, {
+                  title,
+                  content,
+                  type: noticeType,
+                  validFrom: validFrom ? new Date(validFrom).toISOString() : undefined,
+                  validUntil: validUntil ? new Date(validUntil).toISOString() : undefined // Explicitly undefined if empty to avoid issues? Or should send null? API handles undefined.
+              });
+          } else {
+              await createNotice({ 
+                  title, 
+                  content, 
+                  type: noticeType, 
+                  author: user.name,
+                  validFrom: validFrom ? new Date(validFrom).toISOString() : undefined,
+                  validUntil: validUntil ? new Date(validUntil).toISOString() : undefined
+              }, user);
+          }
+
           setIsModalOpen(false);
-          setTitle('');
-          setContent('');
-          setNoticeType(NoticeType.General);
+          resetForm();
           await fetchNotices(user.communityId); // Refresh list
       } catch (error) {
-          console.error("Failed to create notice:", error);
-          alert("Failed to create notice. Please try again.");
+          console.error("Failed to save notice:", error);
+          alert("Failed to save notice. Please try again.");
       } finally {
           setIsSubmitting(false);
       }
   };
 
+  const resetForm = () => {
+      setTitle('');
+      setContent('');
+      setNoticeType(NoticeType.General);
+      setValidFrom(new Date().toISOString().split('T')[0]);
+      setValidUntil('');
+      setEditingId(null);
+  };
+
+  const handleCreateClick = () => {
+      resetForm();
+      setIsModalOpen(true);
+  };
+
+  const handleEditClick = (notice: Notice) => {
+      setTitle(notice.title);
+      setContent(notice.content);
+      setNoticeType(notice.type);
+      setValidFrom(notice.validFrom ? new Date(notice.validFrom).toISOString().split('T')[0] : '');
+      setValidUntil(notice.validUntil ? new Date(notice.validUntil).toISOString().split('T')[0] : '');
+      setEditingId(notice.id);
+      setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = (notice: Notice) => {
+      setConfirmConfig({
+          isOpen: true,
+          title: "Delete Notice",
+          message: "Are you sure you want to delete this notice? This action cannot be undone.",
+          isDestructive: true,
+          confirmLabel: "Delete",
+          action: async () => {
+              await deleteNotice(notice.id);
+              await fetchNotices(user?.communityId!);
+          }
+      });
+  };
+
+  const handleDisableClick = (notice: Notice) => {
+      setConfirmConfig({
+          isOpen: true,
+          title: "Disable Notice",
+          message: "This will expire the notice immediately and move it to the Archive. Continue?",
+          isDestructive: true,
+          confirmLabel: "Disable",
+          action: async () => {
+              // Set validUntil to now, effectively expiring it
+              await updateNotice(notice.id, { validUntil: new Date().toISOString() });
+              await fetchNotices(user?.communityId!);
+          }
+      });
+  };
+  
+  const handleConfirmAction = async () => {
+      setIsSubmitting(true);
+      try {
+          await confirmConfig.action();
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+      } catch (error: any) {
+          alert("Action failed: " + error.message);
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
+  // Filter Logic
+  const getFilteredNotices = () => {
+      const now = new Date();
+      
+      return notices.filter(n => {
+          const start = n.validFrom ? new Date(n.validFrom) : new Date(0); 
+          const end = n.validUntil ? new Date(n.validUntil) : new Date(8640000000000000); 
+          
+          if (activeTab === 'active') {
+              return start <= now && end >= now;
+          } else {
+              return end < now;
+          }
+      });
+  };
+
+  const displayedNotices = getFilteredNotices();
+  const isAdmin = user?.role === UserRole.Admin;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
         <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Notice Board</h2>
-        {user?.role === UserRole.Admin && (
-            <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Create New Notice" variant="fab">
+        {isAdmin && (
+            <Button onClick={handleCreateClick} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Create New Notice" variant="fab">
                 <span className="hidden sm:inline">New Notice</span>
                 <span className="sm:hidden">New</span>
             </Button>
         )}
       </div>
+
+      {/* Tabs */}
+      <div className="border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
+        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+                onClick={() => setActiveTab('active')}
+                className={`${activeTab === 'active' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+                Active Notices
+            </button>
+            <button
+                onClick={() => setActiveTab('archived')}
+                className={`${activeTab === 'archived' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+                Archived
+            </button>
+        </nav>
+      </div>
       
       <div className="space-y-4">
         {loading ? (
             Array.from({ length: 4 }).map((_, index) => <NoticeSkeleton key={index} />)
+        ) : displayedNotices.length === 0 ? (
+            <div className="p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
+                No {activeTab} notices found.
+            </div>
         ) : (
-            notices.map((notice, index) => (
+            displayedNotices.map((notice, index) => (
                 <Card key={notice.id} className="p-5 animated-card" style={{ animationDelay: `${index * 100}ms` }}>
                     <div className="flex justify-between items-start gap-2">
                         <div className="flex-1">
                             <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">{notice.title}</h3>
-                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">By {notice.author} on {new Date(notice.createdAt).toLocaleDateString()}</p>
+                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">
+                                By {notice.author}
+                            </p>
                         </div>
                         <NoticeTag type={notice.type} />
                     </div>
-                    <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{notice.content}</p>
+                    
+                    {/* Validity Info */}
+                    {(notice.validFrom || notice.validUntil) && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-black/5 dark:bg-white/5 p-2 rounded-md w-fit">
+                            <ClockIcon className="w-3.5 h-3.5" />
+                            <span>
+                                {notice.validFrom ? new Date(notice.validFrom).toLocaleDateString() : 'Posted'} 
+                                {notice.validUntil ? ` — ${new Date(notice.validUntil).toLocaleDateString()}` : ' — Indefinite'}
+                            </span>
+                        </div>
+                    )}
+
+                    <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] whitespace-pre-wrap">{notice.content}</p>
+                    
+                    {/* Admin Actions */}
+                    {isAdmin && (
+                        <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                             {activeTab === 'active' && (
+                                <button 
+                                    onClick={() => handleDisableClick(notice)}
+                                    className="p-1.5 rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1 text-xs"
+                                    title="Disable (Expire Now)"
+                                >
+                                    <EyeSlashIcon className="w-4 h-4" /> <span className="hidden sm:inline">Disable</span>
+                                </button>
+                             )}
+                            <button 
+                                onClick={() => handleEditClick(notice)}
+                                className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-1 text-xs"
+                                title="Edit Notice"
+                            >
+                                <PencilIcon className="w-4 h-4" /> <span className="hidden sm:inline">Edit</span>
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteClick(notice)}
+                                className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1 text-xs"
+                                title="Delete Notice"
+                            >
+                                <TrashIcon className="w-4 h-4" /> <span className="hidden sm:inline">Delete</span>
+                            </button>
+                        </div>
+                    )}
                 </Card>
             ))
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New Notice">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Edit Notice" : "Create New Notice"}>
         <form className="space-y-4" onSubmit={handleFormSubmit}>
             <div>
                 <label htmlFor="title" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Title</label>
@@ -135,12 +332,35 @@ const NoticeBoard: React.FC = () => {
                     ))}
                 </select>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="validFrom" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Display From</label>
+                    <input type="date" id="validFrom" value={validFrom} onChange={e => setValidFrom(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
+                </div>
+                <div>
+                    <label htmlFor="validUntil" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Display Until (Optional)</label>
+                    <input type="date" id="validUntil" value={validUntil} onChange={e => setValidUntil(e.target.value)} min={validFrom} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
+                </div>
+            </div>
+
             <div className="flex justify-end pt-4 space-x-2">
                 <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Posting...' : 'Post Notice'}</Button>
+                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Processing...' : (editingId ? 'Update Notice' : 'Post Notice')}</Button>
             </div>
         </form>
       </Modal>
+
+      <ConfirmationModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={handleConfirmAction}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        isDestructive={confirmConfig.isDestructive}
+        confirmLabel={confirmConfig.confirmLabel}
+        isLoading={isSubmitting}
+      />
     </div>
   );
 };

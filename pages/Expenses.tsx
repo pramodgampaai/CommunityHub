@@ -7,7 +7,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
-import { PlusIcon, BanknotesIcon, FunnelIcon } from '../components/icons';
+import { PlusIcon, BanknotesIcon, FunnelIcon, AlertTriangleIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useScreen } from '../hooks/useScreen';
 
@@ -27,9 +27,12 @@ const Expenses: React.FC = () => {
     const { user } = useAuth();
     const { isMobile } = useScreen();
 
-    // Receipt Modal State
+    // Receipt Modal State (Quick View)
     const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
     
+    // Details Modal State
+    const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+
     // Reject Modal State
     const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
     const [expenseToReject, setExpenseToReject] = useState<Expense | null>(null);
@@ -81,6 +84,15 @@ const Expenses: React.FC = () => {
     useEffect(() => {
         fetchExpensesData();
     }, [user]);
+
+    const parseDescription = (desc: string | undefined) => {
+        if (!desc) return { text: 'No description provided.', rejectionReason: null };
+        const parts = desc.split('[REJECTION REASON]:');
+        return {
+            text: parts[0].trim() || (parts.length > 1 ? '' : 'No description provided.'),
+            rejectionReason: parts.length > 1 ? parts[1].trim() : null
+        };
+    };
 
     const handleFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -211,6 +223,8 @@ const Expenses: React.FC = () => {
         .filter(e => e.status === ExpenseStatus.Pending)
         .reduce((sum, e) => sum + e.amount, 0);
 
+    const detailViewData = selectedExpense ? parseDescription(selectedExpense.description) : null;
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center animated-card">
@@ -282,7 +296,12 @@ const Expenses: React.FC = () => {
             ) : (
                 <div className="space-y-4">
                     {filteredExpenses.map((expense, idx) => (
-                        <Card key={expense.id} className="p-4 animated-card" style={{ animationDelay: `${idx * 50}ms` }}>
+                        <Card 
+                            key={expense.id} 
+                            className="p-4 animated-card cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            style={{ animationDelay: `${idx * 50}ms` }}
+                            onClick={() => setSelectedExpense(expense)}
+                        >
                             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start md:hidden mb-2">
@@ -297,7 +316,12 @@ const Expenses: React.FC = () => {
                                         <span>•</span>
                                         <span>By {expense.submittedByName}</span>
                                     </div>
-                                    {expense.description && <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-2 italic whitespace-pre-line">{expense.description}</p>}
+                                    {expense.description && (
+                                        <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-2 italic whitespace-pre-line line-clamp-2">
+                                            {parseDescription(expense.description).text}
+                                        </p>
+                                    )}
+                                    {/* Action By Metadata */}
                                     {expense.status === ExpenseStatus.Approved && expense.approvedByName && (
                                         <p className="text-xs text-green-600 dark:text-green-400 mt-2">Approved by {expense.approvedByName}</p>
                                     )}
@@ -316,10 +340,25 @@ const Expenses: React.FC = () => {
                                     {expense.status === ExpenseStatus.Pending && (
                                         expense.submittedBy !== user?.id ? (
                                             <div className="flex gap-2 w-full md:w-auto">
-                                                <Button size="sm" variant="outlined" onClick={() => handleRejectClick(expense)} className="flex-1 md:flex-none border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outlined" 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRejectClick(expense);
+                                                    }} 
+                                                    className="flex-1 md:flex-none border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                >
                                                     Reject
                                                 </Button>
-                                                <Button size="sm" onClick={() => handleApproveClick(expense)} className="flex-1 md:flex-none">
+                                                <Button 
+                                                    size="sm" 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleApproveClick(expense);
+                                                    }} 
+                                                    className="flex-1 md:flex-none"
+                                                >
                                                     Approve
                                                 </Button>
                                             </div>
@@ -331,7 +370,10 @@ const Expenses: React.FC = () => {
                                     )}
                                     {expense.receiptUrl && (
                                         <button 
-                                            onClick={() => setViewReceiptUrl(expense.receiptUrl || null)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setViewReceiptUrl(expense.receiptUrl || null);
+                                            }}
                                             className="text-xs text-[var(--accent)] hover:underline focus:outline-none"
                                         >
                                             View Receipt
@@ -445,6 +487,111 @@ const Expenses: React.FC = () => {
                     <Button onClick={() => setViewReceiptUrl(null)}>Close</Button>
                 </div>
             </Modal>
+
+            {/* Expense Detail Modal */}
+            <Modal isOpen={!!selectedExpense} onClose={() => setSelectedExpense(null)} title="Expense Details">
+                {selectedExpense && detailViewData && (
+                    <div className="space-y-6">
+                        {/* Header Info */}
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="text-xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedExpense.title}</h3>
+                                <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{new Date(selectedExpense.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                            </div>
+                            <StatusPill status={selectedExpense.status} />
+                        </div>
+                        
+                        {/* Amount and Meta Grid */}
+                        <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-white/5 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
+                            <div>
+                                <p className="text-xs text-[var(--text-secondary-light)] uppercase tracking-wide font-semibold">Amount</p>
+                                <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{selectedExpense.amount.toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[var(--text-secondary-light)] uppercase tracking-wide font-semibold">Category</p>
+                                <p className="text-base font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedExpense.category}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[var(--text-secondary-light)] uppercase tracking-wide font-semibold">Submitted By</p>
+                                <p className="text-base font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedExpense.submittedByName || 'Unknown'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-[var(--text-secondary-light)] uppercase tracking-wide font-semibold">Action By</p>
+                                <p className="text-base font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                    {selectedExpense.approvedByName || (selectedExpense.status === 'Pending' ? '-' : 'Unknown')}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                            <h4 className="text-sm font-medium text-[var(--text-secondary-light)] mb-2 uppercase tracking-wide">Description</h4>
+                            <p className="text-[var(--text-light)] dark:text-[var(--text-dark)] whitespace-pre-wrap text-sm leading-relaxed p-3 bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                                {detailViewData.text}
+                            </p>
+                        </div>
+
+                        {/* Rejection Alert */}
+                        {detailViewData.rejectionReason && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-lg p-4">
+                                <h4 className="text-sm font-bold text-red-800 dark:text-red-300 mb-1 flex items-center gap-2">
+                                    <AlertTriangleIcon className="w-4 h-4"/> Rejection Reason
+                                </h4>
+                                <p className="text-red-700 dark:text-red-200 text-sm">
+                                    {detailViewData.rejectionReason}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Receipt */}
+                        {selectedExpense.receiptUrl && (
+                            <div>
+                                <h4 className="text-sm font-medium text-[var(--text-secondary-light)] mb-2 uppercase tracking-wide">Receipt</h4>
+                                <div className="border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg overflow-hidden bg-white dark:bg-black/20 group relative cursor-zoom-in" onClick={() => window.open(selectedExpense.receiptUrl, '_blank')}>
+                                    <img 
+                                        src={selectedExpense.receiptUrl} 
+                                        alt="Receipt" 
+                                        className="w-full max-h-64 object-contain"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                         <p className="text-white opacity-0 group-hover:opacity-100 font-medium text-sm bg-black/50 px-3 py-1 rounded">Click to Open</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Footer Actions */}
+                        <div className="flex justify-end pt-4 gap-2">
+                            <Button variant="outlined" onClick={() => setSelectedExpense(null)}>Close</Button>
+                            
+                            {/* Allow actions from modal too if pending */}
+                            {selectedExpense.status === ExpenseStatus.Pending && selectedExpense.submittedBy !== user?.id && (
+                                <>
+                                    <Button 
+                                        variant="outlined" 
+                                        className="text-red-600 border-red-200 hover:bg-red-50"
+                                        onClick={(e) => {
+                                            handleRejectClick(selectedExpense);
+                                            setSelectedExpense(null);
+                                        }}
+                                    >
+                                        Reject
+                                    </Button>
+                                    <Button 
+                                        onClick={(e) => {
+                                            handleApproveClick(selectedExpense);
+                                            setSelectedExpense(null);
+                                        }}
+                                    >
+                                        Approve
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
         </div>
     );
 };

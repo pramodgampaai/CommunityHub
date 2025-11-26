@@ -6,7 +6,8 @@ import { ComplaintStatus, ComplaintCategory, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon, ChevronDownIcon } from '../components/icons';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
+import { PlusIcon, ChevronDownIcon, CheckCircleIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const StatusBadge: React.FC<{ status: ComplaintStatus }> = ({ status }) => {
@@ -50,11 +51,27 @@ const HelpDesk: React.FC = () => {
   const [category, setCategory] = useState<ComplaintCategory>(ComplaintCategory.Other);
   const [selectedUnitId, setSelectedUnitId] = useState<string>(''); // For multi-unit owners
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Confirmation Modal State
+  const [confirmConfig, setConfirmConfig] = useState<{
+      isOpen: boolean;
+      title: string;
+      message: string;
+      action: () => Promise<void>;
+      isDestructive?: boolean;
+      confirmLabel?: string;
+  }>({
+      isOpen: false,
+      title: '',
+      message: '',
+      action: async () => {},
+      isDestructive: false
+  });
   
   const fetchComplaints = async (communityId: string) => {
     try {
       setLoading(true);
-      const data = await getComplaints(communityId);
+      const data = await getComplaints(communityId, user?.id, user?.role);
       setComplaints(data);
     } catch (error) {
       console.error("Failed to fetch complaints", error);
@@ -160,6 +177,32 @@ const HelpDesk: React.FC = () => {
       }
   }
 
+  const promptResolve = (complaint: Complaint) => {
+      setConfirmConfig({
+          isOpen: true,
+          title: "Mark as Resolved",
+          message: "Are you sure you want to mark this complaint as Resolved? You will not be able to make further changes.",
+          confirmLabel: "Yes, Resolve",
+          isDestructive: false,
+          action: async () => {
+              await handleStatusChange(complaint.id, ComplaintStatus.Resolved);
+          }
+      });
+  };
+
+  const handleConfirmAction = async () => {
+      setIsSubmitting(true);
+      try {
+          await confirmConfig.action();
+          setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+      } catch (error: any) {
+          console.error("Action error:", error);
+          alert("Action failed. Please try again.");
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
   // Determine Permissions
   const isHelpdeskAdmin = user?.role === UserRole.Helpdesk;
   const isHelpdeskAgent = user?.role === UserRole.HelpdeskAgent;
@@ -180,85 +223,112 @@ const HelpDesk: React.FC = () => {
         {loading ? (
              Array.from({ length: 3 }).map((_, index) => <ComplaintSkeleton key={index} />)
         ) : (
-            complaints.map((complaint, index) => {
-                // Agent Permission Check: Can update ONLY if they are a HelpdeskAgent AND it is assigned to them.
-                // Helpdesk Admins (Role: Helpdesk) cannot update status.
-                // Community Admins (Role: Admin) cannot update status.
-                const canUpdateStatus = (isHelpdeskAgent && complaint.assignedTo === user?.id);
-                
-                return (
-                    <Card key={complaint.id} className="p-5 animated-card" style={{ animationDelay: `${index * 100}ms` }}>
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-                            <div className="flex-1">
-                                <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">{complaint.title}</h3>
-                                <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">
-                                    From {complaint.flatNumber} on {new Date(complaint.createdAt).toLocaleDateString()}
-                                </p>
-                                <div className="mt-2 text-sm">
-                                    <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Assigned to: </span>
-                                    <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                        {complaint.assignedToName || "Unassigned"}
-                                    </span>
-                                </div>
-                            </div>
+            complaints.length === 0 ? (
+                <div className="p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
+                    No tickets found.
+                </div>
+            ) : (
+                complaints.map((complaint, index) => {
+                    const isResolved = complaint.status === ComplaintStatus.Resolved;
 
-                            <div className="flex flex-col items-end gap-2 min-w-[180px]">
-                                <div className="flex items-center gap-2">
-                                    <StatusBadge status={complaint.status} />
-                                    {canUpdateStatus && (
-                                        <div className="relative">
-                                            <select
-                                                value={complaint.status}
-                                                onChange={(e) => handleStatusChange(complaint.id, e.target.value as ComplaintStatus)}
-                                                disabled={updatingId === complaint.id}
-                                                className="text-sm appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
-                                            >
-                                                {Object.values(ComplaintStatus).map(status => (
-                                                    <option key={status} value={status}>{status}</option>
-                                                ))}
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                                {updatingId === complaint.id ? (
-                                                    <div className="w-4 h-4 border-2 border-[var(--accent)] border-b-transparent rounded-full animate-spin"></div>
-                                                ) : (
-                                                    <ChevronDownIcon className="w-4 h-4" />
-                                                )}
+                    // Permissions
+                    // Agent can update status if assigned
+                    const isAssignedAgent = isHelpdeskAgent && complaint.assignedTo === user?.id;
+                    // Resident can resolve their own ticket
+                    const isOwner = user?.role === UserRole.Resident && complaint.userId === user?.id;
+
+                    const canUpdateStatus = !isResolved && isAssignedAgent;
+                    const canResolve = !isResolved && (isAssignedAgent || isOwner);
+                    
+                    return (
+                        <Card key={complaint.id} className="p-5 animated-card" style={{ animationDelay: `${index * 100}ms` }}>
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">{complaint.title}</h3>
+                                    <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">
+                                        From {complaint.flatNumber} on {new Date(complaint.createdAt).toLocaleDateString()}
+                                    </p>
+                                    <div className="mt-2 text-sm">
+                                        <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Assigned to: </span>
+                                        <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {complaint.assignedToName || "Unassigned"}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col items-end gap-2 min-w-[180px]">
+                                    <div className="flex items-center gap-2">
+                                        <StatusBadge status={complaint.status} />
+                                        {canUpdateStatus && (
+                                            <div className="relative">
+                                                <select
+                                                    value={complaint.status}
+                                                    onChange={(e) => handleStatusChange(complaint.id, e.target.value as ComplaintStatus)}
+                                                    disabled={updatingId === complaint.id}
+                                                    className="text-sm appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
+                                                >
+                                                    {Object.values(ComplaintStatus)
+                                                        .filter(s => s !== ComplaintStatus.Resolved) // Hide Resolved from dropdown, use button instead
+                                                        .map(status => (
+                                                        <option key={status} value={status}>{status}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                    {updatingId === complaint.id ? (
+                                                        <div className="w-4 h-4 border-2 border-[var(--accent)] border-b-transparent rounded-full animate-spin"></div>
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-4 h-4" />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Mark as Resolved Button */}
+                                    {canResolve && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="outlined" 
+                                            className="text-xs py-1.5 px-3 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                            onClick={() => promptResolve(complaint)}
+                                            leftIcon={<CheckCircleIcon className="w-3.5 h-3.5" />}
+                                        >
+                                            Mark as Resolved
+                                        </Button>
+                                    )}
+
+                                    {/* Assignment Dropdown - Only visible to Helpdesk Admins */}
+                                    {isHelpdeskAdmin && !isResolved && (
+                                        <div className="w-full">
+                                            <div className="relative">
+                                                <select
+                                                    value={complaint.assignedTo || ""}
+                                                    onChange={(e) => handleAssignAgent(complaint.id, e.target.value)}
+                                                    disabled={assigningId === complaint.id}
+                                                    className="w-full text-sm appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 text-[var(--text-light)] dark:text-[var(--text-dark)]"
+                                                >
+                                                    <option value="">Assign Agent...</option>
+                                                    {availableAgents.map(agent => (
+                                                        <option key={agent.id} value={agent.id}>{agent.name}</option>
+                                                    ))}
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                    {assigningId === complaint.id ? (
+                                                         <div className="w-4 h-4 border-2 border-[var(--accent)] border-b-transparent rounded-full animate-spin"></div>
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-4 h-4" />
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-
-                                {/* Assignment Dropdown - Only visible to Helpdesk Admins */}
-                                {isHelpdeskAdmin && (
-                                    <div className="w-full">
-                                        <div className="relative">
-                                            <select
-                                                value={complaint.assignedTo || ""}
-                                                onChange={(e) => handleAssignAgent(complaint.id, e.target.value)}
-                                                disabled={assigningId === complaint.id}
-                                                className="w-full text-sm appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 text-[var(--text-light)] dark:text-[var(--text-dark)]"
-                                            >
-                                                <option value="">Assign Agent...</option>
-                                                {availableAgents.map(agent => (
-                                                    <option key={agent.id} value={agent.id}>{agent.name}</option>
-                                                ))}
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                                {assigningId === complaint.id ? (
-                                                     <div className="w-4 h-4 border-2 border-[var(--accent)] border-b-transparent rounded-full animate-spin"></div>
-                                                ) : (
-                                                    <ChevronDownIcon className="w-4 h-4" />
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
-                        </div>
-                        <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{complaint.description}</p>
-                    </Card>
-                );
-            })
+                            <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{complaint.description}</p>
+                        </Card>
+                    );
+                })
+            )
         )}
       </div>
 
@@ -316,6 +386,17 @@ const HelpDesk: React.FC = () => {
             </div>
         </form>
       </Modal>
+
+      <ConfirmationModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={handleConfirmAction}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        isDestructive={confirmConfig.isDestructive}
+        confirmLabel={confirmConfig.confirmLabel}
+        isLoading={isSubmitting}
+      />
     </div>
   );
 };
