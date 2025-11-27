@@ -29,7 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     if (user?.role === UserRole.HelpdeskAgent) {
       return ['Notices', 'Help Desk'].includes(item.name);
     }
-    if (user?.role === UserRole.Helpdesk) {
+    if (user?.role === UserRole.HelpdeskAdmin) {
       // Helpdesk Admin needs Directory to manage agents, but NOT Maintenance
       return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
     }

@@ -1,4 +1,5 @@
 
+
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus } from '../types';
 
@@ -110,7 +111,8 @@ const normalizeRole = (r: string): UserRole => {
     if (lower === 'admin') return UserRole.Admin;
     if (lower === 'resident') return UserRole.Resident;
     if (lower === 'security') return UserRole.Security;
-    if (lower === 'helpdesk') return UserRole.Helpdesk;
+    if (lower === 'helpdesk') return UserRole.HelpdeskAdmin; // Map legacy/shorthand
+    if (lower === 'helpdeskadmin') return UserRole.HelpdeskAdmin;
     if (lower === 'helpdeskagent') return UserRole.HelpdeskAgent;
     if (lower === 'superadmin') return UserRole.SuperAdmin;
     // Fallback to capitalization

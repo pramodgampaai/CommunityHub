@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords, updateMaintenanceStartDate } from '../services/api';
 import type { User, Community, Block, MaintenanceRecord, Unit } from '../types';
@@ -132,7 +133,7 @@ const Directory: React.FC = () => {
     useEffect(() => {
         if (isModalOpen) {
             // Default role based on who is creating
-            if (user?.role === UserRole.Helpdesk) {
+            if (user?.role === UserRole.HelpdeskAdmin) {
                 setNewRole(UserRole.HelpdeskAgent);
             } else {
                 setNewRole(UserRole.Resident);
@@ -311,13 +312,13 @@ const Directory: React.FC = () => {
 
         if (user.role === UserRole.Admin) {
             // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin), Security
-            allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.Helpdesk, UserRole.Security];
+            allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.HelpdeskAdmin, UserRole.Security];
         } else if (user.role === UserRole.Resident) {
             // Resident sees: Admin, Resident
             allowedRoles = [UserRole.Admin, UserRole.Resident];
-        } else if (user.role === UserRole.Helpdesk) {
+        } else if (user.role === UserRole.HelpdeskAdmin) {
             // Helpdesk Admin sees: Helpdesk, HelpdeskAgent
-            allowedRoles = [UserRole.Helpdesk, UserRole.HelpdeskAgent];
+            allowedRoles = [UserRole.HelpdeskAdmin, UserRole.HelpdeskAgent];
         } else if (user.role === UserRole.HelpdeskAgent) {
             // Helpdesk Agent should not see anything
             return [];
@@ -358,7 +359,7 @@ const Directory: React.FC = () => {
     // Permission Checks for Actions
     const canViewHistory = user?.role === UserRole.Admin; // Only Admins can view maintenance history
     const canViewMaintenanceStart = user?.role === UserRole.Admin;
-    const canAddUser = user?.role === UserRole.Admin || user?.role === UserRole.Helpdesk;
+    const canAddUser = user?.role === UserRole.Admin || user?.role === UserRole.HelpdeskAdmin;
 
     // If Helpdesk Agent tries to view, render nothing (Access Control)
     if (user?.role === UserRole.HelpdeskAgent) {
@@ -464,10 +465,10 @@ const Directory: React.FC = () => {
                                     <span className={`px-2 py-1 text-xs font-medium rounded-full 
                                         ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
                                           resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
-                                          resident.role === UserRole.Helpdesk ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
+                                          resident.role === UserRole.HelpdeskAdmin ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
                                           resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
                                           'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
-                                        {resident.role}
+                                        {resident.role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : resident.role}
                                     </span>
                                 </td>
                                 <td className="p-4">
@@ -517,10 +518,10 @@ const Directory: React.FC = () => {
                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full 
                                 ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
                                   resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
-                                  resident.role === UserRole.Helpdesk ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
+                                  resident.role === UserRole.HelpdeskAdmin ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
                                   resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
                                   'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
-                                {resident.role}
+                                {resident.role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : resident.role}
                             </span>
                         </div>
 
@@ -606,9 +607,9 @@ const Directory: React.FC = () => {
                         >
                             {/* Dynamic Dropdown options based on strict visibility rules */}
                             <option value="All">All Roles</option>
-                            {user?.role === UserRole.Helpdesk ? (
+                            {user?.role === UserRole.HelpdeskAdmin ? (
                                 <>
-                                    <option value={UserRole.Helpdesk}>Helpdesk</option>
+                                    <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
                                     <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
                                 </>
                             ) : (
@@ -618,7 +619,7 @@ const Directory: React.FC = () => {
                                     {user?.role === UserRole.Admin && (
                                         <>
                                             <option value={UserRole.Security}>Security</option>
-                                            <option value={UserRole.Helpdesk}>Helpdesk</option>
+                                            <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
                                         </>
                                     )}
                                 </>
@@ -656,7 +657,9 @@ const Directory: React.FC = () => {
             ) : isGrouped ? (
                  Object.entries(groupedResidents).map(([role, users]) => (
                      <div key={role} className="space-y-2 animated-card">
-                         <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] px-2 capitalize">{role}s ({(users as User[]).length})</h3>
+                         <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] px-2 capitalize">
+                            {role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : role}s ({(users as User[]).length})
+                         </h3>
                          {isMobile ? renderMobileCards(users as User[]) : renderTable(users as User[])}
                      </div>
                  ))
@@ -691,14 +694,14 @@ const Directory: React.FC = () => {
                             onChange={e => setNewRole(e.target.value as UserRole)}
                             className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
                         >
-                            {user?.role === UserRole.Helpdesk ? (
+                            {user?.role === UserRole.HelpdeskAdmin ? (
                                  <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
                             ) : (
                                 <>
                                     <option value={UserRole.Resident}>Resident</option>
                                     <option value={UserRole.Security}>Security</option>
                                     <option value={UserRole.Admin}>Admin</option>
-                                    <option value={UserRole.Helpdesk}>Helpdesk</option>
+                                    <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
                                 </>
                             )}
                         </select>

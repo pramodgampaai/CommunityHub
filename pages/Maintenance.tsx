@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { getMaintenanceRecords, submitMaintenancePayment, verifyMaintenancePayment } from '../services/api';
 import type { MaintenanceRecord } from '../types';
@@ -74,7 +75,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
         }
     }, [initialFilter]);
 
-    const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.Helpdesk;
+    const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.HelpdeskAdmin;
 
     const fetchRecords = async () => {
         if (!user?.communityId) return;

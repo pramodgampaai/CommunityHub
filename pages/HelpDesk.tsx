@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { createComplaint, getComplaints, updateComplaintStatus, getResidents, assignComplaint } from '../services/api';
 import type { Complaint, User } from '../types';
@@ -93,7 +94,7 @@ const HelpDesk: React.FC = () => {
   useEffect(() => {
     if (user?.communityId) {
         fetchComplaints(user.communityId);
-        if (user.role === UserRole.Helpdesk) {
+        if (user.role === UserRole.HelpdeskAdmin) {
             fetchAgents(user.communityId);
         }
     }
@@ -204,7 +205,7 @@ const HelpDesk: React.FC = () => {
   };
 
   // Determine Permissions
-  const isHelpdeskAdmin = user?.role === UserRole.Helpdesk;
+  const isHelpdeskAdmin = user?.role === UserRole.HelpdeskAdmin;
   const isHelpdeskAgent = user?.role === UserRole.HelpdeskAgent;
 
   return (

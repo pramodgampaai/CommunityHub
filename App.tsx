@@ -54,7 +54,7 @@ function App() {
           if (!allowed.includes(activePage)) {
             setActivePage('Help Desk');
           }
-      } else if (user.role === UserRole.Helpdesk) {
+      } else if (user.role === UserRole.HelpdeskAdmin) {
           // Helpdesk Admin allowed on these pages (Maintenance Removed)
           const allowed = ['Notices', 'Help Desk', 'Directory'];
           if (!allowed.includes(activePage)) {
@@ -111,7 +111,7 @@ function App() {
   
   if (user.role === UserRole.HelpdeskAgent) {
       allowedPages = ['Notices', 'Help Desk'];
-  } else if (user.role === UserRole.Helpdesk) {
+  } else if (user.role === UserRole.HelpdeskAdmin) {
       allowedPages = ['Notices', 'Help Desk', 'Directory'];
   } else if (user.role === UserRole.Admin) {
       // Admins have access to everything including Expenses

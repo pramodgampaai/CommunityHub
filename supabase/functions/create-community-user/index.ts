@@ -1,4 +1,5 @@
 
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -78,9 +79,11 @@ serve(async (req: any) => {
         );
     }
     
-    if (requesterProfile.role === 'Helpdesk' && role !== 'HelpdeskAgent') {
+    // Helpdesk Admin (formerly 'Helpdesk') can only create Agents
+    if (requesterProfile.role === 'HelpdeskAdmin' && role !== 'HelpdeskAgent') {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: corsHeaders });
     }
+    // Admins cannot create Agents (Only Helpdesk Admins can)
     if (requesterProfile.role === 'Admin' && role === 'HelpdeskAgent') {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: corsHeaders });
     }

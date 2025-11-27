@@ -5,7 +5,7 @@ export enum UserRole {
   Admin = 'Admin',
   Resident = 'Resident',
   Security = 'Security',
-  Helpdesk = 'Helpdesk', // Acts as Helpdesk Admin
+  HelpdeskAdmin = 'HelpdeskAdmin', // Previously Helpdesk, Acts as Helpdesk Admin
   HelpdeskAgent = 'HelpdeskAgent', // Acts as Worker
 }
 
