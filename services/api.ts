@@ -1,7 +1,7 @@
 
 
 import { supabase, supabaseKey } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus } from '../types';
+import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus, VisitorStatus } from '../types';
 
 // =================================================================
 // USER / ADMIN / RESIDENT-FACING API
@@ -70,7 +70,8 @@ export const getVisitors = async (communityId: string): Promise<Visitor[]> => {
         status: v.status,
         residentName: v.resident_name,
         flatNumber: v.flat_number,
-        communityId: v.community_id
+        communityId: v.community_id,
+        userId: v.user_id
     })) as Visitor[];
 };
 
@@ -114,6 +115,7 @@ const normalizeRole = (r: string): UserRole => {
     if (lower === 'helpdesk') return UserRole.HelpdeskAdmin; // Map legacy/shorthand
     if (lower === 'helpdeskadmin') return UserRole.HelpdeskAdmin;
     if (lower === 'helpdeskagent') return UserRole.HelpdeskAgent;
+    if (lower === 'securityadmin') return UserRole.SecurityAdmin;
     if (lower === 'superadmin') return UserRole.SuperAdmin;
     // Fallback to capitalization
     return (r.charAt(0).toUpperCase() + r.slice(1)) as UserRole;
@@ -166,7 +168,7 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     if (userError) throw userError;
     if (!users) return [];
 
-    // Step 2: Fetch Units (Best Effort)
+    // Step 2: Fetch Units (Best effort)
     let allUnits: any[] = [];
     try {
         const { data: units, error: unitsError } = await supabase
@@ -371,19 +373,102 @@ export const createComplaint = async (
     } as Complaint;
 };
 
-export const createVisitor = async (visitorData: { name: string; purpose: string; expectedAt: string }, user: User): Promise<Visitor> => {
-     const displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
+export const createVisitor = async (
+    visitorData: { name: string; purpose: string; expectedAt: string, targetFlat?: string }, 
+    user: User
+): Promise<Visitor> => {
+     
+    let targetUserId = user.id;
+    let residentName = user.name;
+    let displayFlat = 'N/A';
+    let status: VisitorStatus = VisitorStatus.Expected;
+
+    // 1. If Creator is Resident
+    if (user.role === UserRole.Resident) {
+        displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
+    } 
+    // 2. If Creator is Security/Admin, we MUST resolve the resident by flat number
+    else if (user.role === UserRole.Security || user.role === UserRole.SecurityAdmin || user.role === UserRole.Admin) {
+        if (!visitorData.targetFlat) throw new Error("Flat number is required for security created visitors.");
+        
+        const flatInput = visitorData.targetFlat.trim();
+        let blockSearch = '';
+        let flatSearch = flatInput;
+
+        // Simple parsing: if contains hyphen, assume Block-Flat
+        if (flatInput.includes('-')) {
+            const parts = flatInput.split('-');
+            if (parts.length >= 2) {
+                 blockSearch = parts[0].trim();
+                 flatSearch = parts.slice(1).join('-').trim();
+            }
+        }
+
+        let unitData = null;
+        
+        // Try Block+Flat search first if block detected
+        if (blockSearch) {
+             const { data } = await supabase
+                .from('units')
+                .select('user_id, users(name), flat_number, block')
+                .eq('community_id', user.communityId)
+                .ilike('block', blockSearch) // case insensitive
+                .eq('flat_number', flatSearch)
+                .limit(1)
+                .maybeSingle();
+             unitData = data;
+        }
+
+        // If not found or no block, try direct flat match (e.g. '101' or user entered 'A-101' but stored as 'A-101' in flat_number legacy)
+        if (!unitData) {
+             const { data } = await supabase
+                .from('units')
+                .select('user_id, users(name), flat_number, block')
+                .eq('community_id', user.communityId)
+                .eq('flat_number', flatInput)
+                .limit(1)
+                .maybeSingle();
+             unitData = data;
+        }
+        
+        if (unitData) {
+             // Found in Units
+             targetUserId = unitData.user_id;
+             // unitData.users could be object or array depending on join, safely cast
+             const userData = unitData.users as any;
+             residentName = userData?.name || 'Resident';
+             displayFlat = unitData.block ? `${unitData.block}-${unitData.flat_number}` : unitData.flat_number;
+             status = VisitorStatus.PendingApproval;
+        } else {
+            // Fallback to USERS table (Legacy/Standalone)
+             const { data: legacyUser } = await supabase
+                .from('users')
+                .select('id, name, flat_number')
+                .eq('community_id', user.communityId)
+                .eq('flat_number', flatInput)
+                .limit(1)
+                .maybeSingle();
+            
+            if (!legacyUser) throw new Error(`No resident found for flat ${visitorData.targetFlat}`);
+            
+            targetUserId = legacyUser.id;
+            residentName = legacyUser.name;
+            displayFlat = legacyUser.flat_number;
+            status = VisitorStatus.PendingApproval;
+        }
+    }
 
     const newVisitor = {
         name: visitorData.name,
         purpose: visitorData.purpose,
         expected_at: visitorData.expectedAt,
-        status: 'Expected',
-        resident_name: user.name,
+        status: status,
+        resident_name: residentName,
         flat_number: displayFlat,
-        user_id: user.id,
+        user_id: targetUserId,
         community_id: user.communityId,
     };
+
     const { data, error } = await supabase.from('visitors').insert(newVisitor).select().single();
     if (error) throw error;
     
@@ -395,8 +480,14 @@ export const createVisitor = async (visitorData: { name: string; purpose: string
         status: data.status,
         residentName: data.resident_name,
         flatNumber: data.flat_number,
-        communityId: data.community_id
+        communityId: data.community_id,
+        userId: data.user_id
     } as Visitor;
+};
+
+export const updateVisitorStatus = async (visitorId: string, status: VisitorStatus): Promise<void> => {
+    const { error } = await supabase.from('visitors').update({ status }).eq('id', visitorId);
+    if (error) throw error;
 };
 
 export const createBooking = async (bookingData: { amenityId: string; startTime: string; endTime: string; }, user: User): Promise<Booking> => {
@@ -700,44 +791,54 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
     return stats;
 };
 
-export const createCommunity = async (data: Partial<Community>): Promise<Community> => {
-    const { data: newCommunity, error } = await supabase.from('communities').insert({
-        name: data.name,
-        address: data.address,
-        community_type: data.communityType,
-        blocks: data.blocks,
-        maintenance_rate: data.maintenanceRate,
-        fixed_maintenance_amount: data.fixedMaintenanceAmount,
+export const createCommunity = async (communityData: Partial<Community>): Promise<Community> => {
+    const { data, error } = await supabase.from('communities').insert({
+        name: communityData.name,
+        address: communityData.address,
+        community_type: communityData.communityType,
+        blocks: communityData.blocks,
+        maintenance_rate: communityData.maintenanceRate,
+        fixed_maintenance_amount: communityData.fixedMaintenanceAmount,
         status: 'active'
     }).select().single();
-    
+
     if (error) throw error;
     
     return {
-        ...newCommunity,
-        communityType: newCommunity.community_type,
-        maintenanceRate: newCommunity.maintenance_rate,
-        fixedMaintenanceAmount: newCommunity.fixed_maintenance_amount
-    };
-};
-
-export const updateCommunity = async (id: string, data: Partial<Community>): Promise<Community> => {
-    const { data: updated, error } = await supabase.from('communities').update({
+        id: data.id,
         name: data.name,
         address: data.address,
-        community_type: data.communityType,
+        status: data.status,
+        communityType: data.community_type,
         blocks: data.blocks,
-        maintenance_rate: data.maintenanceRate,
-        fixed_maintenance_amount: data.fixedMaintenanceAmount
-    }).eq('id', id).select().single();
-    
+        maintenanceRate: data.maintenance_rate,
+        fixedMaintenanceAmount: data.fixed_maintenance_amount
+    } as Community;
+};
+
+export const updateCommunity = async (id: string, updates: Partial<Community>): Promise<Community> => {
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.address) dbUpdates.address = updates.address;
+    if (updates.communityType) dbUpdates.community_type = updates.communityType;
+    if (updates.blocks) dbUpdates.blocks = updates.blocks;
+    if (updates.maintenanceRate !== undefined) dbUpdates.maintenance_rate = updates.maintenanceRate;
+    if (updates.fixedMaintenanceAmount !== undefined) dbUpdates.fixed_maintenance_amount = updates.fixedMaintenanceAmount;
+    if (updates.status) dbUpdates.status = updates.status;
+
+    const { data, error } = await supabase.from('communities').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
+
     return {
-        ...updated,
-        communityType: updated.community_type,
-        maintenanceRate: updated.maintenance_rate,
-        fixedMaintenanceAmount: updated.fixed_maintenance_amount
-    };
+        id: data.id,
+        name: data.name,
+        address: data.address,
+        status: data.status,
+        communityType: data.community_type,
+        blocks: data.blocks,
+        maintenanceRate: data.maintenance_rate,
+        fixedMaintenanceAmount: data.fixed_maintenance_amount
+    } as Community;
 };
 
 export const deleteCommunity = async (id: string): Promise<void> => {
@@ -745,10 +846,7 @@ export const deleteCommunity = async (id: string): Promise<void> => {
     if (error) throw error;
 };
 
-
-// EDGE FUNCTIONS
-
-export const createAdminUser = async (userData: any) => {
+export const createAdminUser = async (payload: any): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
 
@@ -759,31 +857,16 @@ export const createAdminUser = async (userData: any) => {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': supabaseKey
         },
-        body: JSON.stringify(userData)
+        body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to create admin');
+        throw new Error(err.error || 'Failed to create admin user');
     }
-    return response.json();
 };
 
-export const createCommunityUser = async (userData: {
-    name: string;
-    email: string;
-    password: string;
-    community_id: string;
-    role: string;
-    units?: Array<{
-        flat_number: string;
-        block?: string;
-        floor?: number;
-        flat_size?: number;
-        maintenance_start_date?: string;
-    }>;
-    flat_number?: string;
-}) => {
+export const createCommunityUser = async (payload: any): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
 
@@ -794,20 +877,19 @@ export const createCommunityUser = async (userData: {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': supabaseKey
         },
-        body: JSON.stringify(userData)
+        body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || 'Failed to create user');
     }
-    return response.json();
 };
 
 export const updateUserPassword = async (password: string): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("No active session. Please log in again.");
-
+    if (!session) throw new Error("No active session");
+    
     const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-user-password', {
         method: 'POST',
         headers: {
@@ -818,15 +900,15 @@ export const updateUserPassword = async (password: string): Promise<void> => {
         body: JSON.stringify({ password })
     });
 
-     if (!response.ok) {
-        const err = await response.json();
+    if (!response.ok) {
+         const err = await response.json();
         throw new Error(err.error || 'Failed to update password');
     }
 };
 
 export const requestPasswordReset = async (email: string): Promise<void> => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
+        redirectTo: window.location.origin + '/reset-password',
     });
     if (error) throw error;
 };

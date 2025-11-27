@@ -29,8 +29,6 @@ serve(async (req: any) => {
     )
 
     // Parse request body
-    // 'units' is an array of objects for Residents.
-    // 'flat_number' etc are fallback for Staff/Legacy
     const { name, email, password, community_id, role, units, flat_number } = await req.json()
 
     if (!email || !password || !name || !community_id || !role) {
@@ -42,10 +40,8 @@ serve(async (req: any) => {
     
     // For Residents, we expect 'units' array
     if (role === 'Resident' && (!units || !Array.isArray(units) || units.length === 0)) {
-         // Fallback: If they sent legacy fields, wrap them
          if (!units && flat_number) {
-             // This block intentionally left to support simple legacy calls if needed, 
-             // but ideally the frontend should send 'units'
+             // Fallback support
          } else {
             return new Response(
                 JSON.stringify({ error: 'Residents must have at least one Unit/Flat assigned.' }),
@@ -83,9 +79,20 @@ serve(async (req: any) => {
     if (requesterProfile.role === 'HelpdeskAdmin' && role !== 'HelpdeskAgent') {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: corsHeaders });
     }
-    // Admins cannot create Agents (Only Helpdesk Admins can)
-    if (requesterProfile.role === 'Admin' && role === 'HelpdeskAgent') {
+    // Security Admin can only create Security (Guard)
+    if (requesterProfile.role === 'SecurityAdmin' && role !== 'Security') {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: corsHeaders });
+    }
+
+    // Admins restrictions
+    if (requesterProfile.role === 'Admin') {
+         if (role === 'HelpdeskAgent') {
+              return new Response(JSON.stringify({ error: 'Unauthorized: Only Helpdesk Admin can create Agents' }), { status: 403, headers: corsHeaders });
+         }
+         if (role === 'Security') {
+              return new Response(JSON.stringify({ error: 'Unauthorized: Only Security Admin can create Security Guards' }), { status: 403, headers: corsHeaders });
+         }
+         // Admins can create SecurityAdmin, HelpdeskAdmin, Resident
     }
 
     // 1. Create Auth User
@@ -100,7 +107,6 @@ serve(async (req: any) => {
     if (!user) throw new Error('User creation failed')
 
     // 2. Insert into Public Users (Profile)
-    // Note: flat_number in users table is now essentially a "Display Label" or NULL for Residents
     const displayFlatNumber = role === 'Resident' && units && units.length > 0 
         ? units[0].flat_number 
         : flat_number; 
@@ -113,8 +119,6 @@ serve(async (req: any) => {
         name: name,
         role: role,
         community_id: community_id,
-        // For residents, these columns on the 'users' table might be deprecated, 
-        // but we fill them for backward compatibility if they exist
         flat_number: displayFlatNumber, 
         status: 'active',
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
@@ -127,8 +131,6 @@ serve(async (req: any) => {
 
     // 3. Insert Units & Calculate Maintenance (Only for Residents)
     if (role === 'Resident' && units && Array.isArray(units)) {
-        
-        // Fetch Community Details for Rates
         const { data: community } = await supabaseClient
             .from('communities')
             .select('*')
@@ -136,7 +138,6 @@ serve(async (req: any) => {
             .single();
 
         for (const unit of units) {
-            // Insert Unit
             const { data: createdUnit, error: unitError } = await supabaseClient
                 .from('units')
                 .insert({
@@ -156,7 +157,6 @@ serve(async (req: any) => {
                 continue; 
             }
 
-            // Calculate Pro-Rata Maintenance
             if (community && unit.maintenance_start_date) {
                 let monthlyAmount = 0;
                 const type = community.community_type ? community.community_type.toLowerCase() : 'gated';
@@ -180,7 +180,7 @@ serve(async (req: any) => {
                         const periodDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
                         await supabaseClient.from('maintenance_records').insert({
                             user_id: user.id,
-                            unit_id: createdUnit.id, // Link to the specific unit
+                            unit_id: createdUnit.id,
                             community_id: community_id,
                             amount: proRataAmount,
                             period_date: periodDate,

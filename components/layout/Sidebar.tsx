@@ -30,14 +30,16 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
       return ['Notices', 'Help Desk'].includes(item.name);
     }
     if (user?.role === UserRole.HelpdeskAdmin) {
-      // Helpdesk Admin needs Directory to manage agents, but NOT Maintenance
       return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
+    }
+    if (user?.role === UserRole.SecurityAdmin || user?.role === UserRole.Security) {
+        return ['Notices', 'Visitors', 'Directory'].includes(item.name);
     }
     if (user?.role === UserRole.Admin) {
        // Admins see everything
        return true; 
     }
-    // Residents and Security don't see Expenses
+    // Residents don't see Expenses
     if (item.name === 'Expenses') return false;
 
     return true;

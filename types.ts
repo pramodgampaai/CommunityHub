@@ -7,6 +7,7 @@ export enum UserRole {
   Security = 'Security',
   HelpdeskAdmin = 'HelpdeskAdmin', // Previously Helpdesk, Acts as Helpdesk Admin
   HelpdeskAgent = 'HelpdeskAgent', // Acts as Worker
+  SecurityAdmin = 'SecurityAdmin', // Manages Security Guards
 }
 
 export interface Block {
@@ -107,9 +108,11 @@ export interface Complaint {
 }
 
 export enum VisitorStatus {
-    Expected = 'Expected',
+    PendingApproval = 'Pending Approval', // Created by Security, waiting for Resident
+    Expected = 'Expected', // Created by Resident OR Approved by Resident
     Arrived = 'Arrived',
     Departed = 'Departed',
+    Denied = 'Denied' // Rejected by Resident
 }
 
 export interface Visitor {
@@ -121,6 +124,7 @@ export interface Visitor {
   residentName: string;
   flatNumber: string;
   communityId: string;
+  userId?: string; // ID of the resident being visited
 }
 
 export interface Amenity {

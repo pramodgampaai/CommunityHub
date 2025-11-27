@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords, updateMaintenanceStartDate } from '../services/api';
 import type { User, Community, Block, MaintenanceRecord, Unit } from '../types';
@@ -122,7 +121,6 @@ const Directory: React.FC = () => {
                 fetchResidents(user.communityId);
                 fetchCommunityDetails(user.communityId);
             } else {
-                // If user has no community ID, we stop loading but list remains empty
                 console.warn("Logged in user has no Community ID");
                 setLoading(false);
             }
@@ -135,6 +133,8 @@ const Directory: React.FC = () => {
             // Default role based on who is creating
             if (user?.role === UserRole.HelpdeskAdmin) {
                 setNewRole(UserRole.HelpdeskAgent);
+            } else if (user?.role === UserRole.SecurityAdmin) {
+                setNewRole(UserRole.Security);
             } else {
                 setNewRole(UserRole.Resident);
             }
@@ -278,7 +278,6 @@ const Directory: React.FC = () => {
 
         setIsSubmitting(true);
         try {
-            // Call API with Unit ID
             await updateMaintenanceStartDate(editingUser.id, editMaintenanceDate, editingUnit.id);
             setIsEditModalOpen(false);
             alert("Maintenance start date updated successfully!");
@@ -311,14 +310,18 @@ const Directory: React.FC = () => {
         let allowedRoles: UserRole[] = [];
 
         if (user.role === UserRole.Admin) {
-            // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin), Security
-            allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.HelpdeskAdmin, UserRole.Security];
+            // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin), and Security Admin
+            // Excludes Security Guard (UserRole.Security) as per requirements
+            allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.HelpdeskAdmin, UserRole.SecurityAdmin];
         } else if (user.role === UserRole.Resident) {
             // Resident sees: Admin, Resident
             allowedRoles = [UserRole.Admin, UserRole.Resident];
         } else if (user.role === UserRole.HelpdeskAdmin) {
             // Helpdesk Admin sees: Helpdesk, HelpdeskAgent
             allowedRoles = [UserRole.HelpdeskAdmin, UserRole.HelpdeskAgent];
+        } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
+            // Security roles see only Security related personnel
+            allowedRoles = [UserRole.SecurityAdmin, UserRole.Security];
         } else if (user.role === UserRole.HelpdeskAgent) {
             // Helpdesk Agent should not see anything
             return [];
@@ -359,7 +362,7 @@ const Directory: React.FC = () => {
     // Permission Checks for Actions
     const canViewHistory = user?.role === UserRole.Admin; // Only Admins can view maintenance history
     const canViewMaintenanceStart = user?.role === UserRole.Admin;
-    const canAddUser = user?.role === UserRole.Admin || user?.role === UserRole.HelpdeskAdmin;
+    const canAddUser = user?.role === UserRole.Admin || user?.role === UserRole.HelpdeskAdmin || user?.role === UserRole.SecurityAdmin;
 
     // If Helpdesk Agent tries to view, render nothing (Access Control)
     if (user?.role === UserRole.HelpdeskAgent) {
@@ -465,10 +468,11 @@ const Directory: React.FC = () => {
                                     <span className={`px-2 py-1 text-xs font-medium rounded-full 
                                         ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
                                           resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
+                                          resident.role === UserRole.SecurityAdmin ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 border border-orange-200' :
                                           resident.role === UserRole.HelpdeskAdmin ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
                                           resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
                                           'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
-                                        {resident.role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : resident.role}
+                                        {resident.role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : resident.role === UserRole.SecurityAdmin ? 'Security Admin' : resident.role}
                                     </span>
                                 </td>
                                 <td className="p-4">
@@ -518,10 +522,11 @@ const Directory: React.FC = () => {
                             <span className={`px-2 py-0.5 text-xs font-medium rounded-full 
                                 ${resident.role === UserRole.Admin ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' : 
                                   resident.role === UserRole.Security ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 
+                                  resident.role === UserRole.SecurityAdmin ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 border border-orange-200' :
                                   resident.role === UserRole.HelpdeskAdmin ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' :
                                   resident.role === UserRole.HelpdeskAgent ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' :
                                   'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'}`}>
-                                {resident.role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : resident.role}
+                                {resident.role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : resident.role === UserRole.SecurityAdmin ? 'Security Admin' : resident.role}
                             </span>
                         </div>
 
@@ -612,14 +617,19 @@ const Directory: React.FC = () => {
                                     <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
                                     <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
                                 </>
+                            ) : user?.role === UserRole.SecurityAdmin || user?.role === UserRole.Security ? (
+                                <>
+                                    <option value={UserRole.SecurityAdmin}>Security Admin</option>
+                                    <option value={UserRole.Security}>Security</option>
+                                </>
                             ) : (
                                 <>
                                     <option value={UserRole.Resident}>Residents</option>
                                     <option value={UserRole.Admin}>Admins</option>
                                     {user?.role === UserRole.Admin && (
                                         <>
-                                            <option value={UserRole.Security}>Security</option>
                                             <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
+                                            <option value={UserRole.SecurityAdmin}>Security Admin</option>
                                         </>
                                     )}
                                 </>
@@ -658,7 +668,7 @@ const Directory: React.FC = () => {
                  Object.entries(groupedResidents).map(([role, users]) => (
                      <div key={role} className="space-y-2 animated-card">
                          <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] px-2 capitalize">
-                            {role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : role}s ({(users as User[]).length})
+                            {role === UserRole.HelpdeskAdmin ? 'Helpdesk Admin' : role === UserRole.SecurityAdmin ? 'Security Admin' : role}s ({(users as User[]).length})
                          </h3>
                          {isMobile ? renderMobileCards(users as User[]) : renderTable(users as User[])}
                      </div>
@@ -696,10 +706,12 @@ const Directory: React.FC = () => {
                         >
                             {user?.role === UserRole.HelpdeskAdmin ? (
                                  <option value={UserRole.HelpdeskAgent}>Helpdesk Agent</option>
+                            ) : user?.role === UserRole.SecurityAdmin ? (
+                                 <option value={UserRole.Security}>Security</option>
                             ) : (
                                 <>
                                     <option value={UserRole.Resident}>Resident</option>
-                                    <option value={UserRole.Security}>Security</option>
+                                    <option value={UserRole.SecurityAdmin}>Security Admin</option>
                                     <option value={UserRole.Admin}>Admin</option>
                                     <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
                                 </>
