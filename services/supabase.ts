@@ -18,6 +18,7 @@ const supabaseKeyFromEnv = (import.meta as any).env?.VITE_SUPABASE_KEY ?? proces
 // WARNING: Do not commit your keys to a public repository.
 const supabaseUrlPlaceholder = "YOUR_SUPABASE_URL";
 const supabaseKeyPlaceholder = "YOUR_SUPABASE_KEY";
+
 const supabaseUrl = supabaseUrlFromEnv || supabaseUrlPlaceholder;
 export const supabaseKey = supabaseKeyFromEnv || supabaseKeyPlaceholder;
 

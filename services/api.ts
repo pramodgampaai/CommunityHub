@@ -797,8 +797,6 @@ export const createCommunity = async (communityData: Partial<Community>): Promis
         address: communityData.address,
         community_type: communityData.communityType,
         blocks: communityData.blocks,
-        maintenance_rate: communityData.maintenanceRate,
-        fixed_maintenance_amount: communityData.fixedMaintenanceAmount,
         status: 'active'
     }).select().single();
 
