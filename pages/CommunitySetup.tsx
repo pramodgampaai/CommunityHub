@@ -1,286 +1,471 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getCommunity, updateCommunity } from '../services/api';
+import { getCommunity, updateCommunity, assignAdminUnit } from '../services/api';
 import type { Community, Block } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
-import { PlusIcon, TrashIcon, CheckCircleIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, CheckCircleIcon, AlertTriangleIcon } from '../components/icons';
 
 interface CommunitySetupProps {
     onComplete: () => void;
 }
 
+type SetupStep = 'landscape' | 'residence';
+
 const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
-    const { user } = useAuth();
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
+    const { user, refreshUser } = useAuth();
+    const [step, setStep] = useState<SetupStep>('landscape');
     const [community, setCommunity] = useState<Community | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
 
-    // Form States
-    const [blocks, setBlocks] = useState<Block[]>([]); // For High-Rise
-    const [villaRoads, setVillaRoads] = useState<number>(0); // For Villa
-    const [standaloneData, setStandaloneData] = useState<{ floors: number; unitsPerFloor: number }>({ floors: 0, unitsPerFloor: 0 }); // For Standalone
+    // --- Landscape State ---
+    const [blocks, setBlocks] = useState<Block[]>([]);
+    // Villa Specific
+    const [roadCount, setRoadCount] = useState<number>(0);
+    // Standalone Specific
+    const [standaloneFloors, setStandaloneFloors] = useState<number>(0);
+    const [standaloneUnitsPerFloor, setStandaloneUnitsPerFloor] = useState<number>(0);
+
+    // --- Residence State ---
+    const [selectedBlock, setSelectedBlock] = useState('');
+    const [selectedFloor, setSelectedFloor] = useState('');
+    const [flatNumber, setFlatNumber] = useState('');
+    const [flatSize, setFlatSize] = useState('');
+    const [maintenanceStartDate, setMaintenanceStartDate] = useState(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
-        const fetchDetails = async () => {
+        const init = async () => {
             if (!user?.communityId) return;
             try {
-                setLoading(true);
                 const data = await getCommunity(user.communityId);
                 setCommunity(data);
                 
-                // Initialize state if data exists (edit mode) or prepare for new
                 if (data.blocks && data.blocks.length > 0) {
                     setIsEditMode(true);
                     setBlocks(data.blocks);
-                    if (data.communityType?.includes('Villa')) {
-                        setVillaRoads(data.blocks.length);
+                    
+                    // Pre-fill helper states based on type
+                    if (data.communityType === 'Gated Community Villa') {
+                        setRoadCount(data.blocks.length);
                     } else if (data.communityType?.includes('Standalone')) {
-                        setStandaloneData({
-                            floors: data.blocks[0].floorCount,
-                            unitsPerFloor: data.blocks[0].unitsPerFloor || 0
-                        });
+                        setStandaloneFloors(data.blocks[0].floorCount);
+                        setStandaloneUnitsPerFloor(data.blocks[0].unitsPerFloor || 0);
                     }
+                } else {
+                    // Initialize empty blocks for High-Rise if new
+                    setBlocks([]);
                 }
-            } catch (err: any) {
-                setError(err.message || 'Failed to load community details.');
+            } catch (err) {
+                console.error(err);
+                setError("Failed to load community details.");
             } finally {
                 setLoading(false);
             }
         };
-        fetchDetails();
+        init();
     }, [user]);
 
-    const isFormValid = () => {
-        if (!community) return false;
+    // --- Landscape Handlers ---
 
-        if (community.communityType === 'Gated Community Villa') {
-            return villaRoads > 0;
-        }
-
-        if (community.communityType === 'Standalone Apartment' || community.communityType === 'Standalone') {
-            return standaloneData.floors > 0 && standaloneData.unitsPerFloor > 0;
-        }
-
-        // High-Rise: Must have at least one block and all blocks must be valid
-        if (blocks.length === 0) return false;
-        return blocks.every(b => b.name.trim() !== '' && b.floorCount > 0);
-    };
-
-    const handleSave = async () => {
-        if (!community || !user?.communityId) return;
-        setSubmitting(true);
-        setError(null);
-
-        let finalBlocks: Block[] = [];
-
-        try {
-            if (community.communityType === 'Gated Community Villa') {
-                if (villaRoads < 1) throw new Error("Please enter a valid number of roads.");
-                if (villaRoads > 100) throw new Error("Maximum 100 roads allowed for performance reasons.");
-                
-                // Generate Road blocks
-                finalBlocks = Array.from({ length: villaRoads }, (_, i) => ({
-                    name: `Road ${i + 1}`,
-                    floorCount: 1 // Default for villas
-                }));
-            } else if (community.communityType === 'Standalone Apartment' || community.communityType === 'Standalone') {
-                if (standaloneData.floors > 200) throw new Error("Maximum 200 floors allowed.");
-                // Button disabled state handles validation (floors > 0 && unitsPerFloor > 0)
-                finalBlocks = [{
-                    name: 'Main Building',
-                    floorCount: standaloneData.floors,
-                    unitsPerFloor: standaloneData.unitsPerFloor
-                }];
-            } else {
-                // High-Rise / Generic
-                if (blocks.length === 0) throw new Error("Please add at least one block/tower.");
-                if (blocks.some(b => !b.name.trim() || b.floorCount < 1)) throw new Error("All blocks must have a name and at least 1 floor.");
-                finalBlocks = blocks;
-            }
-
-            await updateCommunity(user.communityId, { blocks: finalBlocks });
-            onComplete(); // Navigate to dashboard
-        } catch (err: any) {
-            console.error("Setup error:", err);
-            setError(err.message || 'An unexpected error occurred. Please try again.');
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    // High-Rise Helpers
-    const addBlock = () => {
+    const handleAddBlock = () => {
         setBlocks([...blocks, { name: '', floorCount: 0 }]);
     };
 
-    const updateBlock = (index: number, field: keyof Block, value: string | number) => {
-        const updated = [...blocks];
-        updated[index] = { ...updated[index], [field]: value };
-        setBlocks(updated);
-    };
-
-    const removeBlock = (index: number) => {
+    const handleRemoveBlock = (index: number) => {
         setBlocks(blocks.filter((_, i) => i !== index));
     };
 
-    if (loading) {
-        return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
-    }
+    const handleBlockChange = (index: number, field: keyof Block, value: string | number) => {
+        const newBlocks = [...blocks];
+        newBlocks[index] = { ...newBlocks[index], [field]: value };
+        setBlocks(newBlocks);
+    };
 
-    if (!community) {
-        return <div className="p-8 text-center">Community details not found.</div>;
-    }
+    const isLandscapeValid = () => {
+        if (!community) return false;
+        
+        if (community.communityType === 'Gated Community Villa') {
+            return roadCount > 0 && roadCount < 500;
+        }
+        if (community.communityType?.includes('Standalone')) {
+            return standaloneFloors > 0 && standaloneUnitsPerFloor > 0;
+        }
+        // High-Rise
+        return blocks.length > 0 && blocks.every(b => b.name.trim() !== '' && b.floorCount > 0);
+    };
+
+    const handleSaveLandscape = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!community || !user?.communityId) return;
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            let finalBlocks: Block[] = [];
+
+            if (community.communityType === 'Gated Community Villa') {
+                // Generate Road blocks
+                finalBlocks = Array.from({ length: roadCount }, (_, i) => ({
+                    name: `Road ${i + 1}`,
+                    floorCount: 1 // Default for Villas
+                }));
+            } else if (community.communityType?.includes('Standalone')) {
+                // Generate Single Block
+                finalBlocks = [{
+                    name: 'Main Building',
+                    floorCount: Number(standaloneFloors),
+                    unitsPerFloor: Number(standaloneUnitsPerFloor)
+                }];
+            } else {
+                // High-Rise uses the dynamic list
+                finalBlocks = blocks.map(b => ({
+                    name: b.name,
+                    floorCount: Number(b.floorCount)
+                }));
+            }
+
+            await updateCommunity(user.communityId, { blocks: finalBlocks });
+            
+            // If in Edit Mode, we are done (updating landscape doesn't require re-assigning unit)
+            if (isEditMode) {
+                alert("Landscape updated successfully.");
+                onComplete();
+            } else {
+                // Determine next step
+                // Update local state to reflect the saved blocks for the next step dropdowns
+                setCommunity({ ...community, blocks: finalBlocks });
+                setStep('residence');
+                
+                // Pre-select block if only one (Standalone or 1 Tower)
+                if (finalBlocks.length === 1) {
+                    setSelectedBlock(finalBlocks[0].name);
+                }
+            }
+
+        } catch (err: any) {
+            console.error("Save failed:", err);
+            setError(err.message || "Failed to save landscape.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // --- Residence Handlers ---
+
+    const getFloorOptions = () => {
+        if (!selectedBlock || !community?.blocks) return [];
+        const block = community.blocks.find(b => b.name === selectedBlock);
+        if (!block) return [];
+        return Array.from({ length: block.floorCount }, (_, i) => i + 1);
+    };
+
+    const handleSaveResidence = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user || !community) return;
+        
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const flatSizeNum = parseFloat(flatSize);
+            if (isNaN(flatSizeNum) || flatSizeNum <= 0) {
+                throw new Error("Please enter a valid Flat Size.");
+            }
+
+            await assignAdminUnit({
+                block: community.communityType?.includes('Standalone') ? 'Main Building' : selectedBlock,
+                floor: selectedFloor ? parseInt(selectedFloor) : undefined,
+                flatNumber,
+                flatSize: flatSizeNum,
+                maintenanceStartDate
+            }, user, community);
+
+            // Refresh user profile to get updated units and clear gatekeeper
+            await refreshUser();
+            
+            // Navigate to Dashboard
+            onComplete();
+
+        } catch (err: any) {
+            console.error("Residence save failed:", err);
+            setError(err.message || "Failed to assign unit.");
+            setIsSubmitting(false);
+        }
+    };
+
+    if (loading) return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh] p-4">
-            <Card className="w-full max-w-2xl p-8 border-t-4 border-t-brand-500">
+        <div className="min-h-screen flex items-center justify-center bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4">
+            <div className="w-full max-w-2xl">
+                {/* Header */}
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2">
+                    <h1 className="text-3xl font-brand font-bold text-brand-500 mb-2">
                         {isEditMode ? 'Community Landscape' : 'Welcome to Elevate'}
                     </h1>
                     <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                        {isEditMode 
-                            ? <span>Update the landscape settings for <strong>{community.name}</strong>.</span>
-                            : <span>Let's set up the landscape for <strong>{community.name}</strong>.</span>
-                        }
+                        {step === 'landscape' 
+                            ? "Let's define the structure of your community." 
+                            : "One last step! Tell us where you live."}
                     </p>
-                    {!isEditMode && (
-                        <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2 bg-yellow-50 dark:bg-yellow-900/20 inline-block px-3 py-1 rounded-full">
-                            This step is mandatory to unlock all features.
-                        </p>
-                    )}
                 </div>
 
-                {error && (
-                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm text-center">
-                        {error}
-                    </div>
-                )}
-
-                <div className="space-y-6">
-                    {/* Villa Form */}
-                    {community.communityType === 'Gated Community Villa' && (
-                        <div>
-                            <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
-                                How many roads are in your community?
-                            </label>
-                            <input 
-                                type="number" 
-                                min="1" 
-                                max="100"
-                                value={villaRoads} 
-                                onChange={(e) => setVillaRoads(parseInt(e.target.value) || 0)}
-                                className="block w-full px-4 py-3 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-lg"
-                                placeholder="e.g. 5"
-                            />
-                            <p className="mt-2 text-xs text-[var(--text-secondary-light)]">We will automatically generate blocks named "Road 1", "Road 2", etc.</p>
+                <Card className="p-6 sm:p-8 animated-card">
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg flex items-start gap-3">
+                            <AlertTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm">{error}</p>
                         </div>
                     )}
 
-                    {/* Standalone Form */}
-                    {(community.communityType === 'Standalone Apartment' || community.communityType === 'Standalone') && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
-                                    Total Floors
-                                </label>
-                                <input 
-                                    type="number" 
-                                    min="1" 
-                                    max="200"
-                                    value={standaloneData.floors} 
-                                    onChange={(e) => setStandaloneData({...standaloneData, floors: parseInt(e.target.value) || 0})}
-                                    className="block w-full px-4 py-3 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
-                                />
+                    {step === 'landscape' && (
+                        <form onSubmit={handleSaveLandscape} className="space-y-6">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                                <p className="text-sm text-blue-800 dark:text-blue-200">
+                                    <span className="font-bold">Community Type:</span> {community?.communityType}
+                                </p>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
-                                    Flats per Floor
-                                </label>
-                                <input 
-                                    type="number" 
-                                    min="1" 
-                                    max="50"
-                                    value={standaloneData.unitsPerFloor} 
-                                    onChange={(e) => setStandaloneData({...standaloneData, unitsPerFloor: parseInt(e.target.value) || 0})}
-                                    className="block w-full px-4 py-3 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
-                                />
-                            </div>
-                        </div>
-                    )}
 
-                    {/* High-Rise Form */}
-                    {community.communityType === 'High-Rise Apartment' && (
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center mb-2">
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                    Blocks / Towers
-                                </label>
-                                <Button size="sm" variant="outlined" onClick={addBlock} leftIcon={<PlusIcon className="w-4 h-4"/>}>Add Block</Button>
-                            </div>
-                            
-                            {blocks.length === 0 && (
-                                <div className="text-center p-6 border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg text-[var(--text-secondary-light)]">
-                                    No blocks added yet. Click "Add Block" to start.
+                            {/* --- High Rise Form --- */}
+                            {community?.communityType === 'High-Rise Apartment' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Blocks / Towers</label>
+                                        <Button type="button" size="sm" variant="outlined" onClick={handleAddBlock} leftIcon={<PlusIcon className="w-4 h-4"/>}>
+                                            Add Block
+                                        </Button>
+                                    </div>
+                                    
+                                    {blocks.length === 0 && (
+                                        <p className="text-center text-sm text-[var(--text-secondary-light)] italic py-4">No blocks added yet.</p>
+                                    )}
+
+                                    {blocks.map((block, index) => (
+                                        <div key={index} className="flex gap-4 items-start">
+                                            <div className="flex-1">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Block Name (e.g. A, Tower 1)" 
+                                                    value={block.name}
+                                                    onChange={e => handleBlockChange(index, 'name', e.target.value)}
+                                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="w-32">
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="Floors" 
+                                                    min="1"
+                                                    value={block.floorCount}
+                                                    onChange={e => handleBlockChange(index, 'floorCount', parseInt(e.target.value))}
+                                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                                    required
+                                                />
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleRemoveBlock(index)}
+                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                            >
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
 
-                            {blocks.map((block, index) => (
-                                <div key={index} className="flex gap-4 items-center bg-black/5 dark:bg-white/5 p-3 rounded-lg animate-fadeIn">
-                                    <div className="flex-1">
-                                        <input 
-                                            type="text" 
-                                            placeholder="Block Name (e.g. Tower A)"
-                                            value={block.name}
-                                            onChange={(e) => updateBlock(index, 'name', e.target.value)}
-                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-sm"
-                                        />
-                                    </div>
-                                    <div className="w-24">
+                            {/* --- Villa Form --- */}
+                            {community?.communityType === 'Gated Community Villa' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
+                                        Number of Roads / Streets
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        min="1"
+                                        max="500"
+                                        value={roadCount}
+                                        onChange={e => setRoadCount(parseInt(e.target.value) || 0)}
+                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                        placeholder="e.g. 10"
+                                    />
+                                    <p className="text-xs text-[var(--text-secondary-light)] mt-2">
+                                        We will automatically generate blocks named "Road 1", "Road 2", etc.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* --- Standalone Form --- */}
+                            {community?.communityType?.includes('Standalone') && (
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
+                                            Total Floors
+                                        </label>
                                         <input 
                                             type="number" 
-                                            placeholder="Floors"
                                             min="1"
                                             max="200"
-                                            value={block.floorCount || ''}
-                                            onChange={(e) => updateBlock(index, 'floorCount', parseInt(e.target.value) || 0)}
-                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-sm"
+                                            value={standaloneFloors}
+                                            onChange={e => setStandaloneFloors(parseInt(e.target.value) || 0)}
+                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
                                         />
                                     </div>
-                                    <button 
-                                        onClick={() => removeBlock(index)}
-                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
-                                    >
-                                        <TrashIcon className="w-5 h-5" />
-                                    </button>
+                                    <div>
+                                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
+                                            Flats per Floor
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            max="50"
+                                            value={standaloneUnitsPerFloor}
+                                            onChange={e => setStandaloneUnitsPerFloor(parseInt(e.target.value) || 0)}
+                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                        />
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+
+                            <div className="pt-6 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] flex justify-end gap-3">
+                                {isEditMode && (
+                                    <Button type="button" variant="outlined" onClick={onComplete} disabled={isSubmitting}>
+                                        Cancel
+                                    </Button>
+                                )}
+                                <Button type="submit" disabled={isSubmitting || !isLandscapeValid()}>
+                                    {isSubmitting ? 'Saving...' : (isEditMode ? 'Update Landscape' : 'Save & Continue')}
+                                </Button>
+                            </div>
+                        </form>
                     )}
 
-                    <div className="pt-6 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] flex gap-4">
-                        {isEditMode && (
-                            <Button variant="outlined" onClick={onComplete} disabled={submitting} className="flex-1">
-                                Cancel
-                            </Button>
-                        )}
-                        <Button 
-                            onClick={handleSave} 
-                            disabled={submitting || !isFormValid()} 
-                            className="flex-1" 
-                            size="lg" 
-                            leftIcon={<CheckCircleIcon className="w-5 h-5"/>}
-                        >
-                            {submitting ? 'Saving...' : (isEditMode ? 'Update Configuration' : 'Save & Continue')}
-                        </Button>
-                    </div>
-                </div>
-            </Card>
+                    {step === 'residence' && (
+                        <form onSubmit={handleSaveResidence} className="space-y-6 animated-card">
+                            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-100 dark:border-green-900/30 flex items-center gap-3">
+                                <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                <p className="text-sm text-green-800 dark:text-green-200">Landscape set up successfully!</p>
+                            </div>
+
+                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                As an Admin, you are also a resident. Please enter the details of the unit you own/reside in. 
+                                This will create your maintenance profile.
+                            </p>
+
+                            {/* Block/Road Selection - Hidden for Standalone if auto-generated */}
+                            {!community?.communityType?.includes('Standalone') && (
+                                <div>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
+                                        {community?.communityType === 'Gated Community Villa' ? 'Road / Street' : 'Block / Tower'}
+                                    </label>
+                                    <select 
+                                        value={selectedBlock} 
+                                        onChange={e => {
+                                            setSelectedBlock(e.target.value);
+                                            setSelectedFloor(''); 
+                                        }}
+                                        required
+                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                                    >
+                                        <option value="">Select...</option>
+                                        {community?.blocks?.map((b, i) => (
+                                            <option key={i} value={b.name}>{b.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-6">
+                                {/* Floor Selection */}
+                                <div>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
+                                    {community?.communityType?.includes('Standalone') ? (
+                                        <select 
+                                            value={selectedFloor} 
+                                            onChange={e => setSelectedFloor(e.target.value)}
+                                            required
+                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                                        >
+                                            <option value="">Select...</option>
+                                            {Array.from({ length: community.blocks?.[0]?.floorCount || 0 }, (_, i) => i + 1).map(f => (
+                                                <option key={f} value={f}>{f}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <select 
+                                            value={selectedFloor} 
+                                            onChange={e => setSelectedFloor(e.target.value)}
+                                            required
+                                            disabled={!selectedBlock}
+                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-50"
+                                        >
+                                            <option value="">Select...</option>
+                                            {getFloorOptions().map(f => (
+                                                <option key={f} value={f}>{f}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                {/* Flat Number */}
+                                <div>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
+                                        {community?.communityType === 'Gated Community Villa' ? 'Villa Number' : 'Flat Number'}
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        value={flatNumber}
+                                        onChange={e => setFlatNumber(e.target.value)}
+                                        required
+                                        placeholder="e.g. 101"
+                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
+                                        Size (Sq. Ft)
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        value={flatSize}
+                                        onChange={e => setFlatSize(e.target.value)}
+                                        required
+                                        min="1"
+                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
+                                        Maintenance Start
+                                    </label>
+                                    <input 
+                                        type="date" 
+                                        value={maintenanceStartDate}
+                                        onChange={e => setMaintenanceStartDate(e.target.value)}
+                                        required
+                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] flex justify-end">
+                                <Button type="submit" disabled={isSubmitting}>
+                                    {isSubmitting ? 'Finalizing...' : 'Finish Setup'}
+                                </Button>
+                            </div>
+                        </form>
+                    )}
+                </Card>
+            </div>
         </div>
     );
 };

@@ -158,7 +158,6 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     // This guarantees the directory loads even if the 'units' table or relationship is broken.
     
     // Step 1: Fetch Users (Guaranteed to exist)
-    // Removed .order('created_at') to prevent 400 Bad Request if column is missing
     const { data: users, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -723,6 +722,76 @@ export const rejectExpense = async (expenseId: string, userId: string, reason: s
         .eq('id', expenseId);
 
     if (error) throw error;
+}
+
+// Function to assign Admin Unit and create maintenance record
+export const assignAdminUnit = async (
+    unitData: { block?: string; floor?: number; flatNumber: string; flatSize: number; maintenanceStartDate: string },
+    user: User,
+    community: Community
+): Promise<void> => {
+    
+    // Safety check for Numeric fields
+    if (unitData.flatSize === undefined || unitData.flatSize === null || isNaN(unitData.flatSize)) {
+        throw new Error("Invalid Flat Size provided.");
+    }
+
+    // 1. Insert Unit for Admin
+    const { data: unit, error: unitError } = await supabase.from('units').insert({
+        community_id: community.id,
+        user_id: user.id,
+        flat_number: unitData.flatNumber,
+        block: unitData.block,
+        floor: unitData.floor,
+        flat_size: unitData.flatSize,
+        maintenance_start_date: unitData.maintenanceStartDate
+    }).select().single();
+
+    if (unitError) throw unitError;
+
+    // 2. Calculate Maintenance Amount
+    let monthlyAmount = 0;
+    const type = community.communityType ? community.communityType.toLowerCase() : 'high-rise apartment';
+
+    if (type.includes('standalone')) {
+        monthlyAmount = Number(community.fixedMaintenanceAmount) || 0;
+    } else {
+        monthlyAmount = (Number(community.maintenanceRate) || 0) * (Number(unitData.flatSize) || 0);
+    }
+
+    // Ensure valid number for amount
+    if (isNaN(monthlyAmount)) monthlyAmount = 0;
+
+    // 3. Create Pro-Rata Maintenance Record
+    if (monthlyAmount > 0) {
+        const startDate = new Date(unitData.maintenanceStartDate);
+        
+        // Ensure date is valid
+        if (isNaN(startDate.getTime())) {
+             console.warn("Invalid Maintenance Start Date, skipping maintenance record generation.");
+             return;
+        }
+
+        const year = startDate.getFullYear();
+        const month = startDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const daysRemaining = daysInMonth - startDate.getDate() + 1;
+        
+        let proRataAmount = Math.round((monthlyAmount / daysInMonth) * daysRemaining);
+        if (isNaN(proRataAmount)) proRataAmount = 0;
+
+        if (proRataAmount > 0) {
+            const periodDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
+            await supabase.from('maintenance_records').insert({
+                user_id: user.id,
+                unit_id: unit.id,
+                community_id: community.id,
+                amount: proRataAmount,
+                period_date: periodDate,
+                status: 'Pending'
+            });
+        }
+    }
 }
 
 

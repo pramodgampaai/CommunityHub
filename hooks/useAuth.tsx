@@ -11,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -183,8 +184,22 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     }
   };
 
+  const refreshUser = async () => {
+      try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+              const userProfile = await fetchProfile(session);
+              if (userProfile) {
+                  setUser(userProfile);
+              }
+          }
+      } catch (error) {
+          console.error("Failed to refresh user profile:", error);
+      }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

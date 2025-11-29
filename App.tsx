@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
@@ -29,7 +26,6 @@ function App() {
   // Initialize activePage safely
   const [activePage, setActivePage] = useState<Page>('Dashboard');
   const [pageParams, setPageParams] = useState<any>(null);
-  const [isSetupChecking, setIsSetupChecking] = useState(false);
   
   // Initialize theme from localStorage or fallback to system preference
   const [theme, setTheme] = useState<Theme>(() => {
@@ -55,16 +51,19 @@ function App() {
     const checkAccess = async () => {
         if (!user) return;
 
-        // 1. Admin Landscape Setup Check
+        // 1. Admin Landscape & Unit Setup Check
         if (user.role === UserRole.Admin && user.communityId) {
-            // We need to check if the community has blocks configured
             // Avoid infinite loop by only checking if not already on setup page
             if (activePage !== 'CommunitySetup') {
                 try {
-                    // Only start loading state if we suspect we might need to redirect
+                    // Check Landscape
                     const community = await getCommunity(user.communityId);
+                    const hasBlocks = community.blocks && community.blocks.length > 0;
                     
-                    if (!community.blocks || community.blocks.length === 0) {
+                    // Check User Units (useAuth provides updated units on profile fetch)
+                    const hasUnits = user.units && user.units.length > 0;
+
+                    if (!hasBlocks || !hasUnits) {
                         setActivePage('CommunitySetup');
                         return; // Stop further checks
                     }
@@ -157,39 +156,23 @@ function App() {
   if (!allowedPages.includes(activePage)) {
       return (
         <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-             <div className="flex justify-center items-center h-64">
+            <div className="flex items-center justify-center h-full">
                 <Spinner />
-             </div>
+            </div>
         </Layout>
       );
   }
 
-  const renderContent = () => {
-    switch (activePage) {
-      case 'Dashboard':
-        return <Dashboard navigateToPage={navigateToPage} />;
-      case 'Notices':
-        return <NoticeBoard />;
-      case 'Help Desk':
-        return <HelpDesk />;
-      case 'Visitors':
-        return <Visitors />;
-      case 'Amenities':
-        return <Amenities />;
-      case 'Directory':
-        return <Directory />;
-      case 'Maintenance':
-        return <Maintenance initialFilter={pageParams?.filter} />;
-      case 'Expenses':
-        return <Expenses />;
-      default:
-        return <Dashboard navigateToPage={navigateToPage} />;
-    }
-  };
-
   return (
     <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-      {renderContent()}
+      {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
+      {activePage === 'Notices' && <NoticeBoard />}
+      {activePage === 'Help Desk' && <HelpDesk />}
+      {activePage === 'Visitors' && <Visitors />}
+      {activePage === 'Amenities' && <Amenities />}
+      {activePage === 'Directory' && <Directory />}
+      {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
+      {activePage === 'Expenses' && <Expenses />}
     </Layout>
   );
 }
