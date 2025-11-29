@@ -8,15 +8,23 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: 'md' | 'lg' | 'xl' | '2xl';
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   if (!isOpen) return null;
+
+  const sizeClasses = {
+      md: 'max-w-md',
+      lg: 'max-w-lg',
+      xl: 'max-w-xl',
+      '2xl': 'max-w-2xl'
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 dark:bg-black/60 z-50 flex justify-center items-center p-4 modal-backdrop" onClick={onClose}>
       <div 
-        className="bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-lg shadow-xl w-full max-w-md flex flex-col max-h-[90vh] transform transition-all modal-content" 
+        className={`bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-lg shadow-xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh] transform transition-all modal-content`} 
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-6 border-b border-[var(--border-light)] dark:border-[var(--border-dark)] shrink-0">
@@ -25,7 +33,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer 
             <XIcon className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto">
+        <div className="p-6 overflow-y-auto flex-1">
           {children}
         </div>
         {footer && (

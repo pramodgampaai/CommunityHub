@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords, updateMaintenanceStartDate } from '../services/api';
-import type { User, Community, Block, MaintenanceRecord, Unit } from '../types';
+import { getResidents, createCommunityUser, getCommunity, getMaintenanceRecords } from '../services/api';
+import type { User, Community, Block, MaintenanceRecord, Unit, CommunityType } from '../types';
 import { UserRole, MaintenanceStatus } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -87,13 +87,6 @@ const Directory: React.FC = () => {
     const [maintenanceHistory, setMaintenanceHistory] = useState<MaintenanceRecord[]>([]);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
-    // Edit User Maintenance State
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editingUser, setEditingUser] = useState<User | null>(null);
-    const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
-    const [editMaintenanceDate, setEditMaintenanceDate] = useState('');
-
-
     const fetchResidents = async (communityId: string) => {
         try {
             setLoading(true);
@@ -154,14 +147,19 @@ const Directory: React.FC = () => {
         }
     }, [isModalOpen, user]);
 
+    const isStandaloneType = (type: CommunityType | undefined) => {
+        return type === 'Standalone Apartment' || type === 'Standalone';
+    }
+
     const getFloorOptions = (blockName: string) => {
         if (!community) return [];
         let floorCount = 0;
 
-        if (community.communityType === 'Gated' && blockName) {
+        // Check if Gated/High-Rise (Multiple Blocks) or Standalone
+        if (!isStandaloneType(community.communityType) && blockName) {
             const block = community.blocks?.find(b => b.name === blockName);
             floorCount = block?.floorCount || 0;
-        } else if (community.communityType === 'Standalone' && community.blocks && community.blocks.length > 0) {
+        } else if (isStandaloneType(community.communityType) && community.blocks && community.blocks.length > 0) {
             floorCount = community.blocks[0].floorCount;
         }
         return Array.from({ length: floorCount }, (_, i) => i + 1);
@@ -201,7 +199,7 @@ const Directory: React.FC = () => {
                 // Prepare Units Array
                 const unitsPayload = newUnits.map(u => ({
                     flat_number: u.flatNumber,
-                    block: community?.communityType === 'Gated' ? u.block : undefined,
+                    block: !isStandaloneType(community?.communityType) ? u.block : undefined,
                     floor: u.floor ? parseInt(u.floor) : undefined,
                     flat_size: u.flatSize ? parseFloat(u.flatSize) : 0,
                     maintenance_start_date: u.maintenanceStartDate
@@ -217,13 +215,14 @@ const Directory: React.FC = () => {
                 });
             } else {
                 // Create Staff
+                // Only send flat_number if explicitly set and not just whitespace
                 await createCommunityUser({
                     name: newName,
                     email: newEmail,
                     password: newPassword,
                     community_id: user.communityId,
                     role: newRole,
-                    flat_number: newStaffLocation // Simple string for location
+                    flat_number: newStaffLocation.trim() || undefined // Ensure empty string becomes undefined/null
                 });
             }
             
@@ -262,32 +261,6 @@ const Directory: React.FC = () => {
         setIsHistoryModalOpen(false);
         setHistoryUser(null);
         setMaintenanceHistory([]);
-    };
-
-    // Handle Edit Maintenance Date
-    const handleEditClick = (resident: User, unit: Unit) => {
-        setEditingUser(resident);
-        setEditingUnit(unit);
-        setEditMaintenanceDate(unit.maintenanceStartDate || '');
-        setIsEditModalOpen(true);
-    };
-
-    const handleUpdateSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingUser || !editingUnit) return;
-
-        setIsSubmitting(true);
-        try {
-            await updateMaintenanceStartDate(editingUser.id, editMaintenanceDate, editingUnit.id);
-            setIsEditModalOpen(false);
-            alert("Maintenance start date updated successfully!");
-            if (user?.communityId) await fetchResidents(user.communityId);
-        } catch (error: any) {
-            console.error("Update failed", error);
-            alert("Failed to update: " + (error.message || "Unknown error"));
-        } finally {
-            setIsSubmitting(false);
-        }
     };
 
     const getInitials = (name: string) => {
@@ -437,17 +410,6 @@ const Directory: React.FC = () => {
                                                              </span>
                                                         )}
                                                     </div>
-                                                    
-                                                    {/* Unit Specific Action (Edit Date) */}
-                                                    {canViewMaintenanceStart && (
-                                                        <button 
-                                                            onClick={() => handleEditClick(resident, u)}
-                                                            className="p-1 text-[var(--text-secondary-light)] hover:text-[var(--accent)] rounded transition-colors"
-                                                            title="Edit Maintenance Start Date"
-                                                        >
-                                                            <PencilIcon className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -539,14 +501,6 @@ const Directory: React.FC = () => {
                                             <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
                                                 {u.block ? `${u.block} - ` : ''}{u.flatNumber}
                                             </span>
-                                            {canViewMaintenanceStart && (
-                                                <button 
-                                                    onClick={() => handleEditClick(resident, u)}
-                                                    className="text-[var(--accent)] text-xs"
-                                                >
-                                                    Edit Date
-                                                </button>
-                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -790,7 +744,7 @@ const Directory: React.FC = () => {
                                     )}
                                     
                                     <div className="grid grid-cols-2 gap-4 mb-4">
-                                        {community?.communityType === 'Gated' && (
+                                        {!isStandaloneType(community?.communityType) && (
                                             <div>
                                                 <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Block</label>
                                                 <select 
@@ -800,7 +754,7 @@ const Directory: React.FC = () => {
                                                     required
                                                 >
                                                     <option value="">Select Block</option>
-                                                    {community.blocks?.map((b, i) => <option key={i} value={b.name}>{b.name}</option>)}
+                                                    {community?.blocks?.map((b, i) => <option key={i} value={b.name}>{b.name}</option>)}
                                                 </select>
                                             </div>
                                         )}
@@ -832,14 +786,14 @@ const Directory: React.FC = () => {
                                         </div>
                                          <div>
                                             <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">
-                                                Flat Size (SqFt) {community?.communityType === 'Gated' && <span className="text-red-500">*</span>}
+                                                Flat Size (SqFt) {!isStandaloneType(community?.communityType) && <span className="text-red-500">*</span>}
                                             </label>
                                             <input 
                                                 type="number" 
                                                 value={unit.flatSize} 
                                                 onChange={e => handleUnitChange(index, 'flatSize', e.target.value)}
                                                 className="block w-full px-2 py-1.5 text-sm border rounded bg-transparent"
-                                                required={community?.communityType === 'Gated'}
+                                                required={!isStandaloneType(community?.communityType)}
                                             />
                                         </div>
                                     </div>
@@ -910,38 +864,6 @@ const Directory: React.FC = () => {
                      </div>
                  )}
             </Modal>
-
-            {/* Edit Maintenance Date Modal */}
-            <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Update Maintenance Start">
-                <form onSubmit={handleUpdateSubmit} className="space-y-4">
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md mb-4">
-                        <p className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                            Resident: {editingUser?.name}
-                        </p>
-                        <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                            Unit: {editingUnit?.block ? `${editingUnit?.block}-` : ''}{editingUnit?.flatNumber}
-                        </p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Start Date</label>
-                        <input 
-                            type="date" 
-                            value={editMaintenanceDate} 
-                            onChange={e => setEditMaintenanceDate(e.target.value)} 
-                            required 
-                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
-                        />
-                        <p className="text-xs text-[var(--text-secondary-light)] mt-2">
-                            Changing this will recalculate the pro-rata maintenance for the starting month.
-                        </p>
-                    </div>
-                    <div className="flex justify-end pt-4 space-x-2">
-                        <Button type="button" variant="outlined" onClick={() => setIsEditModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Updating...' : 'Update'}</Button>
-                    </div>
-                </form>
-            </Modal>
-
         </div>
     );
 };

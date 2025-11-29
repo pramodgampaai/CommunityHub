@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
@@ -13,10 +15,12 @@ import AdminPanel from './pages/AdminPanel';
 import Directory from './pages/Directory';
 import Maintenance from './pages/Maintenance';
 import Expenses from './pages/Expenses';
+import CommunitySetup from './pages/CommunitySetup';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
 import { isSupabaseConfigured } from './services/supabase';
+import { getCommunity } from './services/api';
 
 export type Theme = 'light' | 'dark';
 
@@ -25,6 +29,7 @@ function App() {
   // Initialize activePage safely
   const [activePage, setActivePage] = useState<Page>('Dashboard');
   const [pageParams, setPageParams] = useState<any>(null);
+  const [isSetupChecking, setIsSetupChecking] = useState(false);
   
   // Initialize theme from localStorage or fallback to system preference
   const [theme, setTheme] = useState<Theme>(() => {
@@ -45,23 +50,46 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Enforce Role-Based Page Access (Redirect Logic)
+  // Enforce Role-Based Page Access and Community Setup Logic
   useEffect(() => {
-    if (user) {
-      if (user.role === UserRole.HelpdeskAgent) {
-          const allowed = ['Notices', 'Help Desk'];
-          if (!allowed.includes(activePage)) setActivePage('Help Desk');
-      } else if (user.role === UserRole.HelpdeskAdmin) {
-          const allowed = ['Notices', 'Help Desk', 'Directory'];
-          if (!allowed.includes(activePage)) setActivePage('Help Desk');
-      } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
-          // Security roles allowed pages
-          const allowed = ['Notices', 'Visitors', 'Directory'];
-          if (!allowed.includes(activePage)) setActivePage('Visitors');
-      } else if (user.role !== UserRole.Admin && activePage === 'Expenses') {
-          setActivePage('Dashboard');
-      }
-    }
+    const checkAccess = async () => {
+        if (!user) return;
+
+        // 1. Admin Landscape Setup Check
+        if (user.role === UserRole.Admin && user.communityId) {
+            // We need to check if the community has blocks configured
+            // Avoid infinite loop by only checking if not already on setup page
+            if (activePage !== 'CommunitySetup') {
+                try {
+                    // Only start loading state if we suspect we might need to redirect
+                    const community = await getCommunity(user.communityId);
+                    
+                    if (!community.blocks || community.blocks.length === 0) {
+                        setActivePage('CommunitySetup');
+                        return; // Stop further checks
+                    }
+                } catch (e) {
+                    console.error("Failed to check community setup status", e);
+                }
+            }
+        }
+
+        // 2. Standard Role Redirects
+        if (user.role === UserRole.HelpdeskAgent) {
+            const allowed = ['Notices', 'Help Desk'];
+            if (!allowed.includes(activePage)) setActivePage('Help Desk');
+        } else if (user.role === UserRole.HelpdeskAdmin) {
+            const allowed = ['Notices', 'Help Desk', 'Directory'];
+            if (!allowed.includes(activePage)) setActivePage('Help Desk');
+        } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
+            const allowed = ['Notices', 'Visitors', 'Directory'];
+            if (!allowed.includes(activePage)) setActivePage('Visitors');
+        } else if (user.role !== UserRole.Admin && activePage === 'Expenses') {
+            setActivePage('Dashboard');
+        }
+    };
+
+    checkAccess();
   }, [user, activePage]);
 
   const toggleTheme = () => {
@@ -103,6 +131,15 @@ function App() {
     return <AdminPanel theme={theme} toggleTheme={toggleTheme} />;
   }
   
+  // If we are in setup mode, we force that page and hide navigation (via Layout logic)
+  if (activePage === 'CommunitySetup') {
+      return (
+          <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
+              <CommunitySetup onComplete={() => setActivePage('Dashboard')} />
+          </Layout>
+      );
+  }
+
   // Define allowed pages per role for rendering check
   let allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance'];
   

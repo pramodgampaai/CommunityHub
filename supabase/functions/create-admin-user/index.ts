@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -72,6 +73,7 @@ serve(async (req: any) => {
         role: 'Admin',
         community_id: community_id,
         status: 'active',
+        flat_number: null, // Explicitly set to NULL for Admins
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
       })
 

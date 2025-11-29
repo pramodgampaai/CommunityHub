@@ -6,8 +6,9 @@ import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole, ExpenseSta
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
 import { useAuth } from '../hooks/useAuth';
-import { CurrencyRupeeIcon, BanknotesIcon } from '../components/icons';
+import { CurrencyRupeeIcon, BanknotesIcon, PencilIcon } from '../components/icons';
 import { Page } from '../types';
+import Button from '../components/ui/Button';
 
 interface DashboardProps {
     navigateToPage: (page: Page, params?: any) => void;
@@ -234,9 +235,21 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2 animated-card">Dashboard</h2>
-        <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base animated-card" style={{ animationDelay: '100ms' }}>Here's a quick overview of your community.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animated-card">
+        <div>
+            <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2">Dashboard</h2>
+            <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base">Here's a quick overview of your community.</p>
+        </div>
+        {isAdmin && (
+            <Button 
+                variant="outlined" 
+                onClick={() => navigateToPage('CommunitySetup')}
+                className="whitespace-nowrap"
+                leftIcon={<PencilIcon className="w-4 h-4"/>}
+            >
+                Manage Landscape
+            </Button>
+        )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

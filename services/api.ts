@@ -1,5 +1,4 @@
 
-
 import { supabase, supabaseKey } from './supabase';
 import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus, VisitorStatus } from '../types';
 
@@ -207,7 +206,12 @@ export const getCommunity = async (communityId: string): Promise<Community> => {
         communityType: data.community_type,
         blocks: data.blocks,
         maintenanceRate: data.maintenance_rate,
-        fixedMaintenanceAmount: data.fixed_maintenance_amount
+        fixedMaintenanceAmount: data.fixed_maintenance_amount,
+        // New fields
+        contacts: data.contact_info,
+        subscriptionType: data.subscription_type,
+        subscriptionStartDate: data.subscription_start_date,
+        pricePerUser: data.pricing_config
     } as Community;
 };
 
@@ -656,39 +660,6 @@ export const assignComplaint = async (complaintId: string, agentId: string): Pro
     if (error) throw error;
 };
 
-export const updateMaintenanceStartDate = async (userId: string, date: string, unitId?: string): Promise<void> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("No active session");
-
-    const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('community_id')
-        .eq('id', userId)
-        .single();
-
-    if (userError || !user) throw new Error("User not found");
-
-    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-maintenance-date', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': supabaseKey
-        },
-        body: JSON.stringify({ 
-            user_id: userId, 
-            maintenance_start_date: date,
-            community_id: user.community_id,
-            unit_id: unitId 
-        })
-    });
-
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to update maintenance date');
-    }
-};
-
 export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, transactionDate: string): Promise<void> => {
     const { error } = await supabase
         .from('maintenance_records')
@@ -769,11 +740,19 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
 
     const stats: CommunityStat[] = [];
     for (const c of communities) {
-        const { count } = await supabase
+        // Count Residents
+        const { count: residentCount } = await supabase
             .from('users')
             .select('*', { count: 'exact', head: true })
             .eq('community_id', c.id)
             .eq('role', 'Resident');
+        
+        // Count Admins
+        const { count: adminCount } = await supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .eq('community_id', c.id)
+            .eq('role', 'Admin');
             
         stats.push({
             id: c.id,
@@ -784,7 +763,12 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
             blocks: c.blocks,
             maintenanceRate: c.maintenance_rate,
             fixedMaintenanceAmount: c.fixed_maintenance_amount,
-            resident_count: count || 0,
+            contacts: c.contact_info,
+            subscriptionType: c.subscription_type,
+            subscriptionStartDate: c.subscription_start_date,
+            pricePerUser: c.pricing_config,
+            resident_count: residentCount || 0,
+            admin_count: adminCount || 0,
             income_generated: 0
         });
     }
@@ -797,6 +781,10 @@ export const createCommunity = async (communityData: Partial<Community>): Promis
         address: communityData.address,
         community_type: communityData.communityType,
         blocks: communityData.blocks,
+        contact_info: communityData.contacts,
+        subscription_type: communityData.subscriptionType,
+        subscription_start_date: communityData.subscriptionStartDate,
+        pricing_config: communityData.pricePerUser,
         status: 'active'
     }).select().single();
 
@@ -810,7 +798,11 @@ export const createCommunity = async (communityData: Partial<Community>): Promis
         communityType: data.community_type,
         blocks: data.blocks,
         maintenanceRate: data.maintenance_rate,
-        fixedMaintenanceAmount: data.fixed_maintenance_amount
+        fixedMaintenanceAmount: data.fixed_maintenance_amount,
+        contacts: data.contact_info,
+        subscriptionType: data.subscription_type,
+        subscriptionStartDate: data.subscription_start_date,
+        pricePerUser: data.pricing_config
     } as Community;
 };
 
@@ -823,9 +815,17 @@ export const updateCommunity = async (id: string, updates: Partial<Community>): 
     if (updates.maintenanceRate !== undefined) dbUpdates.maintenance_rate = updates.maintenanceRate;
     if (updates.fixedMaintenanceAmount !== undefined) dbUpdates.fixed_maintenance_amount = updates.fixedMaintenanceAmount;
     if (updates.status) dbUpdates.status = updates.status;
+    
+    // New Fields
+    if (updates.contacts) dbUpdates.contact_info = updates.contacts;
+    if (updates.subscriptionType) dbUpdates.subscription_type = updates.subscriptionType;
+    if (updates.subscriptionStartDate) dbUpdates.subscription_start_date = updates.subscriptionStartDate;
+    if (updates.pricePerUser) dbUpdates.pricing_config = updates.pricePerUser;
 
-    const { data, error } = await supabase.from('communities').update(dbUpdates).eq('id', id).select().single();
+    const { data, error } = await supabase.from('communities').update(dbUpdates).eq('id', id).select().maybeSingle();
+    
     if (error) throw error;
+    if (!data) throw new Error("Update failed or permission denied.");
 
     return {
         id: data.id,
@@ -835,7 +835,11 @@ export const updateCommunity = async (id: string, updates: Partial<Community>): 
         communityType: data.community_type,
         blocks: data.blocks,
         maintenanceRate: data.maintenance_rate,
-        fixedMaintenanceAmount: data.fixed_maintenance_amount
+        fixedMaintenanceAmount: data.fixed_maintenance_amount,
+        contacts: data.contact_info,
+        subscriptionType: data.subscription_type,
+        subscriptionStartDate: data.subscription_start_date,
+        pricePerUser: data.pricing_config
     } as Community;
 };
 

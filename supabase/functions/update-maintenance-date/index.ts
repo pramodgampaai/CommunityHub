@@ -1,4 +1,6 @@
 
+
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -57,9 +59,10 @@ serve(async (req: any) => {
     // 3. Recalculate Logic
     if (targetUnit && community) {
         let monthlyAmount = 0;
-        const type = community.community_type ? community.community_type.toLowerCase() : 'gated';
+        const type = community.community_type ? community.community_type.toLowerCase() : 'high-rise apartment';
         
-        if (type === 'standalone') {
+        // Check for 'standalone' or 'standalone apartment'
+        if (type.includes('standalone')) {
             monthlyAmount = Number(community.fixed_maintenance_amount) || 0;
         } else {
             monthlyAmount = (Number(community.maintenance_rate) || 0) * (Number(targetUnit.flat_size) || 0);

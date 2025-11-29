@@ -1,5 +1,4 @@
 
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -107,9 +106,14 @@ serve(async (req: any) => {
     if (!user) throw new Error('User creation failed')
 
     // 2. Insert into Public Users (Profile)
-    const displayFlatNumber = role === 'Resident' && units && units.length > 0 
+    let displayFlatNumber = role === 'Resident' && units && units.length > 0 
         ? units[0].flat_number 
         : flat_number; 
+    
+    // Sanitize: If it's an empty string, convert to null
+    if (typeof displayFlatNumber === 'string' && !displayFlatNumber.trim()) {
+        displayFlatNumber = null;
+    }
 
     const { error: profileError } = await supabaseClient
       .from('users')
@@ -159,9 +163,10 @@ serve(async (req: any) => {
 
             if (community && unit.maintenance_start_date) {
                 let monthlyAmount = 0;
-                const type = community.community_type ? community.community_type.toLowerCase() : 'gated';
+                const type = community.community_type ? community.community_type.toLowerCase() : 'high-rise apartment';
                 
-                if (type === 'standalone') {
+                // Check for 'standalone' or 'standalone apartment'
+                if (type.includes('standalone')) {
                     monthlyAmount = Number(community.fixed_maintenance_amount) || 0;
                 } else {
                     monthlyAmount = (Number(community.maintenance_rate) || 0) * (Number(unit.flat_size) || 0);

@@ -13,9 +13,23 @@ export enum UserRole {
 export interface Block {
     name: string;
     floorCount: number;
+    unitsPerFloor?: number; // For Standalone metadata
 }
 
-export type CommunityType = 'Standalone' | 'Gated';
+export type CommunityType = 'High-Rise Apartment' | 'Standalone Apartment' | 'Gated Community Villa' | 'Standalone' | 'Gated';
+
+export interface CommunityContact {
+    name: string;
+    email: string;
+    primaryPhone: string;
+    secondaryPhone?: string;
+}
+
+export interface CommunityPricing {
+    resident: number;
+    admin: number;
+    staff: number;
+}
 
 export interface Community {
   id: string;
@@ -26,10 +40,17 @@ export interface Community {
   blocks?: Block[];
   maintenanceRate?: number; // For Gated: per sq ft
   fixedMaintenanceAmount?: number; // For Standalone: fixed monthly
+  
+  // New Fields
+  contacts?: CommunityContact[];
+  subscriptionType?: 'Monthly' | 'Yearly';
+  subscriptionStartDate?: string;
+  pricePerUser?: CommunityPricing;
 }
 
 export interface CommunityStat extends Community {
     resident_count: number;
+    admin_count: number;
     income_generated: number;
 }
 
@@ -45,7 +66,7 @@ export interface Unit {
 }
 
 export interface User {
-  id:string;
+  id: string;
   name: string;
   email: string;
   avatarUrl: string;
@@ -203,4 +224,4 @@ export interface Expense {
     receiptUrl?: string;
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses';
+export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup';

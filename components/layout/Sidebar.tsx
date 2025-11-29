@@ -1,5 +1,7 @@
 
 
+
+
 import React from 'react';
 import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
 import type { Page } from '../../types';
@@ -24,6 +26,11 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const { user } = useAuth();
+
+  // Hide sidebar during initial setup
+  if (activePage === 'CommunitySetup') {
+      return null;
+  }
 
   const filteredNavItems = navItems.filter(item => {
     if (user?.role === UserRole.HelpdeskAgent) {

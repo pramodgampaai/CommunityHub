@@ -48,6 +48,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       try {
         // Step 1: Fetch User Profile (Guaranteed to exist if logged in)
         // We join with communities table to get the name
+        // Note: For SuperAdmin, community_id is NULL, so communities will be null.
         const { data: profile, error } = await supabase
           .from('users')
           .select('*, communities(name)')
@@ -84,6 +85,12 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         }));
 
         const primaryUnit = mappedUnits.length > 0 ? mappedUnits[0] : null;
+        
+        // Handle Community Name Logic
+        let communityName = (profile.communities as any)?.name;
+        if (profile.role === UserRole.SuperAdmin) {
+            communityName = 'Platform Owner';
+        }
 
         return {
             id: profile.id,
@@ -92,9 +99,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             avatarUrl: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id}`,
             flatNumber: primaryUnit ? primaryUnit.flatNumber : profile.flat_number,
             role: profile.role as UserRole || UserRole.Resident,
-            communityId: profile.community_id,
-            // Safely access nested community name (it might be an object or array depending on Supabase client version/types, usually object for single relation)
-            communityName: (profile.communities as any)?.name, 
+            communityId: profile.community_id, // Can be null for SuperAdmin
+            communityName: communityName,
             status: profile.status || 'active',
             maintenanceStartDate: profile.maintenance_start_date,
             units: mappedUnits
