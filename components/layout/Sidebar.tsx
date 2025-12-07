@@ -1,7 +1,4 @@
 
-
-
-
 import React from 'react';
 import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
 import type { Page } from '../../types';
@@ -46,8 +43,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
        // Admins see everything
        return true; 
     }
-    // Residents don't see Expenses
-    if (item.name === 'Expenses') return false;
+    if (user?.role === UserRole.Resident) {
+        // Residents see everything except Expenses
+        return item.name !== 'Expenses';
+    }
 
     return true;
   });
@@ -70,7 +69,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
                 }`}
               >
                 <item.icon className="w-6 h-6" />
-                <span className={`ml-4 font-medium ${activePage === item.name ? 'text-brand-600 dark:text-teal-200' : ''}`}>{item.name}</span>
+                <span className={`ml-4 font-medium ${activePage === item.name ? 'text-brand-600 dark:text-teal-200' : ''}`}>
+                    {item.name}
+                </span>
               </button>
             </li>
           ))}

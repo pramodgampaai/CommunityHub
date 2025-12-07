@@ -7,7 +7,8 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
-import { PlusIcon, CheckCircleIcon, XIcon, ClockIcon } from '../components/icons';
+import AuditLogModal from '../components/AuditLogModal';
+import { PlusIcon, CheckCircleIcon, XIcon, ClockIcon, HistoryIcon } from '../components/icons';
 import { useScreen } from '../hooks/useScreen';
 import { useAuth } from '../hooks/useAuth';
 
@@ -54,6 +55,7 @@ const Visitors: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { isMobile } = useScreen();
     const { user } = useAuth();
+    const [isAuditOpen, setIsAuditOpen] = useState(false);
     
     // Form State
     const [visitorName, setVisitorName] = useState('');
@@ -316,12 +318,22 @@ const Visitors: React.FC = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center animated-card">
                 <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Visitor Management</h2>
-                {canAddVisitor && (
-                    <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add New Visitor" variant="fab">
-                        <span className="hidden sm:inline">New Visitor</span>
-                        <span className="sm:hidden">New</span>
+                <div className="flex gap-2">
+                    <Button 
+                        onClick={() => setIsAuditOpen(true)} 
+                        variant="outlined" 
+                        className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
+                        title="Audit History"
+                    >
+                        <HistoryIcon className="w-5 h-5" />
                     </Button>
-                )}
+                    {canAddVisitor && (
+                        <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5" />} aria-label="Add New Visitor" variant="fab">
+                            <span className="hidden sm:inline">New Visitor</span>
+                            <span className="sm:hidden">New</span>
+                        </Button>
+                    )}
+                </div>
             </div>
             
             {renderVisitorList()}
@@ -374,6 +386,13 @@ const Visitors: React.FC = () => {
                 isDestructive={confirmConfig.isDestructive}
                 confirmLabel={confirmConfig.confirmLabel}
                 isLoading={isSubmitting}
+            />
+
+            <AuditLogModal
+                isOpen={isAuditOpen}
+                onClose={() => setIsAuditOpen(false)}
+                entityType="Visitor"
+                title="Visitor Log History"
             />
         </div>
     );

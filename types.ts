@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   SuperAdmin = 'SuperAdmin',
   Admin = 'Admin',
@@ -38,14 +37,23 @@ export interface Community {
   status: 'active' | 'disabled';
   communityType?: CommunityType;
   blocks?: Block[];
-  maintenanceRate?: number; // For Gated: per sq ft
-  fixedMaintenanceAmount?: number; // For Standalone: fixed monthly
+  maintenanceRate?: number; // Legacy/Current Snapshot
+  fixedMaintenanceAmount?: number; // Legacy/Current Snapshot
   
   // New Fields
   contacts?: CommunityContact[];
   subscriptionType?: 'Monthly' | 'Yearly';
   subscriptionStartDate?: string;
   pricePerUser?: CommunityPricing;
+}
+
+export interface MaintenanceConfiguration {
+    id: string;
+    communityId: string;
+    maintenanceRate: number;
+    fixedMaintenanceAmount: number;
+    effectiveDate: string;
+    createdAt: string;
 }
 
 export interface CommunityStat extends Community {
@@ -222,6 +230,27 @@ export interface Expense {
     communityId: string;
     createdAt: string;
     receiptUrl?: string;
+}
+
+// --- Audit Log Interfaces ---
+
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
+
+export interface AuditLog {
+    id: string;
+    createdAt: string;
+    communityId: string;
+    actorId: string;
+    actorName?: string; // Joined
+    actorRole?: string; // Joined
+    entity: string; // e.g. 'Complaint', 'Visitor'
+    entityId: string;
+    action: AuditAction;
+    details: {
+        old?: any;
+        new?: any;
+        description?: string;
+    };
 }
 
 export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup';

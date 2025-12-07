@@ -7,7 +7,8 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
-import { PlusIcon, BanknotesIcon, FunnelIcon, AlertTriangleIcon } from '../components/icons';
+import AuditLogModal from '../components/AuditLogModal';
+import { PlusIcon, BanknotesIcon, FunnelIcon, AlertTriangleIcon, HistoryIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useScreen } from '../hooks/useScreen';
 
@@ -26,6 +27,7 @@ const Expenses: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { user } = useAuth();
     const { isMobile } = useScreen();
+    const [isAuditOpen, setIsAuditOpen] = useState(false);
 
     // Receipt Modal State (Quick View)
     const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
@@ -232,10 +234,20 @@ const Expenses: React.FC = () => {
                     <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Expenses</h2>
                     <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base mt-1">Manage community expenditures.</p>
                 </div>
-                <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Log New Expense" variant="fab">
-                    <span className="hidden sm:inline">Log Expense</span>
-                    <span className="sm:hidden">Log</span>
-                </Button>
+                <div className="flex gap-2">
+                    <Button 
+                        onClick={() => setIsAuditOpen(true)} 
+                        variant="outlined" 
+                        className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
+                        title="Audit History"
+                    >
+                        <HistoryIcon className="w-5 h-5" />
+                    </Button>
+                    <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Log New Expense" variant="fab">
+                        <span className="hidden sm:inline">Log Expense</span>
+                        <span className="sm:hidden">Log</span>
+                    </Button>
+                </div>
             </div>
 
             {/* Summary Cards */}
@@ -591,6 +603,13 @@ const Expenses: React.FC = () => {
                     </div>
                 )}
             </Modal>
+
+            <AuditLogModal
+                isOpen={isAuditOpen}
+                onClose={() => setIsAuditOpen(false)}
+                entityType="Expense"
+                title="Expense History"
+            />
 
         </div>
     );

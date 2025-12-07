@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { createComplaint, getComplaints, updateComplaintStatus, getResidents, assignComplaint } from '../services/api';
 import type { Complaint, User } from '../types';
@@ -8,7 +7,8 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
-import { PlusIcon, ChevronDownIcon, CheckCircleIcon } from '../components/icons';
+import AuditLogModal from '../components/AuditLogModal';
+import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const StatusBadge: React.FC<{ status: ComplaintStatus }> = ({ status }) => {
@@ -45,6 +45,7 @@ const HelpDesk: React.FC = () => {
   const { user } = useAuth();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
   
   // Form state
   const [title, setTitle] = useState('');
@@ -116,8 +117,9 @@ const HelpDesk: React.FC = () => {
         let specificFlatNumber = undefined;
         let specificUnitId = undefined;
 
-        // Determine specific unit details if resident has multiple
-        if (user.role === UserRole.Resident && user.units && user.units.length > 0) {
+        // Determine specific unit details if resident/admin has multiple
+        const isResidentOrAdmin = user.role === UserRole.Resident || user.role === UserRole.Admin;
+        if (isResidentOrAdmin && user.units && user.units.length > 0) {
             const unit = user.units.find(u => u.id === selectedUnitId);
             if (unit) {
                 specificUnitId = unit.id;
@@ -207,17 +209,28 @@ const HelpDesk: React.FC = () => {
   // Determine Permissions
   const isHelpdeskAdmin = user?.role === UserRole.HelpdeskAdmin;
   const isHelpdeskAgent = user?.role === UserRole.HelpdeskAgent;
+  const canCreateComplaint = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
         <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Help Desk</h2>
-        {user?.role === UserRole.Resident && (
-            <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Raise New Complaint" variant="fab">
-                <span className="hidden sm:inline">New Complaint</span>
-                <span className="sm:hidden">New</span>
+        <div className="flex gap-2">
+            <Button 
+                onClick={() => setIsAuditOpen(true)} 
+                variant="outlined" 
+                className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
+                title="Audit History"
+            >
+                <HistoryIcon className="w-5 h-5" />
             </Button>
-        )}
+            {canCreateComplaint && (
+                <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Raise New Complaint" variant="fab">
+                    <span className="hidden sm:inline">New Complaint</span>
+                    <span className="sm:hidden">New</span>
+                </Button>
+            )}
+        </div>
       </div>
       
       <div className="space-y-4">
@@ -235,8 +248,8 @@ const HelpDesk: React.FC = () => {
                     // Permissions
                     // Agent can update status if assigned
                     const isAssignedAgent = isHelpdeskAgent && complaint.assignedTo === user?.id;
-                    // Resident can resolve their own ticket
-                    const isOwner = user?.role === UserRole.Resident && complaint.userId === user?.id;
+                    // Resident/Admin can resolve their own ticket
+                    const isOwner = (user?.role === UserRole.Resident || user?.role === UserRole.Admin) && complaint.userId === user?.id;
 
                     const canUpdateStatus = !isResolved && isAssignedAgent;
                     const canResolve = !isResolved && (isAssignedAgent || isOwner);
@@ -397,6 +410,13 @@ const HelpDesk: React.FC = () => {
         isDestructive={confirmConfig.isDestructive}
         confirmLabel={confirmConfig.confirmLabel}
         isLoading={isSubmitting}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditOpen}
+        onClose={() => setIsAuditOpen(false)}
+        entityType="Complaint"
+        title="Help Desk History"
       />
     </div>
   );

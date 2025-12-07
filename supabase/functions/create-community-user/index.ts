@@ -174,23 +174,44 @@ serve(async (req: any) => {
 
                 if (monthlyAmount > 0) {
                     const startDate = new Date(unit.maintenance_start_date);
-                    const year = startDate.getFullYear();
-                    const month = startDate.getMonth();
-                    const daysInMonth = new Date(year, month + 1, 0).getDate();
-                    const daysRemaining = daysInMonth - startDate.getDate() + 1;
+                    const now = new Date();
+                    const currentPeriodDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+                    let iterDate = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), 1));
                     
-                    const proRataAmount = Math.round((monthlyAmount / daysInMonth) * daysRemaining);
+                    const newRecords = [];
 
-                    if (proRataAmount > 0) {
-                        const periodDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
-                        await supabaseClient.from('maintenance_records').insert({
-                            user_id: user.id,
-                            unit_id: createdUnit.id,
-                            community_id: community_id,
-                            amount: proRataAmount,
-                            period_date: periodDate,
-                            status: 'Pending'
-                        });
+                    while (iterDate <= currentPeriodDate) {
+                        let finalAmount = monthlyAmount;
+                        
+                        if (iterDate.getFullYear() === startDate.getFullYear() && iterDate.getMonth() === startDate.getMonth()) {
+                            const year = startDate.getFullYear();
+                            const month = startDate.getMonth();
+                            const daysInMonth = new Date(year, month + 1, 0).getDate();
+                            const daysRemaining = daysInMonth - startDate.getDate() + 1;
+                            
+                            if (daysRemaining > 0 && daysRemaining < daysInMonth) {
+                                finalAmount = Math.round((monthlyAmount / daysInMonth) * daysRemaining);
+                            }
+                        }
+                        
+                        finalAmount = Math.round(finalAmount);
+
+                        if (finalAmount > 0) {
+                            newRecords.push({
+                                user_id: user.id,
+                                unit_id: createdUnit.id,
+                                community_id: community_id,
+                                amount: finalAmount,
+                                period_date: iterDate.toISOString().split('T')[0],
+                                status: 'Pending'
+                            });
+                        }
+                        
+                        iterDate.setUTCMonth(iterDate.getUTCMonth() + 1);
+                    }
+
+                    if (newRecords.length > 0) {
+                        await supabaseClient.from('maintenance_records').insert(newRecords);
                     }
                 }
             }

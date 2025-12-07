@@ -7,7 +7,8 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
-import { PlusIcon, ClockIcon, PencilIcon, TrashIcon, EyeSlashIcon } from '../components/icons';
+import AuditLogModal from '../components/AuditLogModal';
+import { PlusIcon, ClockIcon, PencilIcon, TrashIcon, EyeSlashIcon, HistoryIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const NoticeTag: React.FC<{ type: NoticeType }> = ({ type }) => {
@@ -45,6 +46,7 @@ const NoticeBoard: React.FC = () => {
   
   // View State
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
   
   // Form state
   const [title, setTitle] = useState('');
@@ -110,7 +112,7 @@ const NoticeBoard: React.FC = () => {
                   content,
                   type: noticeType,
                   validFrom: validFrom ? new Date(validFrom).toISOString() : undefined,
-                  validUntil: validUntil ? new Date(validUntil).toISOString() : undefined // Explicitly undefined if empty to avoid issues? Or should send null? API handles undefined.
+                  validUntil: validUntil ? new Date(validUntil).toISOString() : undefined 
               });
           } else {
               await createNotice({ 
@@ -222,12 +224,22 @@ const NoticeBoard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
         <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Notice Board</h2>
-        {isAdmin && (
-            <Button onClick={handleCreateClick} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Create New Notice" variant="fab">
-                <span className="hidden sm:inline">New Notice</span>
-                <span className="sm:hidden">New</span>
+        <div className="flex gap-2">
+            <Button 
+                onClick={() => setIsAuditOpen(true)} 
+                variant="outlined" 
+                className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
+                title="Audit History"
+            >
+                <HistoryIcon className="w-5 h-5" />
             </Button>
-        )}
+            {isAdmin && (
+                <Button onClick={handleCreateClick} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Create New Notice" variant="fab">
+                    <span className="hidden sm:inline">New Notice</span>
+                    <span className="sm:hidden">New</span>
+                </Button>
+            )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -247,68 +259,67 @@ const NoticeBoard: React.FC = () => {
             </button>
         </nav>
       </div>
-      
-      <div className="space-y-4">
+
+      {/* List */}
+      <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2">
         {loading ? (
-            Array.from({ length: 4 }).map((_, index) => <NoticeSkeleton key={index} />)
+             Array.from({ length: 4 }).map((_, index) => <NoticeSkeleton key={index} />)
         ) : displayedNotices.length === 0 ? (
-            <div className="p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
-                No {activeTab} notices found.
+            <div className="col-span-full p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
+                No notices found.
             </div>
         ) : (
-            displayedNotices.map((notice, index) => (
-                <Card key={notice.id} className="p-5 animated-card" style={{ animationDelay: `${index * 100}ms` }}>
-                    <div className="flex justify-between items-start gap-2">
+            displayedNotices.map((notice) => (
+                <Card key={notice.id} className="p-6 animated-card flex flex-col h-full">
+                    <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">{notice.title}</h3>
-                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">
-                                By {notice.author}
-                            </p>
+                            <div className="flex items-center gap-2 mb-2">
+                                <NoticeTag type={notice.type} />
+                                {notice.validUntil && new Date(notice.validUntil) < new Date() && (
+                                    <span className="text-xs font-bold text-red-500 border border-red-500 px-1.5 py-0.5 rounded">EXPIRED</span>
+                                )}
+                            </div>
+                            <h3 className="text-xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{notice.title}</h3>
                         </div>
-                        <NoticeTag type={notice.type} />
+                        
+                        {isAdmin && (
+                            <div className="flex gap-2 ml-4">
+                                <button 
+                                    onClick={() => handleEditClick(notice)}
+                                    className="p-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
+                                    title="Edit"
+                                >
+                                    <PencilIcon className="w-5 h-5" />
+                                </button>
+                                {notice.validUntil && new Date(notice.validUntil) > new Date() ? (
+                                     <button 
+                                        onClick={() => handleDisableClick(notice)}
+                                        className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full transition-colors"
+                                        title="Expire Now"
+                                    >
+                                        <EyeSlashIcon className="w-5 h-5" />
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => handleDeleteClick(notice)}
+                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+                                        title="Delete"
+                                    >
+                                        <TrashIcon className="w-5 h-5" />
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                     
-                    {/* Validity Info */}
-                    {(notice.validFrom || notice.validUntil) && (
-                        <div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-black/5 dark:bg-white/5 p-2 rounded-md w-fit">
-                            <ClockIcon className="w-3.5 h-3.5" />
-                            <span>
-                                {notice.validFrom ? new Date(notice.validFrom).toLocaleDateString() : 'Posted'} 
-                                {notice.validUntil ? ` — ${new Date(notice.validUntil).toLocaleDateString()}` : ' — Indefinite'}
-                            </span>
-                        </div>
-                    )}
+                    <div className="flex-grow">
+                        <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] whitespace-pre-wrap">{notice.content}</p>
+                    </div>
 
-                    <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] whitespace-pre-wrap">{notice.content}</p>
-                    
-                    {/* Admin Actions */}
-                    {isAdmin && (
-                        <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                             {activeTab === 'active' && (
-                                <button 
-                                    onClick={() => handleDisableClick(notice)}
-                                    className="p-1.5 rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/20 transition-colors flex items-center gap-1 text-xs"
-                                    title="Disable (Expire Now)"
-                                >
-                                    <EyeSlashIcon className="w-4 h-4" /> <span className="hidden sm:inline">Disable</span>
-                                </button>
-                             )}
-                            <button 
-                                onClick={() => handleEditClick(notice)}
-                                className="p-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors flex items-center gap-1 text-xs"
-                                title="Edit Notice"
-                            >
-                                <PencilIcon className="w-4 h-4" /> <span className="hidden sm:inline">Edit</span>
-                            </button>
-                            <button 
-                                onClick={() => handleDeleteClick(notice)}
-                                className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors flex items-center gap-1 text-xs"
-                                title="Delete Notice"
-                            >
-                                <TrashIcon className="w-4 h-4" /> <span className="hidden sm:inline">Delete</span>
-                            </button>
-                        </div>
-                    )}
+                    <div className="mt-4 pt-4 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] flex justify-between items-center text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                        <span>Posted by {notice.author}</span>
+                        <span>{new Date(notice.createdAt).toLocaleDateString()}</span>
+                    </div>
                 </Card>
             ))
         )}
@@ -318,35 +329,33 @@ const NoticeBoard: React.FC = () => {
         <form className="space-y-4" onSubmit={handleFormSubmit}>
             <div>
                 <label htmlFor="title" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Title</label>
-                <input type="text" id="title" value={title} onChange={e => setTitle(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
+                <input type="text" id="title" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Pool Maintenance" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
             </div>
-             <div>
-                <label htmlFor="content" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Content</label>
-                <textarea id="content" value={content} onChange={e => setContent(e.target.value)} required rows={4} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"></textarea>
-            </div>
-             <div>
-                <label htmlFor="noticeType" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Type</label>
-                <select id="noticeType" value={noticeType} onChange={e => setNoticeType(e.target.value as NoticeType)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent">
+            <div>
+                <label htmlFor="type" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Type</label>
+                <select id="type" value={noticeType} onChange={e => setNoticeType(e.target.value as NoticeType)} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
                     {Object.values(NoticeType).map(type => (
                         <option key={type} value={type}>{type}</option>
                     ))}
                 </select>
             </div>
-
+            <div>
+                <label htmlFor="content" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Content</label>
+                <textarea id="content" value={content} onChange={e => setContent(e.target.value)} required placeholder="Detailed information..." rows={4} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"></textarea>
+            </div>
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label htmlFor="validFrom" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Display From</label>
-                    <input type="date" id="validFrom" value={validFrom} onChange={e => setValidFrom(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
+                    <label htmlFor="validFrom" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Valid From</label>
+                    <input type="date" id="validFrom" value={validFrom} onChange={e => setValidFrom(e.target.value)} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
                 </div>
                 <div>
-                    <label htmlFor="validUntil" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Display Until (Optional)</label>
-                    <input type="date" id="validUntil" value={validUntil} onChange={e => setValidUntil(e.target.value)} min={validFrom} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
+                    <label htmlFor="validUntil" className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Valid Until</label>
+                    <input type="date" id="validUntil" value={validUntil} onChange={e => setValidUntil(e.target.value)} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm bg-transparent"/>
                 </div>
             </div>
-
             <div className="flex justify-end pt-4 space-x-2">
                 <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Processing...' : (editingId ? 'Update Notice' : 'Post Notice')}</Button>
+                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : (editingId ? 'Update' : 'Post')}</Button>
             </div>
         </form>
       </Modal>
@@ -360,6 +369,13 @@ const NoticeBoard: React.FC = () => {
         isDestructive={confirmConfig.isDestructive}
         confirmLabel={confirmConfig.confirmLabel}
         isLoading={isSubmitting}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditOpen}
+        onClose={() => setIsAuditOpen(false)}
+        entityType="Notice"
+        title="Notice Board History"
       />
     </div>
   );

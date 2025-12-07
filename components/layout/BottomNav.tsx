@@ -1,7 +1,4 @@
 
-
-
-
 import React from 'react';
 import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
 import type { Page } from '../../types';
@@ -13,15 +10,15 @@ interface BottomNavProps {
     setActivePage: (page: Page) => void;
 }
 
-const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] = [
-    { name: 'Dashboard', icon: HomeIcon },
-    { name: 'Notices', icon: BellIcon },
-    { name: 'Help Desk', icon: ShieldCheckIcon },
-    { name: 'Visitors', icon: UsersIcon },
-    { name: 'Amenities', icon: SparklesIcon },
-    { name: 'Directory', icon: UserGroupIcon },
-    { name: 'Maintenance', icon: CurrencyRupeeIcon },
-    { name: 'Expenses', icon: BanknotesIcon },
+const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; label: string }[] = [
+    { name: 'Dashboard', icon: HomeIcon, label: 'Home' },
+    { name: 'Notices', icon: BellIcon, label: 'Notices' },
+    { name: 'Help Desk', icon: ShieldCheckIcon, label: 'Help' },
+    { name: 'Visitors', icon: UsersIcon, label: 'Visitors' },
+    { name: 'Amenities', icon: SparklesIcon, label: 'Amenities' },
+    { name: 'Directory', icon: UserGroupIcon, label: 'Directory' },
+    { name: 'Maintenance', icon: CurrencyRupeeIcon, label: 'Pay' },
+    { name: 'Expenses', icon: BanknotesIcon, label: 'Expenses' },
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
@@ -45,7 +42,9 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
     if (user?.role === UserRole.Admin) {
        return true;
     }
-    if (item.name === 'Expenses') return false;
+    if (user?.role === UserRole.Resident) {
+        return item.name !== 'Expenses';
+    }
     
     return true;
   });
@@ -57,7 +56,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
           <button
             key={item.name}
             onClick={() => setActivePage(item.name)}
-            aria-label={`Navigate to ${item.name}`}
+            aria-label={`Navigate to ${item.label}`}
             aria-current={activePage === item.name ? 'page' : undefined}
             className={`flex flex-col items-center justify-center w-16 h-full transition-colors duration-200 group focus:outline-none ${
               activePage === item.name ? 'text-[var(--accent)]' : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]'
@@ -70,7 +69,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
             }`}>
                 <item.icon className="w-6 h-6" />
             </div>
-            <span className="text-[10px] font-medium mt-1 truncate w-full text-center">{item.name}</span>
+            <span className="text-[10px] font-medium mt-1 truncate w-full text-center">{item.label}</span>
           </button>
         ))}
       </div>

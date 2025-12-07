@@ -7,8 +7,9 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
+import AuditLogModal from '../components/AuditLogModal';
 import { useAuth } from '../hooks/useAuth';
-import { PlusIcon, TrashIcon, ClockIcon, AlertTriangleIcon, EyeSlashIcon, CheckCircleIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, ClockIcon, AlertTriangleIcon, EyeSlashIcon, CheckCircleIcon, HistoryIcon } from '../components/icons';
 
 const AmenitySkeleton: React.FC = () => (
     <div className="rounded-xl bg-black/5 dark:bg-white/5 animate-pulse overflow-hidden">
@@ -37,6 +38,7 @@ const Amenities: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedAmenity, setSelectedAmenity] = useState<Amenity | null>(null);
   const { user } = useAuth();
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
   
   // Booking Form State
   const [bookingDate, setBookingDate] = useState('');
@@ -316,12 +318,22 @@ const Amenities: React.FC = () => {
             <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Amenity Booking</h2>
             <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-lg mt-1">Book community facilities for your use.</p>
         </div>
-        {user?.role === UserRole.Admin && (
-             <Button onClick={() => setIsAddModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Add New Amenity" variant="fab">
-                <span className="hidden sm:inline">New Amenity</span>
-                <span className="sm:hidden">New</span>
+        <div className="flex gap-2">
+            <Button 
+                onClick={() => setIsAuditOpen(true)} 
+                variant="outlined" 
+                className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
+                title="Audit History"
+            >
+                <HistoryIcon className="w-5 h-5" />
             </Button>
-        )}
+            {user?.role === UserRole.Admin && (
+                 <Button onClick={() => setIsAddModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Add New Amenity" variant="fab">
+                    <span className="hidden sm:inline">New Amenity</span>
+                    <span className="sm:hidden">New</span>
+                </Button>
+            )}
+        </div>
       </div>
       
       {/* Navigation Tabs */}
@@ -574,6 +586,13 @@ const Amenities: React.FC = () => {
         isDestructive={confirmConfig.isDestructive}
         confirmLabel={confirmConfig.confirmLabel}
         isLoading={isSubmitting}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditOpen}
+        onClose={() => setIsAuditOpen(false)}
+        entityType={['Amenity', 'Booking']}
+        title="Amenities & Bookings History"
       />
 
     </div>

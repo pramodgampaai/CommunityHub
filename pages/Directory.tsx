@@ -6,7 +6,7 @@ import { UserRole, MaintenanceStatus } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ClockIcon, PencilIcon, TrashIcon, AlertTriangleIcon } from '../components/icons';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, AlertTriangleIcon, HistoryIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useScreen } from '../hooks/useScreen';
 
@@ -190,11 +190,19 @@ const Directory: React.FC = () => {
 
     const handleAddResident = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user || !user.communityId) return;
+        
+        // Safety check for user context
+        if (!user || !user.communityId) {
+            alert("Error: Your account is missing a valid Community ID.");
+            return;
+        }
         
         setIsSubmitting(true);
 
         try {
+            // Explicitly cast community_id to string to ensure it exists in payload
+            const communityId = String(user.communityId);
+
             if (newRole === UserRole.Resident) {
                 // Prepare Units Array
                 const unitsPayload = newUnits.map(u => ({
@@ -209,7 +217,7 @@ const Directory: React.FC = () => {
                     name: newName,
                     email: newEmail,
                     password: newPassword,
-                    community_id: user.communityId,
+                    community_id: communityId, // Explicit variable
                     role: newRole,
                     units: unitsPayload
                 });
@@ -220,7 +228,7 @@ const Directory: React.FC = () => {
                     name: newName,
                     email: newEmail,
                     password: newPassword,
-                    community_id: user.communityId,
+                    community_id: communityId, // Explicit variable
                     role: newRole,
                     flat_number: newStaffLocation.trim() || undefined // Ensure empty string becomes undefined/null
                 });
@@ -228,7 +236,7 @@ const Directory: React.FC = () => {
             
             setIsModalOpen(false);
             alert(`${newRole} added successfully!`);
-            await fetchResidents(user.communityId);
+            await fetchResidents(communityId);
         } catch (error: any) {
             console.error("Failed to create user:", error);
             alert(error.message || "Failed to create user.");
@@ -390,8 +398,8 @@ const Directory: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="p-4">
-                                    {/* MULTI-UNIT DISPLAY LOGIC */}
-                                    {resident.role === UserRole.Resident && resident.units && resident.units.length > 0 ? (
+                                    {/* MULTI-UNIT DISPLAY LOGIC - Updated for Admins too */}
+                                    {(resident.role === UserRole.Resident || resident.role === UserRole.Admin) && resident.units && resident.units.length > 0 ? (
                                         <div className="space-y-2">
                                             {resident.units.map((u) => (
                                                 <div key={u.id} className="flex items-center justify-between gap-3 p-1.5 rounded bg-black/5 dark:bg-white/5 border border-transparent hover:border-[var(--border-light)] dark:hover:border-[var(--border-dark)] transition-colors max-w-[280px]">
@@ -417,7 +425,7 @@ const Directory: React.FC = () => {
                                         // STAFF or LEGACY View
                                         <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                             {resident.flatNumber || 'N/A'}
-                                            {resident.role !== UserRole.Resident && (
+                                            {resident.role !== UserRole.Resident && resident.role !== UserRole.Admin && (
                                                 <span className="block text-xs opacity-70">Location</span>
                                             )}
                                         </div>
@@ -444,9 +452,9 @@ const Directory: React.FC = () => {
                                 </td>
                                 {canViewHistory && (
                                     <td className="p-4 text-right">
-                                        {resident.role === UserRole.Resident && (
+                                        {(resident.role === UserRole.Resident || resident.role === UserRole.Admin) && (
                                             <Button size="sm" variant="outlined" onClick={() => handleViewHistory(resident)} title="View Maintenance History">
-                                                <ClockIcon className="w-4 h-4" />
+                                                <HistoryIcon className="w-4 h-4" />
                                             </Button>
                                         )}
                                     </td>
@@ -494,7 +502,7 @@ const Directory: React.FC = () => {
 
                         {/* Units / Location Info */}
                         <div className="bg-black/5 dark:bg-white/5 rounded-lg p-3 mb-3">
-                             {resident.role === UserRole.Resident && resident.units && resident.units.length > 0 ? (
+                             {(resident.role === UserRole.Resident || resident.role === UserRole.Admin) && resident.units && resident.units.length > 0 ? (
                                 <div className="space-y-2">
                                     {resident.units.map((u) => (
                                         <div key={u.id} className="flex items-center justify-between text-sm">
@@ -516,7 +524,7 @@ const Directory: React.FC = () => {
                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${resident.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
                                 {resident.status}
                             </span>
-                             {canViewHistory && resident.role === UserRole.Resident && (
+                             {canViewHistory && (resident.role === UserRole.Resident || resident.role === UserRole.Admin) && (
                                 <Button size="sm" variant="outlined" onClick={() => handleViewHistory(resident)}>
                                     History
                                 </Button>
@@ -534,6 +542,7 @@ const Directory: React.FC = () => {
 
     return (
         <div className="space-y-6">
+            {/* ... Rest of component remains same ... */}
             <div className="flex justify-between items-center animated-card">
                 <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
                 {canAddUser && (
@@ -564,7 +573,6 @@ const Directory: React.FC = () => {
                             onChange={(e) => setFilterRole(e.target.value as UserRole | 'All')}
                             className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
                         >
-                            {/* Dynamic Dropdown options based on strict visibility rules */}
                             <option value="All">All Roles</option>
                             {user?.role === UserRole.HelpdeskAdmin ? (
                                 <>

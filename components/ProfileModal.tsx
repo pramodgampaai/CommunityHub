@@ -95,8 +95,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                     </div>
                 </div>
 
-                {/* Units Information Section */}
-                {user.role === 'Resident' && user.units && user.units.length > 0 && (
+                {/* Units Information Section - Updated for Admins */}
+                {(user.role === 'Resident' || user.role === 'Admin') && user.units && user.units.length > 0 && (
                     <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] overflow-hidden">
                         <div className="bg-black/5 dark:bg-white/5 px-4 py-2 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
                             <h4 className="font-semibold text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">
@@ -134,8 +134,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                     </div>
                 )}
                 
-                {/* Fallback for Staff Location */}
-                {user.role !== 'Resident' && user.flatNumber && (
+                {/* Fallback for Staff Location (Avoid showing if Admin has units) */}
+                {user.role !== 'Resident' && !(user.role === 'Admin' && user.units && user.units.length > 0) && user.flatNumber && (
                     <div className="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg p-4 border border-[var(--border-light)] dark:border-[var(--border-dark)]">
                         <p className="text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Location / Desk</p>
                         <p className="font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{user.flatNumber}</p>

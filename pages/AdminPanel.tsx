@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getCommunityStats, createCommunity, updateCommunity, deleteCommunity, createAdminUser } from '../services/api';
 import type { CommunityStat, User, Community, Block, CommunityType, CommunityContact, CommunityPricing } from '../types';
@@ -366,9 +367,11 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                 <div className="max-w-7xl mx-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-2xl font-bold">Communities</h2>
-                        <Button onClick={openCreateCommunityModal} leftIcon={<PlusIcon className="w-5 h-5" />}>
-                            {isMobile ? 'Create' : 'Create Community'}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button onClick={openCreateCommunityModal} leftIcon={<PlusIcon className="w-5 h-5" />}>
+                                {isMobile ? 'Create' : 'Create Community'}
+                            </Button>
+                        </div>
                     </div>
 
                     {loading && <Spinner />}
