@@ -26,9 +26,25 @@ export const supabaseKey = supabaseKeyFromEnv || supabaseKeyPlaceholder;
 export const isSupabaseConfigured = (supabaseUrl && supabaseKey && supabaseUrl !== "YOUR_SUPABASE_URL" && supabaseKey !== "YOUR_SUPABASE_KEY");
 
 // Initialize the Supabase client.
-// If the configuration is missing, use dummy values to prevent the client
-// from throwing an error, allowing the app to show a friendly error message.
+// We configure a custom fetch implementation to ensure no requests are cached by the client browser.
+// This enforces "load everything from server side" behavior.
 export const supabase = createClient(
   isSupabaseConfigured ? supabaseUrl : 'http://localhost',
-  isSupabaseConfigured ? supabaseKey : 'dummykey'
+  isSupabaseConfigured ? supabaseKey : 'dummykey',
+  {
+    global: {
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          cache: 'no-store', // Forces the browser to ignore the cache
+          headers: {
+            ...options?.headers,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+      }
+    }
+  }
 );

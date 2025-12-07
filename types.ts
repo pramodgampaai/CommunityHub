@@ -86,6 +86,7 @@ export interface User {
   status: 'active' | 'disabled';
   units?: Unit[]; // One-to-Many relationship
   maintenanceStartDate?: string; // Legacy field
+  theme?: 'light' | 'dark';
 }
 
 export enum NoticeType {

@@ -211,7 +211,8 @@ const mapUserFromDB = (u: any, units: any[] = []): User => {
         communityId: u.community_id,
         status: u.status,
         units: mappedUnits,
-        maintenanceStartDate: u.maintenance_start_date
+        maintenanceStartDate: u.maintenance_start_date,
+        theme: u.theme
     } as User;
 };
 
@@ -231,6 +232,11 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     }
     const mappedUsers = users.map(user => mapUserFromDB(user, allUnits));
     return mappedUsers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+};
+
+export const updateTheme = async (userId: string, theme: 'light' | 'dark'): Promise<void> => {
+    const { error } = await supabase.from('users').update({ theme }).eq('id', userId);
+    if (error) throw error;
 };
 
 export const getCommunity = async (communityId: string): Promise<Community> => {
@@ -565,12 +571,12 @@ export const rejectExpense = async (expenseId: string, userId: string, reason: s
 export const assignAdminUnit = async (unitData: any, user: User, community: Community): Promise<void> => {
     if (unitData.flatSize === undefined || unitData.flatSize === null || isNaN(unitData.flatSize)) throw new Error("Invalid Flat Size.");
     
-    // Call Edge Function to handle unit creation and maintenance record generation securely (bypassing RLS)
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
 
     const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/assign-unit', {
         method: 'POST',
+        cache: 'no-store', // Disable caching for this mutation
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
@@ -614,7 +620,6 @@ export const updateCommunity = async (id: string, updates: Partial<Community>): 
     if (updates.communityType) dbUpdates.community_type = updates.communityType;
     if (updates.blocks) dbUpdates.blocks = updates.blocks;
     
-    // We keep these updates to the parent table for "Latest/Current Snapshot" display purposes
     if (updates.maintenanceRate !== undefined) dbUpdates.maintenance_rate = updates.maintenanceRate;
     if (updates.fixedMaintenanceAmount !== undefined) dbUpdates.fixed_maintenance_amount = updates.fixedMaintenanceAmount;
     
@@ -628,10 +633,7 @@ export const updateCommunity = async (id: string, updates: Partial<Community>): 
     if (error) throw error;
     if (!data) throw new Error("Update failed or permission denied.");
 
-    // IMPORTANT: If rates are updated here (e.g. from CommunitySetup), also log to history
-    // We assume effective date is TODAY if not specified via the specific addMaintenanceConfiguration API
     if (updates.maintenanceRate !== undefined || updates.fixedMaintenanceAmount !== undefined) {
-        // We use a try-catch here because `maintenance_configurations` might not exist in early dev or RLS might block
         try {
             await supabase.from('maintenance_configurations').insert({
                 community_id: id,
@@ -647,17 +649,27 @@ export const updateCommunity = async (id: string, updates: Partial<Community>): 
     return { id: data.id, name: data.name, address: data.address, status: data.status, communityType: data.community_type, blocks: data.blocks, maintenanceRate: data.maintenance_rate, fixedMaintenanceAmount: data.fixed_maintenance_amount, contacts: data.contact_info, subscriptionType: data.subscription_type, subscriptionStartDate: data.subscription_start_date, pricePerUser: data.pricing_config } as Community;
 };
 
-// ... (Other User/Auth functions - No Changes) ...
 export const deleteCommunity = async (id: string): Promise<void> => { const { error } = await supabase.from('communities').delete().eq('id', id); if (error) throw error; };
-export const createAdminUser = async (payload: any): Promise<void> => { const { data: { session } } = await supabase.auth.getSession(); if (!session) throw new Error("No active session"); const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-admin-user', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': supabaseKey }, body: JSON.stringify(payload) }); if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Failed to create admin user'); } };
 
-// Updated createCommunityUser to ensure correct endpoint call
+export const createAdminUser = async (payload: any): Promise<void> => { 
+    const { data: { session } } = await supabase.auth.getSession(); 
+    if (!session) throw new Error("No active session"); 
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-admin-user', { 
+        method: 'POST', 
+        cache: 'no-store', // Disable caching for this mutation
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': supabaseKey }, 
+        body: JSON.stringify(payload) 
+    }); 
+    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Failed to create admin user'); } 
+};
+
 export const createCommunityUser = async (payload: any): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
 
     const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-community-user', {
         method: 'POST',
+        cache: 'no-store', // Disable caching for this mutation
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`,
@@ -672,5 +684,16 @@ export const createCommunityUser = async (payload: any): Promise<void> => {
     }
 };
 
-export const updateUserPassword = async (password: string): Promise<void> => { const { data: { session } } = await supabase.auth.getSession(); if (!session) throw new Error("No active session"); const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-user-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': supabaseKey }, body: JSON.stringify({ password }) }); if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Failed to update password'); } };
+export const updateUserPassword = async (password: string): Promise<void> => { 
+    const { data: { session } } = await supabase.auth.getSession(); 
+    if (!session) throw new Error("No active session"); 
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/update-user-password', { 
+        method: 'POST', 
+        cache: 'no-store', // Disable caching for this mutation
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': supabaseKey }, 
+        body: JSON.stringify({ password }) 
+    }); 
+    if (!response.ok) { const err = await response.json(); throw new Error(err.error || 'Failed to update password'); } 
+};
+
 export const requestPasswordReset = async (email: string): Promise<void> => { const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password', }); if (error) throw error; };

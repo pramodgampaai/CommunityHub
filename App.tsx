@@ -17,33 +17,43 @@ import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
 import { isSupabaseConfigured } from './services/supabase';
-import { getCommunity } from './services/api';
+import { getCommunity, updateTheme } from './services/api';
 
 export type Theme = 'light' | 'dark';
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, loading, refreshUser } = useAuth();
   // Initialize activePage safely
   const [activePage, setActivePage] = useState<Page>('Dashboard');
   const [pageParams, setPageParams] = useState<any>(null);
   
-  // Initialize theme from localStorage or fallback to system preference
-  const [theme, setTheme] = useState<Theme>(() => {
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      return savedTheme;
-    }
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-    }
-    return 'light';
-  });
+  // Initialize theme with a default 'light'. 
+  // We'll update it based on system pref (if no user) or user pref (if user) in useEffects.
+  const [theme, setTheme] = useState<Theme>('light');
 
+  // Initial Theme Setup: Check system preference if no user preference is available yet.
+  useEffect(() => {
+    if (!user) {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            setTheme('dark');
+        } else {
+            setTheme('light');
+        }
+    }
+  }, []);
+
+  // Sync theme with user preference when user loads
+  useEffect(() => {
+      if (user?.theme) {
+          setTheme(user.theme);
+      }
+  }, [user]);
+
+  // Apply theme to DOM
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
-    localStorage.setItem('theme', theme);
   }, [theme]);
 
   // Enforce Role-Based Page Access and Community Setup Logic
@@ -91,8 +101,19 @@ function App() {
     checkAccess();
   }, [user, activePage]);
 
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  const toggleTheme = async () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme); // Optimistic UI update
+    
+    if (user) {
+        try {
+            await updateTheme(user.id, newTheme);
+            // Refresh user to ensure context has latest theme if needed elsewhere
+            await refreshUser();
+        } catch (e) {
+            console.error("Failed to save theme preference", e);
+        }
+    }
   };
 
   const navigateToPage = (page: Page, params?: any) => {

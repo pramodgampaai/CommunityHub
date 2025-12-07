@@ -30,10 +30,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     try {
         setUser(null);
         await supabase.auth.signOut();
-        const theme = localStorage.getItem('theme');
+        // Clear all local storage except theme (which we aren't using anymore anyway)
+        // but just to be clean, clear everything.
         localStorage.clear();
         sessionStorage.clear();
-        if (theme) localStorage.setItem('theme', theme);
         document.cookie.split(";").forEach((c) => {
           document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
         });
@@ -104,7 +104,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             communityName: communityName,
             status: profile.status || 'active',
             maintenanceStartDate: profile.maintenance_start_date,
-            units: mappedUnits
+            units: mappedUnits,
+            theme: profile.theme as 'light' | 'dark' | undefined
         } as User;
 
       } catch (err) {
