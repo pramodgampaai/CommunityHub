@@ -288,11 +288,12 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                 <div className="flex gap-2">
                     <Button 
                         onClick={() => setIsAuditOpen(true)} 
-                        variant="outlined" 
-                        className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
-                        title="Audit History"
+                        variant="outlined"
+                        size="sm"
+                        leftIcon={<HistoryIcon className="w-4 h-4" />}
+                        className="border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                        <HistoryIcon className="w-5 h-5" />
+                        History
                     </Button>
                     {canManage && (
                         <Button 
@@ -608,7 +609,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                                     Effective From
                                 </label>
                                 <input 
-                                    type="date"
+                                    type="date" 
                                     value={newEffectiveDate}
                                     onChange={e => setNewEffectiveDate(e.target.value)}
                                     className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"

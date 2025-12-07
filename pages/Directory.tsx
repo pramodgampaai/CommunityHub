@@ -542,7 +542,6 @@ const Directory: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            {/* ... Rest of component remains same ... */}
             <div className="flex justify-between items-center animated-card">
                 <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Directory</h2>
                 {canAddUser && (
@@ -553,6 +552,7 @@ const Directory: React.FC = () => {
                 )}
             </div>
 
+            {/* Rest of the component content */}
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
                 <div className="relative flex-1 w-full">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -644,7 +644,7 @@ const Directory: React.FC = () => {
                 </>
             )}
 
-            {/* Add User Modal */}
+            {/* Modals remain unchanged */}
             <Modal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)} 

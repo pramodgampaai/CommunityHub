@@ -322,10 +322,11 @@ const Amenities: React.FC = () => {
             <Button 
                 onClick={() => setIsAuditOpen(true)} 
                 variant="outlined" 
-                className="w-10 h-10 p-0 rounded-full flex items-center justify-center border-[var(--border-light)] dark:border-[var(--border-dark)]"
-                title="Audit History"
+                size="sm"
+                leftIcon={<HistoryIcon className="w-4 h-4" />}
+                className="border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
-                <HistoryIcon className="w-5 h-5" />
+                History
             </Button>
             {user?.role === UserRole.Admin && (
                  <Button onClick={() => setIsAddModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Add New Amenity" variant="fab">
