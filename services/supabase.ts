@@ -34,15 +34,21 @@ export const supabase = createClient(
   {
     global: {
       fetch: (url, options) => {
+        // Robust header handling:
+        // options.headers can be a plain object, undefined, or a Headers instance.
+        // Using `new Headers(...)` normalizes this input so we don't lose the Authorization token
+        // which might be hidden inside a Headers prototype if we just spread it.
+        const headers = new Headers(options?.headers);
+        
+        // Append cache-busting headers
+        headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        headers.set('Pragma', 'no-cache');
+        headers.set('Expires', '0');
+
         return fetch(url, {
           ...options,
           cache: 'no-store', // Forces the browser to ignore the cache
-          headers: {
-            ...options?.headers,
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
+          headers: headers
         });
       }
     }

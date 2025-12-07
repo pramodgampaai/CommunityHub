@@ -23,9 +23,21 @@ export type Theme = 'light' | 'dark';
 
 function App() {
   const { user, loading, refreshUser } = useAuth();
-  // Initialize activePage safely
-  const [activePage, setActivePage] = useState<Page>('Dashboard');
+  
+  // Initialize activePage from localStorage if available to persist across refreshes
+  const [activePage, setActivePage] = useState<Page>(() => {
+      const savedPage = localStorage.getItem('elevate_last_page');
+      return (savedPage as Page) || 'Dashboard';
+  });
+  
   const [pageParams, setPageParams] = useState<any>(null);
+  
+  // Persist the active page to localStorage whenever it changes
+  useEffect(() => {
+      if (activePage) {
+          localStorage.setItem('elevate_last_page', activePage);
+      }
+  }, [activePage]);
   
   // Initialize theme with a default 'light'. 
   // We'll update it based on system pref (if no user) or user pref (if user) in useEffects.

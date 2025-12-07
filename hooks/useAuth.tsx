@@ -47,18 +47,30 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   // Robust Fetch Profile Strategy
   const fetchProfile = async (session: Session) => {
       try {
-        // Step 1: Fetch User Profile (Guaranteed to exist if logged in)
-        // We join with communities table to get the name
-        // Note: For SuperAdmin, community_id is NULL, so communities will be null.
+        // Step 1: Fetch Basic User Profile
+        // We separate the join to ensure we get the user even if community lookup fails (e.g. partial outage or RLS issue on communities)
         const { data: profile, error } = await supabase
           .from('users')
-          .select('*, communities(name)')
+          .select('*')
           .eq('id', session.user.id)
           .single();
 
-        if (error || !profile) {
-             console.error("Fetch profile error:", error);
+        if (error) {
+             console.error("Fetch profile error (public.users):", error);
              return null;
+        }
+        if (!profile) {
+             console.error("Profile not found in public.users for ID:", session.user.id);
+             return null;
+        }
+
+        // Step 1.5: Fetch Community Name (Best Effort)
+        let communityName = undefined;
+        if (profile.community_id) {
+            const { data: comm } = await supabase.from('communities').select('name').eq('id', profile.community_id).single();
+            if (comm) communityName = comm.name;
+        } else if (profile.role === UserRole.SuperAdmin) {
+            communityName = 'Platform Owner';
         }
 
         // Step 2: Fetch Units (Best effort, might fail if table missing)
@@ -87,11 +99,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
 
         const primaryUnit = mappedUnits.length > 0 ? mappedUnits[0] : null;
         
-        // Handle Community Name Logic
-        let communityName = (profile.communities as any)?.name;
-        if (profile.role === UserRole.SuperAdmin) {
-            communityName = 'Platform Owner';
-        }
+        // Resolve Theme: Directly from database profile
+        // If the column doesn't exist yet in the user's view (schema cache issue), this might be undefined, which is fine (defaults to system pref in App.tsx)
+        const storedTheme = profile.theme;
 
         return {
             id: profile.id,
@@ -105,7 +115,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             status: profile.status || 'active',
             maintenanceStartDate: profile.maintenance_start_date,
             units: mappedUnits,
-            theme: profile.theme as 'light' | 'dark' | undefined
+            theme: storedTheme as 'light' | 'dark' | undefined
         } as User;
 
       } catch (err) {
@@ -127,6 +137,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
                     if (userProfile) {
                         setUser(userProfile);
                     } else {
+                         // Session valid but profile not found.
+                         // This usually happens if the public.users row was deleted or permissions are wrong.
                          console.warn("Session valid but profile not found.");
                          setUser(null);
                     }
@@ -178,6 +190,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     if (data.session) {
         const userProfile = await fetchProfile(data.session);
         if (!userProfile) {
+            // Force logout if profile is missing to prevent stuck state
             await supabase.auth.signOut();
             throw new Error("Login successful, but user profile not found. Please contact the Administrator.");
         }
