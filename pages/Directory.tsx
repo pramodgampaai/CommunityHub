@@ -188,19 +188,55 @@ const Directory: React.FC = () => {
         }
     };
 
+    // --- Validation Logic ---
+
+    const checkGeneralValidity = () => {
+        if (!newName.trim()) return false;
+        if (!newEmail.trim() || !newEmail.includes('@')) return false;
+        if (!newPassword || newPassword.length < 6) return false;
+        return true;
+    };
+
+    const checkUnitsValidity = () => {
+        if (newRole !== UserRole.Resident) return true;
+        
+        // Must have at least one unit
+        if (newUnits.length === 0) return false;
+
+        // Check each unit
+        for (const unit of newUnits) {
+            if (!unit.flatNumber.trim()) return false;
+            // Block is required if not standalone
+            if (!isStandaloneType(community?.communityType) && !unit.block) return false;
+            if (!unit.maintenanceStartDate) return false;
+        }
+        return true;
+    };
+
+    const isGeneralValid = checkGeneralValidity();
+    const isUnitsValid = checkUnitsValidity();
+
     const handleAddResident = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Safety check for user context
         if (!user || !user.communityId) {
             alert("Error: Your account is missing a valid Community ID.");
+            return;
+        }
+
+        if (!isGeneralValid) {
+            alert("Please fill all mandatory General Info fields correctly.");
+            return;
+        }
+
+        if (newRole === UserRole.Resident && !isUnitsValid) {
+            alert("Please ensure at least one Unit is added with all details.");
             return;
         }
         
         setIsSubmitting(true);
 
         try {
-            // Explicitly cast community_id to string to ensure it exists in payload
             const communityId = String(user.communityId);
 
             if (newRole === UserRole.Resident) {
@@ -217,20 +253,19 @@ const Directory: React.FC = () => {
                     name: newName,
                     email: newEmail,
                     password: newPassword,
-                    community_id: communityId, // Explicit variable
+                    community_id: communityId, 
                     role: newRole,
                     units: unitsPayload
                 });
             } else {
                 // Create Staff
-                // Only send flat_number if explicitly set and not just whitespace
                 await createCommunityUser({
                     name: newName,
                     email: newEmail,
                     password: newPassword,
-                    community_id: communityId, // Explicit variable
+                    community_id: communityId,
                     role: newRole,
-                    flat_number: newStaffLocation.trim() || undefined // Ensure empty string becomes undefined/null
+                    flat_number: newStaffLocation.trim() || undefined
                 });
             }
             
@@ -287,43 +322,33 @@ const Directory: React.FC = () => {
     const getFilteredResidents = () => {
         if (!user) return [];
 
-        // 1. Determine allowed roles based on current user's role
         let allowedRoles: UserRole[] = [];
 
         if (user.role === UserRole.Admin) {
-            // Admin sees: Admin, Resident, Helpdesk (Helpdesk Admin), and Security Admin
-            // Excludes Security Guard (UserRole.Security) as per requirements
             allowedRoles = [UserRole.Admin, UserRole.Resident, UserRole.HelpdeskAdmin, UserRole.SecurityAdmin];
         } else if (user.role === UserRole.Resident) {
-            // Resident sees: Admin, Resident
             allowedRoles = [UserRole.Admin, UserRole.Resident];
         } else if (user.role === UserRole.HelpdeskAdmin) {
-            // Helpdesk Admin sees: Helpdesk, HelpdeskAgent
             allowedRoles = [UserRole.HelpdeskAdmin, UserRole.HelpdeskAgent];
         } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
-            // Security roles see only Security related personnel
             allowedRoles = [UserRole.SecurityAdmin, UserRole.Security];
         } else if (user.role === UserRole.HelpdeskAgent) {
-            // Helpdesk Agent should not see anything
             return [];
         }
 
-        // 2. First pass filter: Remove unauthorized roles
         let filtered = residents.filter(r => allowedRoles.includes(r.role));
 
-        // 3. Second pass filter: Dropdown Role Selection (UI Filter)
         if (filterRole !== 'All') {
             filtered = filtered.filter(r => r.role === filterRole);
         }
 
-        // 4. Third pass filter: Search Query
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase().trim();
             filtered = filtered.filter(r => 
                 r.name.toLowerCase().includes(query) ||
                 r.email.toLowerCase().includes(query) ||
                 (r.units && r.units.some(u => u.flatNumber.toLowerCase().includes(query))) ||
-                (!r.units && r.flatNumber && r.flatNumber.toLowerCase().includes(query)) // Legacy/Staff
+                (!r.units && r.flatNumber && r.flatNumber.toLowerCase().includes(query))
             );
         }
 
@@ -332,7 +357,6 @@ const Directory: React.FC = () => {
 
     const filteredResidents = getFilteredResidents();
 
-    // Grouping logic
     const groupedResidents = filteredResidents.reduce((acc, curr) => {
         const group = curr.role;
         if (!acc[group]) acc[group] = [];
@@ -340,12 +364,10 @@ const Directory: React.FC = () => {
         return acc;
     }, {} as Record<string, User[]>);
 
-    // Permission Checks for Actions
-    const canViewHistory = user?.role === UserRole.Admin; // Only Admins can view maintenance history
+    const canViewHistory = user?.role === UserRole.Admin;
     const canViewMaintenanceStart = user?.role === UserRole.Admin;
     const canAddUser = user?.role === UserRole.Admin || user?.role === UserRole.HelpdeskAdmin || user?.role === UserRole.SecurityAdmin;
 
-    // If Helpdesk Agent tries to view, render nothing (Access Control)
     if (user?.role === UserRole.HelpdeskAgent) {
         return <div className="p-8 text-center text-red-500">Unauthorized Access</div>;
     }
@@ -382,7 +404,6 @@ const Directory: React.FC = () => {
                                 <td className="p-4">
                                     <div className="flex items-center">
                                         <div className="relative flex-shrink-0">
-                                            {/* Modern Initials Avatar */}
                                             <div className="w-10 h-10 rounded-lg bg-[var(--bg-light)] dark:bg-gray-800 border border-[var(--border-light)] dark:border-[var(--border-dark)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                                 {getInitials(resident.name)}
                                             </div>
@@ -390,7 +411,6 @@ const Directory: React.FC = () => {
                                         </div>
                                         <div className="ml-3">
                                             <div className="text-sm font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{resident.name}</div>
-                                            {/* Display Unit Count if multiple */}
                                             {resident.units && resident.units.length > 1 && (
                                                 <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{resident.units.length} Properties</div>
                                             )}
@@ -398,7 +418,6 @@ const Directory: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="p-4">
-                                    {/* MULTI-UNIT DISPLAY LOGIC - Updated for Admins too */}
                                     {(resident.role === UserRole.Resident || resident.role === UserRole.Admin) && resident.units && resident.units.length > 0 ? (
                                         <div className="space-y-2">
                                             {resident.units.map((u) => (
@@ -422,7 +441,6 @@ const Directory: React.FC = () => {
                                             ))}
                                         </div>
                                     ) : (
-                                        // STAFF or LEGACY View
                                         <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                             {resident.flatNumber || 'N/A'}
                                             {resident.role !== UserRole.Resident && resident.role !== UserRole.Admin && (
@@ -478,7 +496,6 @@ const Directory: React.FC = () => {
             {users.length > 0 ? (
                 users.map(resident => (
                     <div key={resident.id} className="p-4 rounded-xl bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] shadow-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
-                        {/* Header: Avatar + Name + Role */}
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-lg bg-[var(--bg-light)] dark:bg-gray-800 border border-[var(--border-light)] dark:border-[var(--border-dark)] flex items-center justify-center text-sm font-bold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
@@ -500,7 +517,6 @@ const Directory: React.FC = () => {
                             </span>
                         </div>
 
-                        {/* Units / Location Info */}
                         <div className="bg-black/5 dark:bg-white/5 rounded-lg p-3 mb-3">
                              {(resident.role === UserRole.Resident || resident.role === UserRole.Admin) && resident.units && resident.units.length > 0 ? (
                                 <div className="space-y-2">
@@ -519,7 +535,6 @@ const Directory: React.FC = () => {
                              )}
                         </div>
 
-                        {/* Footer: Status + Actions */}
                         <div className="flex items-center justify-between pt-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${resident.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
                                 {resident.status}
@@ -552,7 +567,6 @@ const Directory: React.FC = () => {
                 )}
             </div>
 
-            {/* Rest of the component content */}
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
                 <div className="relative flex-1 w-full">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -644,23 +658,66 @@ const Directory: React.FC = () => {
                 </>
             )}
 
-            {/* Modals remain unchanged */}
             <Modal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)} 
                 title="Add New User"
                 footer={(
-                    <div className="flex justify-end gap-2">
-                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" form="add-user-form" disabled={isSubmitting}>{isSubmitting ? 'Adding...' : 'Add User'}</Button>
+                    <div className="flex justify-between w-full">
+                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
+                            Cancel
+                        </Button>
+                        <div className="flex gap-2">
+                            {/* Logic for Resident Wizard Buttons */}
+                            {newRole === UserRole.Resident && activeTab === 'general' && (
+                                <Button 
+                                    type="button" 
+                                    onClick={() => setActiveTab('units')} 
+                                    disabled={!isGeneralValid}
+                                >
+                                    Next
+                                </Button>
+                            )}
+                            
+                            {newRole === UserRole.Resident && activeTab === 'units' && (
+                                <>
+                                    <Button 
+                                        type="button" 
+                                        variant="outlined"
+                                        onClick={() => setActiveTab('general')} 
+                                        disabled={isSubmitting}
+                                    >
+                                        Back
+                                    </Button>
+                                    <Button 
+                                        type="submit" 
+                                        form="add-user-form" 
+                                        disabled={isSubmitting || !isUnitsValid}
+                                    >
+                                        {isSubmitting ? 'Adding...' : 'Add User'}
+                                    </Button>
+                                </>
+                            )}
+
+                            {/* Logic for Non-Resident (Direct Submit) */}
+                            {newRole !== UserRole.Resident && (
+                                <Button 
+                                    type="submit" 
+                                    form="add-user-form" 
+                                    disabled={isSubmitting || !isGeneralValid}
+                                >
+                                    {isSubmitting ? 'Adding...' : 'Add User'}
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 )}
             >
                 <form id="add-user-form" className="space-y-4" onSubmit={handleAddResident}>
                     
-                    {/* Role Selection - Strictly limited by who is adding */}
+                    {/* Role Selection */}
                     <div>
-                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Role</label>
+                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Role <span className="text-red-500">*</span></label>
                         <select 
                             value={newRole} 
                             onChange={e => setNewRole(e.target.value as UserRole)}
@@ -674,7 +731,6 @@ const Directory: React.FC = () => {
                                 <>
                                     <option value={UserRole.Resident}>Resident</option>
                                     <option value={UserRole.SecurityAdmin}>Security Admin</option>
-                                    <option value={UserRole.Admin}>Admin</option>
                                     <option value={UserRole.HelpdeskAdmin}>Helpdesk Admin</option>
                                 </>
                             )}
@@ -690,14 +746,17 @@ const Directory: React.FC = () => {
                                     onClick={() => setActiveTab('general')}
                                     className={`${activeTab === 'general' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] hover:border-gray-300'} whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
                                 >
-                                    General Info
+                                    1. General Info
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setActiveTab('units')}
-                                    className={`${activeTab === 'units' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] hover:border-gray-300'} whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
+                                    onClick={() => {
+                                        if(isGeneralValid) setActiveTab('units');
+                                    }}
+                                    disabled={!isGeneralValid}
+                                    className={`${activeTab === 'units' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]'} ${!isGeneralValid ? 'opacity-50 cursor-not-allowed' : 'hover:text-[var(--text-light)] hover:border-gray-300'} whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
                                 >
-                                    Units & Maintenance
+                                    2. Units & Maintenance
                                 </button>
                             </nav>
                         </div>
@@ -707,15 +766,15 @@ const Directory: React.FC = () => {
                     {(activeTab === 'general' || newRole !== UserRole.Resident) && (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Name</label>
+                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Name <span className="text-red-500">*</span></label>
                                 <input type="text" value={newName} onChange={e => setNewName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Email</label>
+                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Email <span className="text-red-500">*</span></label>
                                 <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Password</label>
+                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Password <span className="text-red-500">*</span></label>
                                 <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={6} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                             </div>
 
@@ -754,7 +813,7 @@ const Directory: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         {!isStandaloneType(community?.communityType) && (
                                             <div>
-                                                <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Block</label>
+                                                <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Block <span className="text-red-500">*</span></label>
                                                 <select 
                                                     value={unit.block} 
                                                     onChange={e => handleUnitChange(index, 'block', e.target.value)}
@@ -783,7 +842,7 @@ const Directory: React.FC = () => {
 
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div>
-                                            <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Flat No.</label>
+                                            <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Flat No. <span className="text-red-500">*</span></label>
                                             <input 
                                                 type="text" 
                                                 value={unit.flatNumber} 
@@ -807,7 +866,7 @@ const Directory: React.FC = () => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Maintenance Start Date</label>
+                                        <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Maintenance Start Date <span className="text-red-500">*</span></label>
                                         <input 
                                             type="date" 
                                             value={unit.maintenanceStartDate} 

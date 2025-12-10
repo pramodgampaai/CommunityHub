@@ -8,7 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
-import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon } from '../components/icons';
+import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon, UserGroupIcon, ClipboardDocumentListIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const StatusBadge: React.FC<{ status: ComplaintStatus }> = ({ status }) => {
@@ -47,6 +47,9 @@ const HelpDesk: React.FC = () => {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   
+  // Routing / View State
+  const [activeTab, setActiveTab] = useState<'unassigned' | 'mine' | 'all'>('all');
+
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -70,11 +73,26 @@ const HelpDesk: React.FC = () => {
       isDestructive: false
   });
   
+  // Determine Permissions
+  const isHelpdeskAdmin = user?.role === UserRole.HelpdeskAdmin || user?.role === UserRole.Admin;
+  const isHelpdeskAgent = user?.role === UserRole.HelpdeskAgent;
+  const canCreateComplaint = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
+
   const fetchComplaints = async (communityId: string) => {
     try {
       setLoading(true);
       const data = await getComplaints(communityId, user?.id, user?.role);
       setComplaints(data);
+      
+      // Smart Default: If Admin, and there are unassigned tickets, go to Inbox
+      if (isHelpdeskAdmin) {
+          const hasUnassigned = data.some(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved);
+          if (hasUnassigned) {
+              setActiveTab('unassigned');
+          } else {
+              setActiveTab('all');
+          }
+      }
     } catch (error) {
       console.error("Failed to fetch complaints", error);
     } finally {
@@ -85,7 +103,9 @@ const HelpDesk: React.FC = () => {
   const fetchAgents = async (communityId: string) => {
       try {
           const users = await getResidents(communityId);
-          const agents = users.filter(u => u.role === UserRole.HelpdeskAgent);
+          // Admins can assign to Helpdesk Agents OR other Admins/HelpdeskAdmins if needed, 
+          // but typically tasks go to Agents.
+          const agents = users.filter(u => u.role === UserRole.HelpdeskAgent || u.role === UserRole.HelpdeskAdmin);
           setAvailableAgents(agents);
       } catch (error) {
           console.error("Failed to fetch agents", error);
@@ -95,7 +115,7 @@ const HelpDesk: React.FC = () => {
   useEffect(() => {
     if (user?.communityId) {
         fetchComplaints(user.communityId);
-        if (user.role === UserRole.HelpdeskAdmin) {
+        if (isHelpdeskAdmin) {
             fetchAgents(user.communityId);
         }
     }
@@ -143,7 +163,8 @@ const HelpDesk: React.FC = () => {
         setTitle('');
         setDescription('');
         setCategory(ComplaintCategory.Other);
-        await fetchComplaints(user.communityId); // Refresh list
+        // We explicitly re-fetch to ensure the new ticket appears in the list
+        await fetchComplaints(user.communityId); 
     } catch (error) {
         console.error("Failed to create complaint:", error);
         alert("Failed to create complaint. Please try again.");
@@ -169,9 +190,9 @@ const HelpDesk: React.FC = () => {
       setAssigningId(complaintId);
       try {
           await assignComplaint(complaintId, agentId);
-          // Optimistic update or refresh
+          // Optimistic update
           const agent = availableAgents.find(a => a.id === agentId);
-          setComplaints(prev => prev.map(c => c.id === complaintId ? { ...c, assignedTo: agentId, assignedToName: agent?.name } : c));
+          setComplaints(prev => prev.map(c => c.id === complaintId ? { ...c, assignedTo: agentId, assignedToName: agent?.name || 'Assigned' } : c));
       } catch (error) {
           console.error("Failed to assign agent", error);
           alert("Failed to assign agent.");
@@ -206,10 +227,26 @@ const HelpDesk: React.FC = () => {
       }
   };
 
-  // Determine Permissions
-  const isHelpdeskAdmin = user?.role === UserRole.HelpdeskAdmin;
-  const isHelpdeskAgent = user?.role === UserRole.HelpdeskAgent;
-  const canCreateComplaint = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
+  // --- Filtering Logic for Routing ---
+  const getFilteredComplaints = () => {
+      if (!isHelpdeskAdmin) return complaints; // Residents/Agents just see what API returns
+
+      return complaints.filter(c => {
+          if (activeTab === 'unassigned') {
+              return !c.assignedTo && c.status !== ComplaintStatus.Resolved;
+          }
+          if (activeTab === 'mine') {
+              return c.assignedTo === user?.id;
+          }
+          return true; // 'all'
+      });
+  };
+
+  const displayedComplaints = getFilteredComplaints();
+  
+  // Counts for Badges
+  const unassignedCount = complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved).length;
+  const myAssignedCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
 
   return (
     <div className="space-y-6">
@@ -234,53 +271,127 @@ const HelpDesk: React.FC = () => {
         </div>
       </div>
       
+      {/* Helpdesk Admin Routing Tabs */}
+      {isHelpdeskAdmin && (
+          <div className="flex space-x-1 p-1 bg-black/5 dark:bg-white/5 rounded-xl mb-4 animated-card overflow-x-auto">
+              <button
+                  onClick={() => setActiveTab('unassigned')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeTab === 'unassigned'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  <span>Inbox (Unassigned)</span>
+                  {unassignedCount > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                          {unassignedCount}
+                      </span>
+                  )}
+              </button>
+              <button
+                  onClick={() => setActiveTab('mine')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeTab === 'mine'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  <span>My Tasks</span>
+                  {myAssignedCount > 0 && (
+                      <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                          {myAssignedCount}
+                      </span>
+                  )}
+              </button>
+              <button
+                  onClick={() => setActiveTab('all')}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeTab === 'all'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--text-light)] dark:text-[var(--text-dark)] shadow-sm'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  All Tickets
+              </button>
+          </div>
+      )}
+
       <div className="space-y-4">
         {loading ? (
              Array.from({ length: 3 }).map((_, index) => <ComplaintSkeleton key={index} />)
         ) : (
-            complaints.length === 0 ? (
-                <div className="p-8 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
-                    No tickets found.
+            displayedComplaints.length === 0 ? (
+                <div className="p-12 flex flex-col items-center justify-center text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
+                    <ClipboardDocumentListIcon className="w-12 h-12 mb-3 opacity-20" />
+                    <p className="text-lg font-medium">No tickets found.</p>
+                    {activeTab === 'unassigned' && <p className="text-sm mt-1">Great job! All pending tickets have been routed.</p>}
                 </div>
             ) : (
-                complaints.map((complaint, index) => {
+                displayedComplaints.map((complaint, index) => {
                     const isResolved = complaint.status === ComplaintStatus.Resolved;
 
-                    // Permissions
-                    // Agent can update status if assigned
-                    const isAssignedAgent = isHelpdeskAgent && complaint.assignedTo === user?.id;
-                    // Resident/Admin can resolve their own ticket
+                    // Permissions Logic
+                    const isAssignedAgent = (isHelpdeskAgent || isHelpdeskAdmin) && complaint.assignedTo === user?.id;
                     const isOwner = (user?.role === UserRole.Resident || user?.role === UserRole.Admin) && complaint.userId === user?.id;
 
-                    const canUpdateStatus = !isResolved && isAssignedAgent;
-                    const canResolve = !isResolved && (isAssignedAgent || isOwner);
+                    const canUpdateStatus = !isResolved && (isAssignedAgent || isHelpdeskAdmin);
+                    const canResolve = !isResolved && (isAssignedAgent || isOwner || isHelpdeskAdmin);
                     
+                    // Show Unassigned Badge to Admins to prompt routing
+                    const showUnassignedAlert = isHelpdeskAdmin && !complaint.assignedTo && !isResolved;
+
                     return (
-                        <Card key={complaint.id} className="p-5 animated-card" style={{ animationDelay: `${index * 100}ms` }}>
+                        <Card key={complaint.id} className="p-5 animated-card" style={{ animationDelay: `${index * 50}ms` }}>
                             <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
                                 <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
+                                            {complaint.category}
+                                        </span>
+                                        <span className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                            #{String(complaint.id).substring(0, 6)}
+                                        </span>
+                                    </div>
                                     <h3 className="text-lg font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">{complaint.title}</h3>
                                     <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1">
-                                        From {complaint.flatNumber} on {new Date(complaint.createdAt).toLocaleDateString()}
+                                        From <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{complaint.residentName}</span> ({complaint.flatNumber})
                                     </p>
-                                    <div className="mt-2 text-sm">
-                                        <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Assigned to: </span>
-                                        <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                            {complaint.assignedToName || "Unassigned"}
-                                        </span>
+                                    <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-0.5">
+                                        {new Date(complaint.createdAt).toLocaleString()}
+                                    </p>
+                                    
+                                    <div className="mt-3 text-sm flex items-center gap-2">
+                                        <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Agent: </span>
+                                        {complaint.assignedToName ? (
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
+                                                    {complaint.assignedToName.charAt(0)}
+                                                </div>
+                                                <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                    {complaint.assignedToName}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className={`font-medium px-2 py-0.5 rounded text-xs ${showUnassignedAlert ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 animate-pulse' : 'text-[var(--text-secondary-light)] italic'}`}>
+                                                {showUnassignedAlert ? 'Unassigned (Route Now)' : 'Unassigned'}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-end gap-2 min-w-[180px]">
+                                <div className="flex flex-col items-end gap-3 min-w-[180px]">
                                     <div className="flex items-center gap-2">
                                         <StatusBadge status={complaint.status} />
+                                        
+                                        {/* Status Dropdown */}
                                         {canUpdateStatus && (
                                             <div className="relative">
                                                 <select
                                                     value={complaint.status}
                                                     onChange={(e) => handleStatusChange(complaint.id, e.target.value as ComplaintStatus)}
                                                     disabled={updatingId === complaint.id}
-                                                    className="text-sm appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50"
+                                                    className="text-sm appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 cursor-pointer hover:border-[var(--accent)] transition-colors"
                                                 >
                                                     {Object.values(ComplaintStatus)
                                                         .filter(s => s !== ComplaintStatus.Resolved) // Hide Resolved from dropdown, use button instead
@@ -304,11 +415,11 @@ const HelpDesk: React.FC = () => {
                                         <Button 
                                             size="sm" 
                                             variant="outlined" 
-                                            className="text-xs py-1.5 px-3 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                            className="text-xs py-1.5 px-3 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 w-full justify-center"
                                             onClick={() => promptResolve(complaint)}
                                             leftIcon={<CheckCircleIcon className="w-3.5 h-3.5" />}
                                         >
-                                            Mark as Resolved
+                                            Mark Resolved
                                         </Button>
                                     )}
 
@@ -320,9 +431,9 @@ const HelpDesk: React.FC = () => {
                                                     value={complaint.assignedTo || ""}
                                                     onChange={(e) => handleAssignAgent(complaint.id, e.target.value)}
                                                     disabled={assigningId === complaint.id}
-                                                    className="w-full text-sm appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 text-[var(--text-light)] dark:text-[var(--text-dark)]"
+                                                    className={`w-full text-sm appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 text-[var(--text-light)] dark:text-[var(--text-dark)] cursor-pointer ${showUnassignedAlert ? 'border-red-300 ring-1 ring-red-200' : 'border-[var(--border-light)] dark:border-[var(--border-dark)]'}`}
                                                 >
-                                                    <option value="">Assign Agent...</option>
+                                                    <option value="">{showUnassignedAlert ? "Assign Agent (Action Required)" : "Assign Agent..."}</option>
                                                     {availableAgents.map(agent => (
                                                         <option key={agent.id} value={agent.id}>{agent.name}</option>
                                                     ))}
@@ -339,7 +450,9 @@ const HelpDesk: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-                            <p className="mt-3 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{complaint.description}</p>
+                            <div className="mt-4 p-3 bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] rounded-lg border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                                <p className="text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] whitespace-pre-wrap">{complaint.description}</p>
+                            </div>
                         </Card>
                     );
                 })

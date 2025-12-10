@@ -65,6 +65,17 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                         setStandaloneFloors(data.blocks[0].floorCount);
                         setStandaloneUnitsPerFloor(data.blocks[0].unitsPerFloor || 0);
                     }
+
+                    // SKIPPING LOGIC: 
+                    // If landscape is already set up, and the current user has no units (fresh admin),
+                    // skip directly to residence setup.
+                    if (!user.units || user.units.length === 0) {
+                        setStep('residence');
+                        // If only one block exists (e.g. standalone or single tower), pre-select it
+                        if (data.blocks.length === 1) {
+                            setSelectedBlock(data.blocks[0].name);
+                        }
+                    }
                 } else {
                     // Initialize empty blocks for High-Rise if new
                     setBlocks([]);

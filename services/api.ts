@@ -101,9 +101,15 @@ export const getComplaints = async (communityId: string, userId?: string, role?:
         .eq('community_id', communityId)
         .order('created_at', { ascending: false });
 
+    // 1. Helpdesk Agents only see tickets assigned to them
     if (role === UserRole.HelpdeskAgent && userId) {
         query = query.eq('assigned_to', userId);
     }
+    // 2. Residents only see tickets they created
+    else if (role === UserRole.Resident && userId) {
+        query = query.eq('user_id', userId);
+    }
+    // 3. Admins, HelpdeskAdmins, SecurityAdmins see ALL tickets for the community (No filter applied)
         
     const { data, error } = await query;
         
@@ -596,15 +602,46 @@ export const assignAdminUnit = async (unitData: any, user: User, community: Comm
 }
 
 export const getCommunityStats = async (): Promise<CommunityStat[]> => {
-    const { data: communities, error } = await supabase.from('communities').select('*').order('name');
-    if (error) throw error;
-    const stats: CommunityStat[] = [];
-    for (const c of communities) {
-        const { count: residentCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('community_id', c.id).eq('role', 'Resident');
-        const { count: adminCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('community_id', c.id).eq('role', 'Admin');
-        stats.push({ id: c.id, name: c.name, address: c.address, status: c.status, communityType: c.community_type, blocks: c.blocks, maintenanceRate: c.maintenance_rate, fixedMaintenanceAmount: c.fixed_maintenance_amount, contacts: c.contact_info, subscriptionType: c.subscription_type, subscriptionStartDate: c.subscription_start_date, pricePerUser: c.pricing_config, resident_count: residentCount || 0, admin_count: adminCount || 0, income_generated: 0 });
+    // We now use the database view 'community_stats' for performance
+    const { data, error } = await supabase
+        .from('community_stats')
+        .select('*')
+        .order('name');
+
+    if (error) {
+        console.error("Error fetching community stats view:", error);
+        // Fallback for dev/first run if view doesn't exist
+        if (error.code === '42P01') { 
+             const { data: communities } = await supabase.from('communities').select('*').order('name');
+             if (!communities) return [];
+             const stats: CommunityStat[] = [];
+             for (const c of communities) {
+                const { count: residentCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('community_id', c.id).eq('role', 'Resident');
+                const { count: adminCount } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('community_id', c.id).eq('role', 'Admin');
+                stats.push({ id: c.id, name: c.name, address: c.address, status: c.status, communityType: c.community_type, blocks: c.blocks, maintenanceRate: c.maintenance_rate, fixedMaintenanceAmount: c.fixed_maintenance_amount, contacts: c.contact_info, subscriptionType: c.subscription_type, subscriptionStartDate: c.subscription_start_date, pricePerUser: c.pricing_config, resident_count: residentCount || 0, admin_count: adminCount || 0, income_generated: 0 });
+             }
+             return stats;
+        }
+        throw error;
     }
-    return stats;
+    
+    return data.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        address: c.address,
+        status: c.status,
+        communityType: c.community_type,
+        blocks: c.blocks,
+        maintenanceRate: c.maintenance_rate,
+        fixedMaintenanceAmount: c.fixed_maintenance_amount,
+        contacts: c.contact_info,
+        subscriptionType: c.subscription_type,
+        subscriptionStartDate: c.subscription_start_date,
+        pricePerUser: c.pricing_config,
+        resident_count: c.resident_count,
+        admin_count: c.admin_count,
+        income_generated: c.income_generated || 0
+    })) as CommunityStat[];
 };
 
 export const createCommunity = async (communityData: Partial<Community>): Promise<Community> => {
