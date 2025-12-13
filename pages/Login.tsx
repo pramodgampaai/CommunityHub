@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
@@ -24,9 +25,21 @@ const LoginPage: React.FC = () => {
     } catch (err: any) {
       console.error('Login failed:', err);
       let errorMessage = 'An unexpected error occurred. Please try again.';
-      if (err && typeof err === 'object' && 'message' in err) {
-        errorMessage = String(err.message);
+      
+      if (err) {
+          if (typeof err === 'string') {
+              errorMessage = err;
+          } else if (typeof err === 'object') {
+              errorMessage = err.message || err.error_description || JSON.stringify(err);
+          }
       }
+      
+      // Case-insensitive check for common credential errors
+      const lowerMsg = errorMessage.toLowerCase();
+      if (lowerMsg.includes("invalid login credentials") || lowerMsg.includes("invalid email or password")) {
+          errorMessage = "Invalid email or password. If you are a new user, please contact your administrator to create an account.";
+      }
+      
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -80,7 +93,7 @@ const LoginPage: React.FC = () => {
         
         {view === 'login' ? (
             <form className="mt-6 space-y-6" onSubmit={handleLoginSubmit}>
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            {error && <div className="p-3 text-sm text-red-600 bg-red-100 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800 text-center">{error}</div>}
             <div className="space-y-4">
                 <div>
                 <label htmlFor="email-address" className="sr-only">Email address</label>

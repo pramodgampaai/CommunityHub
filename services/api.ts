@@ -1,6 +1,6 @@
 
 import { supabase, supabaseKey } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus, VisitorStatus, MaintenanceConfiguration, AuditLog, AuditAction } from '../types';
+import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus, VisitorStatus, VisitorType, MaintenanceConfiguration, AuditLog, AuditAction } from '../types';
 
 // ... (Existing Internal Helpers - No Change) ...
 const logAudit = async (
@@ -36,11 +36,6 @@ export const getNotices = async (communityId: string): Promise<Notice[]> => {
 
 // --- UPDATED getComplaints to use Edge Function for Admins AND Agents ---
 export const getComplaints = async (communityId: string, userId?: string, role?: UserRole): Promise<Complaint[]> => {
-    
-    // STRATEGY: 
-    // If Admin/HelpdeskAdmin/SecurityAdmin OR HelpdeskAgent, use Edge Function.
-    // This bypasses RLS issues where the database policy might not be correctly set up.
-    // CRITICAL FIX: Use case-insensitive check for roles to prevent fallback to standard client.
     
     const r = role ? role.toLowerCase() : '';
     const shouldUseEdgeFunction = r === 'admin' || 
@@ -86,7 +81,7 @@ export const getComplaints = async (communityId: string, userId?: string, role?:
         }
     }
 
-    // Fallback / Standard Client Fetch (Mostly for Residents now)
+    // Fallback / Standard Client (Mostly for Residents now)
     let query = supabase
         .from('complaints')
         .select('*, assigned_user:users!assigned_to(name)')
@@ -119,11 +114,80 @@ export const getComplaints = async (communityId: string, userId?: string, role?:
     })) as Complaint[];
 };
 
-// ... (Rest of the file remains unchanged - getVisitors, getAmenities, etc.) ...
-export const getVisitors = async (communityId: string): Promise<Visitor[]> => {
-    const { data, error } = await supabase.from('visitors').select('*').eq('community_id', communityId).order('expected_at', { ascending: false });
+// --- UPDATED getVisitors to use Edge Function for Security/Admin ---
+export const getVisitors = async (communityId: string, userRole?: UserRole): Promise<Visitor[]> => {
+    
+    const isPrivileged = userRole === UserRole.Security || 
+                         userRole === UserRole.SecurityAdmin || 
+                         userRole === UserRole.Admin || 
+                         userRole === UserRole.SuperAdmin;
+
+    if (isPrivileged) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            // Using the specifically provided URL for get-visitors
+            const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/get-visitors', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': supabaseKey
+                },
+                body: JSON.stringify({ community_id: communityId })
+            });
+
+            if (response.ok) {
+                const resData = await response.json();
+                const data = resData.data;
+                return data.map((v: any) => ({ 
+                    id: v.id, 
+                    name: v.name, 
+                    visitorType: v.visitor_type || VisitorType.Guest,
+                    vehicleNumber: v.vehicle_number,
+                    purpose: v.purpose, 
+                    expectedAt: v.expected_at, 
+                    validUntil: v.valid_until,
+                    status: v.status, 
+                    residentName: v.resident_name, 
+                    flatNumber: v.flat_number, 
+                    communityId: v.community_id, 
+                    userId: v.user_id,
+                    entryToken: v.entry_token || v.id,
+                    entryTime: v.entry_time,
+                    exitTime: v.exit_time
+                })) as Visitor[];
+            } else {
+                console.warn("Edge function fetch failed, falling back to standard client.");
+            }
+        }
+    }
+
+    // Fallback / Standard Client (Residents)
+    const { data, error } = await supabase
+        .from('visitors')
+        .select('*')
+        .eq('community_id', communityId)
+        .order('expected_at', { ascending: false });
+
     if (error) throw error;
-    return data.map((v: any) => ({ id: v.id, name: v.name, purpose: v.purpose, expectedAt: v.expected_at, status: v.status, residentName: v.resident_name, flatNumber: v.flat_number, communityId: v.community_id, userId: v.user_id })) as Visitor[];
+    
+    return data.map((v: any) => ({ 
+        id: v.id, 
+        name: v.name, 
+        visitorType: v.visitor_type || VisitorType.Guest,
+        vehicleNumber: v.vehicle_number,
+        purpose: v.purpose, 
+        expectedAt: v.expected_at, 
+        validUntil: v.valid_until,
+        status: v.status, 
+        residentName: v.resident_name, 
+        flatNumber: v.flat_number, 
+        communityId: v.community_id, 
+        userId: v.user_id, 
+        entryToken: v.entry_token || v.id,
+        entryTime: v.entry_time,
+        exitTime: v.exit_time
+    })) as Visitor[];
 };
 
 export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
@@ -241,9 +305,13 @@ export const createComplaint = async (complaintData: any, user: User, specificUn
 };
 
 export const createVisitor = async (visitorData: any, user: User): Promise<Visitor> => {
-    let targetUserId = user.id; let residentName = user.name; let displayFlat = 'N/A'; let status: VisitorStatus = VisitorStatus.Expected;
+    let targetUserId = user.id; 
+    let residentName = user.name; 
+    let displayFlat = 'N/A'; 
+    let status: VisitorStatus = VisitorStatus.Expected;
+    
     if (user.role === UserRole.Resident) {
-        displayFlat = user.units && user.units.length > 0 ? user.units[0].flatNumber : (user.flatNumber || 'N/A');
+        displayFlat = user.units && user.units.length > 0 ? (user.units[0].block ? `${user.units[0].block}-${user.units[0].flatNumber}` : user.units[0].flatNumber) : (user.flatNumber || 'N/A');
     } else if (user.role === UserRole.Security || user.role === UserRole.SecurityAdmin || user.role === UserRole.Admin) {
         if (!visitorData.targetFlat) throw new Error("Flat number is required.");
         const flatInput = visitorData.targetFlat.trim();
@@ -255,11 +323,88 @@ export const createVisitor = async (visitorData: any, user: User): Promise<Visit
         if (unitData) { targetUserId = unitData.user_id; const userData = unitData.users as any; residentName = userData?.name || 'Resident'; displayFlat = unitData.block ? `${unitData.block}-${unitData.flat_number}` : unitData.flat_number; status = VisitorStatus.PendingApproval; } 
         else { const { data: legacyUser } = await supabase.from('users').select('id, name, flat_number').eq('community_id', user.communityId).eq('flat_number', flatInput).limit(1).maybeSingle(); if (!legacyUser) throw new Error(`No resident found.`); targetUserId = legacyUser.id; residentName = legacyUser.name; displayFlat = legacyUser.flat_number; status = VisitorStatus.PendingApproval; }
     }
-    const newVisitor = { name: visitorData.name, purpose: visitorData.purpose, expected_at: visitorData.expectedAt, status: status, resident_name: residentName, flat_number: displayFlat, user_id: targetUserId, community_id: user.communityId };
+
+    // Default valid until end of expected day (23:59:59)
+    const expectedDate = new Date(visitorData.expectedAt);
+    expectedDate.setHours(23, 59, 59, 999);
+    const validUntil = expectedDate.toISOString();
+
+    // Generate a secure entry token (simple random string for now)
+    const entryToken = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const newVisitor = { 
+        name: visitorData.name, 
+        visitor_type: visitorData.visitorType || VisitorType.Guest,
+        vehicle_number: visitorData.vehicleNumber || null,
+        purpose: visitorData.purpose, 
+        expected_at: visitorData.expectedAt, 
+        valid_until: validUntil,
+        status: status, 
+        resident_name: residentName, 
+        flat_number: displayFlat, 
+        user_id: targetUserId, 
+        community_id: user.communityId,
+        entry_token: entryToken
+    };
+
     const { data, error } = await supabase.from('visitors').insert(newVisitor).select().single();
     if (error) throw error;
-    await logAudit(user, 'CREATE', 'Visitor', data.id, null, data, `Registered visitor: ${data.name}`);
-    return { id: data.id, name: data.name, purpose: data.purpose, expectedAt: data.expected_at, status: data.status, residentName: data.resident_name, flatNumber: data.flat_number, communityId: data.community_id, userId: data.user_id } as Visitor;
+    
+    await logAudit(user, 'CREATE', 'Visitor', data.id, null, data, `Registered visitor: ${data.name} (${data.visitor_type})`);
+    
+    return { 
+        id: data.id, 
+        name: data.name, 
+        visitorType: data.visitor_type || visitorData.visitorType,
+        vehicleNumber: data.vehicle_number,
+        purpose: data.purpose, 
+        expectedAt: data.expected_at, 
+        validUntil: data.valid_until || validUntil, 
+        status: data.status, 
+        residentName: data.resident_name, 
+        flatNumber: data.flat_number, 
+        communityId: data.community_id, 
+        userId: data.user_id, 
+        entryToken: data.entry_token || entryToken
+    } as Visitor;
+};
+
+// --- Secure Entry Verification (Edge Function) ---
+export const verifyVisitorEntry = async (visitorId: string, entryToken: string, user: User): Promise<Visitor> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session");
+
+    // Using the specifically provided URL
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/verify-visitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}`, 'apikey': supabaseKey },
+        body: JSON.stringify({ visitor_id: visitorId, entry_token: entryToken, action: 'check_in' })
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Verification failed');
+    }
+
+    const resData = await response.json();
+    return resData.data as Visitor; 
+};
+
+export const checkOutVisitor = async (visitorId: string, user: User): Promise<void> => {
+    const { data: oldData } = await supabase.from('visitors').select('*').eq('id', visitorId).single();
+    
+    const { data: newData, error } = await supabase
+        .from('visitors')
+        .update({ 
+            status: VisitorStatus.CheckedOut, 
+            exit_time: new Date().toISOString() 
+        })
+        .eq('id', visitorId)
+        .select().single();
+
+    if (error) throw error;
+    
+    await logAudit(user, 'UPDATE', 'Visitor', visitorId, { status: oldData.status }, { status: newData.status }, `Checked out visitor: ${newData.name}`);
 };
 
 export const updateVisitorStatus = async (visitorId: string, status: VisitorStatus): Promise<void> => {

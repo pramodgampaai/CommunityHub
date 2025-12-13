@@ -94,7 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({ navigateToPage }) => {
         const promises: Promise<any>[] = [
             getNotices(user.communityId),
             getComplaints(user.communityId, user.id, user.role),
-            getVisitors(user.communityId)
+            getVisitors(user.communityId, user.role)
         ];
 
         // Only Admin should see maintenance stats on dashboard. Helpdesk is excluded.

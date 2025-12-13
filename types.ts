@@ -141,17 +141,37 @@ export interface Complaint {
 export enum VisitorStatus {
     PendingApproval = 'Pending Approval', // Created by Security, waiting for Resident
     Expected = 'Expected', // Created by Resident OR Approved by Resident
-    Arrived = 'Arrived',
-    Departed = 'Departed',
-    Denied = 'Denied' // Rejected by Resident
+    CheckedIn = 'Checked In', // Inside premises
+    CheckedOut = 'Checked Out', // Left premises
+    Denied = 'Denied', // Rejected by Resident or Security
+    Expired = 'Expired' // Did not arrive on time
+}
+
+export enum VisitorType {
+    Guest = 'Guest',
+    Delivery = 'Delivery',
+    Cab = 'Cab',
+    Service = 'Service'
 }
 
 export interface Visitor {
   id: string;
   name: string;
-  purpose: string;
-  expectedAt: string;
+  visitorType: VisitorType;
+  vehicleNumber?: string;
+  purpose: string; // Optional if type is specific
   status: VisitorStatus;
+  
+  // Timing
+  expectedAt: string; // ISO String
+  validUntil?: string; // ISO String - Entry expiry
+  entryTime?: string; // ISO String
+  exitTime?: string; // ISO String
+  
+  // Security
+  entryToken?: string; // Secure random string for QR Code
+  
+  // Relations
   residentName: string;
   flatNumber: string;
   communityId: string;
