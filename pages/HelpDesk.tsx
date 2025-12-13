@@ -8,13 +8,14 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
-import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon, UserGroupIcon, ClipboardDocumentListIcon } from '../components/icons';
+import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon, ClipboardDocumentListIcon, ShieldCheckIcon, UsersIcon, UserGroupIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const StatusBadge: React.FC<{ status: ComplaintStatus }> = ({ status }) => {
     const statusStyles: Record<ComplaintStatus, string> = {
         [ComplaintStatus.Pending]: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
         [ComplaintStatus.InProgress]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+        [ComplaintStatus.Completed]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
         [ComplaintStatus.Resolved]: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
     };
     return <span className={`px-3 py-1 text-sm font-medium rounded-full ${statusStyles[status]}`}>{status}</span>;
@@ -36,6 +37,8 @@ const ComplaintSkeleton: React.FC = () => (
     </div>
 );
 
+type AdminTab = 'unassigned' | 'mine' | 'team' | 'all';
+type AgentTab = 'mine' | 'unassigned' | 'history';
 
 const HelpDesk: React.FC = () => {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -48,7 +51,8 @@ const HelpDesk: React.FC = () => {
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   
   // Routing / View State
-  const [activeTab, setActiveTab] = useState<'unassigned' | 'mine' | 'all'>('all');
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('unassigned');
+  const [activeAgentTab, setActiveAgentTab] = useState<AgentTab>('mine');
 
   // Form state
   const [title, setTitle] = useState('');
@@ -73,26 +77,18 @@ const HelpDesk: React.FC = () => {
       isDestructive: false
   });
   
-  // Determine Permissions
-  const isHelpdeskAdmin = user?.role === UserRole.HelpdeskAdmin || user?.role === UserRole.Admin;
-  const isHelpdeskAgent = user?.role === UserRole.HelpdeskAgent;
-  const canCreateComplaint = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
+  // ROLES & PERMISSIONS
+  const isHelpdeskAdmin = user?.role === UserRole.HelpdeskAdmin;
+  const isAdmin = user?.role === UserRole.Admin;
+  const isAgent = user?.role === UserRole.HelpdeskAgent;
+  const isStaff = isHelpdeskAdmin || isAgent || isAdmin;
 
+  // FETCH DATA
   const fetchComplaints = async (communityId: string) => {
     try {
       setLoading(true);
       const data = await getComplaints(communityId, user?.id, user?.role);
       setComplaints(data);
-      
-      // Smart Default: If Admin, and there are unassigned tickets, go to Inbox
-      if (isHelpdeskAdmin) {
-          const hasUnassigned = data.some(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved);
-          if (hasUnassigned) {
-              setActiveTab('unassigned');
-          } else {
-              setActiveTab('all');
-          }
-      }
     } catch (error) {
       console.error("Failed to fetch complaints", error);
     } finally {
@@ -103,8 +99,7 @@ const HelpDesk: React.FC = () => {
   const fetchAgents = async (communityId: string) => {
       try {
           const users = await getResidents(communityId);
-          // Admins can assign to Helpdesk Agents OR other Admins/HelpdeskAdmins if needed, 
-          // but typically tasks go to Agents.
+          // Only list Helpdesk Staff (Agents or Admins) as potential assignees
           const agents = users.filter(u => u.role === UserRole.HelpdeskAgent || u.role === UserRole.HelpdeskAdmin);
           setAvailableAgents(agents);
       } catch (error) {
@@ -115,6 +110,7 @@ const HelpDesk: React.FC = () => {
   useEffect(() => {
     if (user?.communityId) {
         fetchComplaints(user.communityId);
+        // Only fetch agents if the user has permission to assign (HelpdeskAdmin)
         if (isHelpdeskAdmin) {
             fetchAgents(user.communityId);
         }
@@ -145,7 +141,6 @@ const HelpDesk: React.FC = () => {
                 specificUnitId = unit.id;
                 specificFlatNumber = unit.block ? `${unit.block}-${unit.flatNumber}` : unit.flatNumber;
             } else {
-                // Fallback to first unit if logic fails
                 const first = user.units[0];
                 specificUnitId = first.id;
                 specificFlatNumber = first.block ? `${first.block}-${first.flatNumber}` : first.flatNumber;
@@ -163,7 +158,6 @@ const HelpDesk: React.FC = () => {
         setTitle('');
         setDescription('');
         setCategory(ComplaintCategory.Other);
-        // We explicitly re-fetch to ensure the new ticket appears in the list
         await fetchComplaints(user.communityId); 
     } catch (error) {
         console.error("Failed to create complaint:", error);
@@ -205,7 +199,7 @@ const HelpDesk: React.FC = () => {
       setConfirmConfig({
           isOpen: true,
           title: "Mark as Resolved",
-          message: "Are you sure you want to mark this complaint as Resolved? You will not be able to make further changes.",
+          message: "Are you sure you want to close this ticket? This confirms the issue is fixed.",
           confirmLabel: "Yes, Resolve",
           isDestructive: false,
           action: async () => {
@@ -227,92 +221,187 @@ const HelpDesk: React.FC = () => {
       }
   };
 
-  // --- Filtering Logic for Routing ---
+  // --- Filtering Logic for View Routing ---
   const getFilteredComplaints = () => {
-      if (!isHelpdeskAdmin) return complaints; // Residents/Agents just see what API returns
+      // 1. Admin: Global Dashboard
+      if (isAdmin) return complaints;
+      
+      // 2. Helpdesk Admin: Distinct Tabs to manage flow
+      if (isHelpdeskAdmin) {
+          if (activeAdminTab === 'unassigned') {
+              // Strictly Unassigned AND Active
+              return complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved);
+          }
+          if (activeAdminTab === 'mine') {
+              // Assigned to Me AND Active
+              return complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved);
+          }
+          if (activeAdminTab === 'team') {
+              // Assigned to Others AND Active
+              return complaints.filter(c => c.assignedTo && c.assignedTo !== user?.id && c.status !== ComplaintStatus.Resolved);
+          }
+          // 'all' - Everything (Active + Resolved)
+          return complaints; 
+      }
 
-      return complaints.filter(c => {
-          if (activeTab === 'unassigned') {
-              return !c.assignedTo && c.status !== ComplaintStatus.Resolved;
+      // 3. Helpdesk Agent: Distinct Tabs
+      if (isAgent) {
+          if (activeAgentTab === 'mine') {
+              // Assigned to Me AND Active
+              return complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved);
           }
-          if (activeTab === 'mine') {
-              return c.assignedTo === user?.id;
+          if (activeAgentTab === 'unassigned') {
+              // Unassigned work (Cherry Picking)
+              return complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved);
           }
-          return true; // 'all'
-      });
+          // My History
+          return complaints.filter(c => c.assignedTo === user?.id && c.status === ComplaintStatus.Resolved);
+      }
+
+      // 4. Resident: See what API returned (Own)
+      return complaints; 
   };
 
   const displayedComplaints = getFilteredComplaints();
   
-  // Counts for Badges
+  // Badge Counts for Helpdesk Admin
   const unassignedCount = complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved).length;
-  const myAssignedCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
+  const myAdminCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
+  
+  // Badge Counts for Agent
+  const myAgentCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center animated-card">
-        <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Help Desk</h2>
+        <div>
+            <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Help Desk</h2>
+            {isHelpdeskAdmin && <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Dispatcher Dashboard</p>}
+            {isAgent && <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Agent Dashboard</p>}
+            {isAdmin && <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Global Dashboard</p>}
+        </div>
         <div className="flex gap-2">
             <Button 
                 onClick={() => setIsAuditOpen(true)} 
-                variant="outlined"
+                variant="outlined" 
                 size="sm"
                 leftIcon={<HistoryIcon className="w-4 h-4" />}
                 className="border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             >
                 History
             </Button>
-            {canCreateComplaint && (
+            {/* Residents or Admins (acting as residents) can create complaints */}
+            {(!isAgent && !isHelpdeskAdmin) || isAdmin ? (
                 <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Raise New Complaint" variant="fab">
                     <span className="hidden sm:inline">New Complaint</span>
                     <span className="sm:hidden">New</span>
                 </Button>
-            )}
+            ) : null}
         </div>
       </div>
       
-      {/* Helpdesk Admin Routing Tabs */}
+      {/* Helpdesk Admin Tabs */}
       {isHelpdeskAdmin && (
-          <div className="flex space-x-1 p-1 bg-black/5 dark:bg-white/5 rounded-xl mb-4 animated-card overflow-x-auto">
+          <div className="flex space-x-1 p-1 bg-black/5 dark:bg-white/5 rounded-xl mb-4 animated-card overflow-x-auto no-scrollbar">
               <button
-                  onClick={() => setActiveTab('unassigned')}
+                  onClick={() => setActiveAdminTab('unassigned')}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                      activeTab === 'unassigned'
-                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm'
+                      activeAdminTab === 'unassigned'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
                           : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
                   }`}
               >
-                  <span>Inbox (Unassigned)</span>
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  <span>Inbox</span>
                   {unassignedCount > 0 && (
-                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
                           {unassignedCount}
                       </span>
                   )}
               </button>
               <button
-                  onClick={() => setActiveTab('mine')}
+                  onClick={() => setActiveAdminTab('mine')}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                      activeTab === 'mine'
-                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm'
+                      activeAdminTab === 'mine'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
                           : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
                   }`}
               >
                   <span>My Tasks</span>
-                  {myAssignedCount > 0 && (
-                      <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
-                          {myAssignedCount}
+                  {myAdminCount > 0 && (
+                      <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
+                          {myAdminCount}
                       </span>
                   )}
               </button>
               <button
-                  onClick={() => setActiveTab('all')}
-                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                      activeTab === 'all'
-                          ? 'bg-white dark:bg-gray-800 text-[var(--text-light)] dark:text-[var(--text-dark)] shadow-sm'
+                  onClick={() => setActiveAdminTab('team')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeAdminTab === 'team'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
                           : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
                   }`}
               >
-                  All Tickets
+                  <UserGroupIcon className="w-4 h-4" />
+                  <span>Team</span>
+              </button>
+              <button
+                  onClick={() => setActiveAdminTab('all')}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeAdminTab === 'all'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--text-light)] dark:text-[var(--text-dark)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  All History
+              </button>
+          </div>
+      )}
+
+      {/* Helpdesk Agent Tabs */}
+      {isAgent && (
+          <div className="flex space-x-1 p-1 bg-black/5 dark:bg-white/5 rounded-xl mb-4 animated-card overflow-x-auto">
+              <button
+                  onClick={() => setActiveAgentTab('mine')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeAgentTab === 'mine'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  <span>My Tasks</span>
+                  {myAgentCount > 0 && (
+                      <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
+                          {myAgentCount}
+                      </span>
+                  )}
+              </button>
+              <button
+                  onClick={() => setActiveAgentTab('unassigned')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeAgentTab === 'unassigned'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  <span>Inbox</span>
+                  {unassignedCount > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
+                          {unassignedCount}
+                      </span>
+                  )}
+              </button>
+              <button
+                  onClick={() => setActiveAgentTab('history')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeAgentTab === 'history'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--text-light)] dark:text-[var(--text-dark)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  <HistoryIcon className="w-4 h-4" />
+                  <span>History</span>
               </button>
           </div>
       )}
@@ -325,24 +414,37 @@ const HelpDesk: React.FC = () => {
                 <div className="p-12 flex flex-col items-center justify-center text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
                     <ClipboardDocumentListIcon className="w-12 h-12 mb-3 opacity-20" />
                     <p className="text-lg font-medium">No tickets found.</p>
-                    {activeTab === 'unassigned' && <p className="text-sm mt-1">Great job! All pending tickets have been routed.</p>}
+                    {isHelpdeskAdmin && activeAdminTab === 'unassigned' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">Inbox clear! All tickets dispatched.</p>}
+                    {isAgent && activeAgentTab === 'mine' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">You have no pending tasks assigned to you.</p>}
+                    {isAgent && activeAgentTab === 'unassigned' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">No unassigned tickets available.</p>}
                 </div>
             ) : (
                 displayedComplaints.map((complaint, index) => {
                     const isResolved = complaint.status === ComplaintStatus.Resolved;
+                    const isCompleted = complaint.status === ComplaintStatus.Completed;
 
-                    // Permissions Logic
-                    const isAssignedAgent = (isHelpdeskAgent || isHelpdeskAdmin) && complaint.assignedTo === user?.id;
-                    const isOwner = (user?.role === UserRole.Resident || user?.role === UserRole.Admin) && complaint.userId === user?.id;
-
-                    const canUpdateStatus = !isResolved && (isAssignedAgent || isHelpdeskAdmin);
-                    const canResolve = !isResolved && (isAssignedAgent || isOwner || isHelpdeskAdmin);
+                    // --- PERMISSION LOGIC ---
                     
-                    // Show Unassigned Badge to Admins to prompt routing
-                    const showUnassignedAlert = isHelpdeskAdmin && !complaint.assignedTo && !isResolved;
+                    const isAssignedToMe = complaint.assignedTo === user?.id;
+                    const isUnassigned = !complaint.assignedTo;
+                    const isOwner = user?.id === complaint.userId;
+
+                    // 1. Resolve Action: Visible Only to Ticket Owner AND only when status is Completed
+                    const canResolve = isOwner && isCompleted;
+                    
+                    // 2. Complete Action: Visible to Assigned Agent/Admin AND only when In Progress
+                    const canComplete = !isResolved && !isCompleted && 
+                        complaint.status === ComplaintStatus.InProgress && 
+                        (isAdmin || isHelpdeskAdmin || (isAgent && isAssignedToMe));
+
+                    // 3. Assignment: STRICTLY restricted to Helpdesk Admin.
+                    const canAssign = isHelpdeskAdmin && !isResolved && !isCompleted;
+
+                    // 4. Agent "Cherry Pick": If unassigned, Agent can assign to self
+                    const canSelfAssign = isAgent && isUnassigned && !isResolved && !isCompleted;
 
                     return (
-                        <Card key={complaint.id} className="p-5 animated-card" style={{ animationDelay: `${index * 50}ms` }}>
+                        <Card key={complaint.id} className="p-5 animated-card border-l-4 border-l-transparent hover:border-l-[var(--accent)] transition-all" style={{ animationDelay: `${index * 50}ms` }}>
                             <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
@@ -361,8 +463,9 @@ const HelpDesk: React.FC = () => {
                                         {new Date(complaint.createdAt).toLocaleString()}
                                     </p>
                                     
+                                    {/* Assignment Status Display */}
                                     <div className="mt-3 text-sm flex items-center gap-2">
-                                        <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Agent: </span>
+                                        <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Assigned to: </span>
                                         {complaint.assignedToName ? (
                                             <div className="flex items-center gap-1.5">
                                                 <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
@@ -373,44 +476,32 @@ const HelpDesk: React.FC = () => {
                                                 </span>
                                             </div>
                                         ) : (
-                                            <span className={`font-medium px-2 py-0.5 rounded text-xs ${showUnassignedAlert ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 animate-pulse' : 'text-[var(--text-secondary-light)] italic'}`}>
-                                                {showUnassignedAlert ? 'Unassigned (Route Now)' : 'Unassigned'}
+                                            <span className="font-medium px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                                Unassigned
                                             </span>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-end gap-3 min-w-[180px]">
-                                    <div className="flex items-center gap-2">
+                                <div className="flex flex-col items-end gap-3 min-w-[200px]">
+                                    <div className="flex items-center gap-2 w-full justify-end">
                                         <StatusBadge status={complaint.status} />
-                                        
-                                        {/* Status Dropdown */}
-                                        {canUpdateStatus && (
-                                            <div className="relative">
-                                                <select
-                                                    value={complaint.status}
-                                                    onChange={(e) => handleStatusChange(complaint.id, e.target.value as ComplaintStatus)}
-                                                    disabled={updatingId === complaint.id}
-                                                    className="text-sm appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 cursor-pointer hover:border-[var(--accent)] transition-colors"
-                                                >
-                                                    {Object.values(ComplaintStatus)
-                                                        .filter(s => s !== ComplaintStatus.Resolved) // Hide Resolved from dropdown, use button instead
-                                                        .map(status => (
-                                                        <option key={status} value={status}>{status}</option>
-                                                    ))}
-                                                </select>
-                                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                                    {updatingId === complaint.id ? (
-                                                        <div className="w-4 h-4 border-2 border-[var(--accent)] border-b-transparent rounded-full animate-spin"></div>
-                                                    ) : (
-                                                        <ChevronDownIcon className="w-4 h-4" />
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
 
-                                    {/* Mark as Resolved Button */}
+                                    {/* Staff: Mark Completed */}
+                                    {canComplete && (
+                                        <Button 
+                                            size="sm" 
+                                            variant="outlined" 
+                                            className="text-xs py-1.5 px-3 border-blue-500 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 w-full justify-center"
+                                            onClick={() => handleStatusChange(complaint.id, ComplaintStatus.Completed)}
+                                            leftIcon={<CheckCircleIcon className="w-3.5 h-3.5" />}
+                                        >
+                                            Mark Completed
+                                        </Button>
+                                    )}
+
+                                    {/* Resident: Mark Resolved (Closure) */}
                                     {canResolve && (
                                         <Button 
                                             size="sm" 
@@ -422,20 +513,35 @@ const HelpDesk: React.FC = () => {
                                             Mark Resolved
                                         </Button>
                                     )}
+                                    
+                                    {/* Agent Self-Assign */}
+                                    {canSelfAssign && (
+                                        <Button 
+                                            size="sm"
+                                            onClick={() => handleStatusChange(complaint.id, ComplaintStatus.InProgress)
+                                                .then(() => handleAssignAgent(complaint.id, user!.id))
+                                            }
+                                            disabled={assigningId === complaint.id}
+                                            className="w-full justify-center"
+                                        >
+                                            {assigningId === complaint.id ? 'Assigning...' : 'Pick Up Ticket'}
+                                        </Button>
+                                    )}
 
-                                    {/* Assignment Dropdown - Only visible to Helpdesk Admins */}
-                                    {isHelpdeskAdmin && !isResolved && (
-                                        <div className="w-full">
+                                    {/* Assignment Dropdown - STRICTLY Helpdesk Admin Only */}
+                                    {canAssign && (
+                                        <div className="w-full pt-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)] mt-1">
+                                            <label className="text-[10px] text-[var(--text-secondary-light)] uppercase font-bold mb-1 block">Dispatch To</label>
                                             <div className="relative">
                                                 <select
                                                     value={complaint.assignedTo || ""}
                                                     onChange={(e) => handleAssignAgent(complaint.id, e.target.value)}
                                                     disabled={assigningId === complaint.id}
-                                                    className={`w-full text-sm appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 text-[var(--text-light)] dark:text-[var(--text-dark)] cursor-pointer ${showUnassignedAlert ? 'border-red-300 ring-1 ring-red-200' : 'border-[var(--border-light)] dark:border-[var(--border-dark)]'}`}
+                                                    className="w-full text-sm appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md pl-3 pr-8 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-50 text-[var(--text-light)] dark:text-[var(--text-dark)] cursor-pointer"
                                                 >
-                                                    <option value="">{showUnassignedAlert ? "Assign Agent (Action Required)" : "Assign Agent..."}</option>
+                                                    <option value="">-- Unassigned --</option>
                                                     {availableAgents.map(agent => (
-                                                        <option key={agent.id} value={agent.id}>{agent.name}</option>
+                                                        <option key={agent.id} value={agent.id}>{agent.name} ({agent.role})</option>
                                                     ))}
                                                 </select>
                                                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">

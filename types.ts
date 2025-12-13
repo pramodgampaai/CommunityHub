@@ -111,6 +111,7 @@ export interface Notice {
 export enum ComplaintStatus {
   Pending = 'Pending',
   InProgress = 'In Progress',
+  Completed = 'Completed',
   Resolved = 'Resolved',
 }
 
