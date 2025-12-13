@@ -382,7 +382,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
 
                                 {/* Standalone Form */}
                                 {community?.communityType?.includes('Standalone') && (
-                                    <div className="grid grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
                                                 Total Floors
@@ -508,7 +508,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 {/* Floor Selection */}
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
@@ -556,7 +556,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
                                         Size (Sq. Ft)

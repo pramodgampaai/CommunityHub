@@ -535,7 +535,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                                 <Button size="sm" onClick={() => setIsAddingConfig(true)} leftIcon={<ClockIcon className="w-4 h-4"/>}>New Rate</Button>
                             </div>
                             
-                            <div className="overflow-hidden border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg">
+                            <div className="overflow-x-auto border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg">
                                 <table className="min-w-full divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
                                     <thead className="bg-black/5 dark:bg-white/5">
                                         <tr>

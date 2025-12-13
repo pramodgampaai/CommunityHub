@@ -407,7 +407,7 @@ const Expenses: React.FC = () => {
                         <input type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Generator Fuel" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Amount (₹)</label>
                             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} required min="0" step="0.01" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
@@ -515,7 +515,7 @@ const Expenses: React.FC = () => {
                         </div>
                         
                         {/* Amount and Meta Grid */}
-                        <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-white/5 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-white/5 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
                             <div>
                                 <p className="text-xs text-[var(--text-secondary-light)] uppercase tracking-wide font-semibold">Amount</p>
                                 <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{selectedExpense.amount.toLocaleString()}</p>

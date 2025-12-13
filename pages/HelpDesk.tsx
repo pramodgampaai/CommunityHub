@@ -445,7 +445,7 @@ const HelpDesk: React.FC = () => {
 
                     return (
                         <Card key={complaint.id} className="p-5 animated-card border-l-4 border-l-transparent hover:border-l-[var(--accent)] transition-all" style={{ animationDelay: `${index * 50}ms` }}>
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-start gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
@@ -483,7 +483,7 @@ const HelpDesk: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-end gap-3 min-w-[200px]">
+                                <div className="flex flex-col items-stretch sm:items-end gap-3 w-full sm:w-auto sm:min-w-[200px]">
                                     <div className="flex items-center gap-2 w-full justify-end">
                                         <StatusBadge status={complaint.status} />
                                     </div>

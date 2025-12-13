@@ -494,7 +494,7 @@ const Visitors: React.FC = () => {
                         <input type="text" id="name" value={visitorName} onChange={e => setVisitorName(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Type</label>
                             <select value={visitorType} onChange={e => setVisitorType(e.target.value as VisitorType)} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
@@ -573,81 +573,56 @@ const Visitors: React.FC = () => {
                             </div>
                             <div className="text-right">
                                 <p className="text-xs text-[var(--text-secondary-light)]">{selectedVisitorForQR.visitorType}</p>
-                                <p className="text-xs font-mono">{selectedVisitorForQR.vehicleNumber || 'No Vehicle'}</p>
+                                <p className="text-sm font-medium">{selectedVisitorForQR.flatNumber}</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 text-center">
-                            <p className="text-sm font-bold text-blue-800 dark:text-blue-200">Global Scan Mode</p>
-                            <p className="text-xs text-blue-600 dark:text-blue-300">Scan any visitor pass to verify.</p>
+                        <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded text-center text-sm">
+                            Ready to Scan
                         </div>
                     )}
 
-                    {/* Result Feedback */}
-                    {verificationResult && (
-                        <div className={`p-4 rounded-lg flex items-start gap-3 ${verificationResult.success ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'}`}>
-                            {verificationResult.success ? <CheckCircleIcon className="w-5 h-5 flex-shrink-0" /> : <XIcon className="w-5 h-5 flex-shrink-0" />}
-                            <div>
-                                <p className="font-bold text-sm">{verificationResult.success ? 'Success' : 'Verification Failed'}</p>
-                                <p className="text-xs mt-1">{verificationResult.message}</p>
-                            </div>
+                    {isScanning ? (
+                        <div className="rounded-lg overflow-hidden border border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                            <QRScanner onScan={handleScanResult} onClose={() => setIsScanning(false)} />
                         </div>
-                    )}
-
-                    {/* Switcher */}
-                    {!verificationResult && (
-                        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg mb-4">
-                            <button 
-                                type="button"
-                                onClick={() => setIsScanning(true)}
-                                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isScanning ? 'bg-white dark:bg-gray-700 shadow-sm text-[var(--accent)]' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Scan QR
-                            </button>
-                            <button 
-                                type="button"
-                                onClick={() => setIsScanning(false)}
-                                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isScanning ? 'bg-white dark:bg-gray-700 shadow-sm text-[var(--accent)]' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Manual Entry
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Scan Mode */}
-                    {isScanning && !verificationResult ? (
-                        <QRScanner 
-                            onScan={handleScanResult} 
-                            onClose={() => setIsScanning(false)} 
-                        />
-                    ) : !verificationResult ? (
-                        /* Manual Mode */
-                        <form onSubmit={handleVerifySubmit} className="space-y-4">
-                            {!selectedVisitorForQR && (
-                                <p className="text-sm text-red-500">Manual entry via token is only available when verifying a specific visitor from the list.</p>
-                            )}
-                            <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Enter Token</label>
+                    ) : (
+                        <div>
+                             {!selectedVisitorForQR && (
+                                <div className="mb-4">
+                                    <Button className="w-full" onClick={() => setIsScanning(true)}>Start Scanner</Button>
+                                    <div className="relative flex py-3 items-center">
+                                        <div className="flex-grow border-t border-[var(--border-light)] dark:border-[var(--border-dark)]"></div>
+                                        <span className="flex-shrink-0 mx-2 text-[var(--text-secondary-light)] text-xs">OR</span>
+                                        <div className="flex-grow border-t border-[var(--border-light)] dark:border-[var(--border-dark)]"></div>
+                                    </div>
+                                </div>
+                             )}
+                             
+                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Enter Token Manually</label>
+                             <div className="flex gap-2">
                                 <input 
                                     type="text" 
                                     value={manualEntryToken} 
                                     onChange={e => setManualEntryToken(e.target.value.toUpperCase())} 
-                                    placeholder="Enter 6-char token"
-                                    disabled={!selectedVisitorForQR}
-                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent font-mono text-center tracking-widest uppercase text-lg disabled:opacity-50"
-                                    maxLength={6}
+                                    placeholder="e.g. AB12CD"
+                                    className="flex-1 block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent uppercase font-mono"
                                 />
+                                <Button onClick={handleVerifySubmit} disabled={!manualEntryToken || isSubmitting}>Verify</Button>
                             </div>
-                            <Button type="submit" className="w-full" disabled={isSubmitting || manualEntryToken.length < 3 || !selectedVisitorForQR}>
-                                {isSubmitting ? 'Verifying...' : 'Verify Entry'}
-                            </Button>
-                        </form>
-                    ) : null}
+                        </div>
+                    )}
+
+                    {verificationResult && (
+                        <div className={`p-3 rounded-lg flex items-center gap-2 ${verificationResult.success ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+                            {verificationResult.success ? <CheckCircleIcon className="w-5 h-5"/> : <XIcon className="w-5 h-5"/>}
+                            <span className="font-medium text-sm">{verificationResult.message}</span>
+                        </div>
+                    )}
                 </div>
             </Modal>
 
-            {/* Confirmation Modal */}
-            <ConfirmationModal 
+            <ConfirmationModal
                 isOpen={confirmConfig.isOpen}
                 onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
                 onConfirm={handleConfirmAction}

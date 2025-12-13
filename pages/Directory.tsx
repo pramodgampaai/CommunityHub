@@ -810,7 +810,7 @@ const Directory: React.FC = () => {
                                         </button>
                                     )}
                                     
-                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                         {!isStandaloneType(community?.communityType) && (
                                             <div>
                                                 <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Block <span className="text-red-500">*</span></label>
@@ -840,7 +840,7 @@ const Directory: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                         <div>
                                             <label className="block text-xs font-medium mb-1 text-[var(--text-secondary-light)]">Flat No. <span className="text-red-500">*</span></label>
                                             <input 
