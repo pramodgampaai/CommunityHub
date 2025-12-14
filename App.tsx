@@ -13,6 +13,7 @@ import Directory from './pages/Directory';
 import Maintenance from './pages/Maintenance';
 import Expenses from './pages/Expenses';
 import CommunitySetup from './pages/CommunitySetup';
+import Billing from './pages/Billing';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
@@ -107,6 +108,8 @@ function App() {
             if (!allowed.includes(activePage)) setActivePage('Visitors');
         } else if (user.role !== UserRole.Admin && activePage === 'Expenses') {
             setActivePage('Dashboard');
+        } else if (user.role !== UserRole.SuperAdmin && activePage === 'Billing') {
+            setActivePage('Dashboard');
         }
     };
 
@@ -160,7 +163,11 @@ function App() {
 
   // Role-based routing
   if (user.role === UserRole.SuperAdmin) {
-    return <AdminPanel theme={theme} toggleTheme={toggleTheme} />;
+      return (
+          <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
+              {activePage === 'Billing' ? <Billing /> : <AdminPanel />}
+          </Layout>
+      );
   }
   
   // If we are in setup mode, we force that page and hide navigation (via Layout logic)

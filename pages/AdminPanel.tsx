@@ -14,67 +14,7 @@ import ProfileModal from '../components/ProfileModal';
 import Logo from '../components/ui/Logo';
 import { useScreen } from '../hooks/useScreen';
 
-const AdminHeader: React.FC<{ theme: Theme; toggleTheme: () => void; }> = ({ theme, toggleTheme }) => {
-    const { user, logout } = useAuth();
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-    const getInitials = (name: string) => {
-        return name
-            .split(' ')
-            .map(part => part[0])
-            .slice(0, 2)
-            .join('')
-            .toUpperCase();
-    };
-
-    return (
-        <>
-            <header className="flex justify-between items-center p-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-b border-[var(--border-light)] dark:border-[var(--border-dark)] z-10 sticky top-0">
-                <div className="flex items-center gap-3">
-                    <Logo className="w-10 h-10 text-[var(--accent)]" />
-                    <div className="flex flex-col">
-                        <h1 className="text-3xl font-brand font-bold text-brand-500 tracking-wide leading-none">Elevate</h1>
-                        <span className="text-[10px] text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-medium uppercase tracking-wide">Platform Management</span>
-                    </div>
-                </div>
-                <div className="flex items-center">
-                    <button
-                        onClick={toggleTheme}
-                        className="mr-4 p-2 rounded-lg text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-200"
-                        aria-label="Toggle theme"
-                    >
-                        {theme === 'light' ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
-                    </button>
-                     <div 
-                        className="flex items-center gap-3 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1.5 rounded-xl transition-colors"
-                        onClick={() => setIsProfileOpen(true)}
-                        role="button"
-                        tabIndex={0}
-                     >
-                        <div className="text-right hidden sm:block">
-                            <p className="font-semibold text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] leading-tight">{user?.name}</p>
-                            <p className="text-[10px] text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] font-bold uppercase tracking-wider">Super Admin</p>
-                        </div>
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 text-white flex items-center justify-center text-sm font-bold shadow-sm">
-                            {getInitials(user?.name || 'SA')}
-                        </div>
-                     </div>
-                    <button
-                        onClick={logout}
-                        className="ml-4 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                        aria-label="Logout"
-                    >
-                        <LogOutIcon />
-                    </button>
-                </div>
-            </header>
-            <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
-        </>
-    );
-};
-
-
-const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme, toggleTheme }) => {
+const AdminPanel: React.FC = () => {
     const [stats, setStats] = useState<CommunityStat[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -338,6 +278,10 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
                     <span className="font-medium">{stat.admin_count}</span>
                 </div>
                 <div className="flex justify-between">
+                    <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Staff:</span>
+                    <span className="font-medium">{stat.helpdesk_count} Helpdesk, {stat.security_count} Security</span>
+                </div>
+                <div className="flex justify-between">
                     <span className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Plan:</span>
                     <span className="font-medium">{stat.subscriptionType || 'Monthly'}</span>
                 </div>
@@ -361,90 +305,92 @@ const AdminPanel: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme
     );
 
     return (
-        <div className="flex flex-col h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)]">
-            <AdminHeader theme={theme} toggleTheme={toggleTheme} />
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-                <div className="max-w-7xl mx-auto">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold">Communities</h2>
-                        <div className="flex gap-2">
-                            <Button onClick={openCreateCommunityModal} leftIcon={<PlusIcon className="w-5 h-5" />}>
-                                {isMobile ? 'Create' : 'Create Community'}
-                            </Button>
-                        </div>
-                    </div>
-
-                    {loading && <Spinner />}
-                    {error && <p className="text-red-500">Error: {error}</p>}
-                    
-                    {!loading && !error && (
-                        isMobile ? (
-                            <div className="space-y-4">
-                                {stats.map(stat => renderMobileCommunityCard(stat))}
-                            </div>
-                        ) : (
-                            <Card className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead className="bg-black/5 dark:bg-white/5 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                                        <tr>
-                                            <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Community</th>
-                                            <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Type</th>
-                                            <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Subscription</th>
-                                            <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
-                                            <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                                        {stats.map(stat => (
-                                            <tr key={stat.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                                <td className="p-4">
-                                                    <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{stat.name}</div>
-                                                    <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{stat.address}</div>
-                                                    <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1 flex gap-2">
-                                                        <span>{stat.resident_count} Residents</span>
-                                                        <span className="text-gray-300 dark:text-gray-600">|</span>
-                                                        <span>{stat.admin_count} Admins</span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                                    {stat.communityType || 'N/A'}
-                                                </td>
-                                                <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                                    {stat.subscriptionType || 'N/A'}
-                                                    {stat.subscriptionStartDate && (
-                                                        <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                                            Since: {new Date(stat.subscriptionStartDate).toLocaleDateString()}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="p-4">
-                                                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                                        stat.status === 'active' 
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' 
-                                                            : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-                                                    }`}>
-                                                        {stat.status}
-                                                    </span>
-                                                </td>
-                                                <td className="p-4 text-right space-x-2">
-                                                    <button 
-                                                        onClick={() => openEditCommunityModal(stat)}
-                                                        className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] transition-colors p-1"
-                                                        title="Edit Details"
-                                                    >
-                                                        <PencilIcon className="w-5 h-5" />
-                                                    </button>
-                                                    <Button size="sm" onClick={() => openAddAdminModal(stat)}>Add Admin</Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </Card>
-                        )
-                    )}
+        <div className="space-y-6">
+            <div className="flex justify-between items-center animated-card">
+                <div>
+                    <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Communities</h2>
+                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Manage platform communities.</p>
                 </div>
-            </main>
+                <div className="flex gap-2">
+                    <Button onClick={openCreateCommunityModal} leftIcon={<PlusIcon className="w-5 h-5" />}>
+                        {isMobile ? 'Create' : 'Create Community'}
+                    </Button>
+                </div>
+            </div>
+
+            {loading && <div className="flex justify-center p-8"><Spinner /></div>}
+            {error && <div className="text-red-500 bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">Error: {error}</div>}
+            
+            {!loading && !error && (
+                isMobile ? (
+                    <div className="space-y-4">
+                        {stats.map(stat => renderMobileCommunityCard(stat))}
+                    </div>
+                ) : (
+                    <Card className="overflow-x-auto animated-card">
+                        <table className="w-full text-left">
+                            <thead className="bg-black/5 dark:bg-white/5 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                                <tr>
+                                    <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Community</th>
+                                    <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Type</th>
+                                    <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Subscription</th>
+                                    <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
+                                    <th className="p-4 font-semibold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                                {stats.map(stat => (
+                                    <tr key={stat.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                        <td className="p-4">
+                                            <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{stat.name}</div>
+                                            <div className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{stat.address}</div>
+                                            <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1 flex flex-wrap gap-2">
+                                                <span>{stat.resident_count} Residents</span>
+                                                <span className="text-gray-300 dark:text-gray-600">|</span>
+                                                <span>{stat.admin_count} Admins</span>
+                                                <span className="text-gray-300 dark:text-gray-600">|</span>
+                                                <span>{stat.helpdesk_count} Helpdesk</span>
+                                                <span className="text-gray-300 dark:text-gray-600">|</span>
+                                                <span>{stat.security_count} Security</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {stat.communityType || 'N/A'}
+                                        </td>
+                                        <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {stat.subscriptionType || 'N/A'}
+                                            {stat.subscriptionStartDate && (
+                                                <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                    Since: {new Date(stat.subscriptionStartDate).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                                stat.status === 'active' 
+                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' 
+                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                                            }`}>
+                                                {stat.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right space-x-2">
+                                            <button 
+                                                onClick={() => openEditCommunityModal(stat)}
+                                                className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--accent)] transition-colors p-1"
+                                                title="Edit Details"
+                                            >
+                                                <PencilIcon className="w-5 h-5" />
+                                            </button>
+                                            <Button size="sm" onClick={() => openAddAdminModal(stat)}>Add Admin</Button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </Card>
+                )
+            )}
 
              <Modal 
                 isOpen={isCommunityModalOpen} 

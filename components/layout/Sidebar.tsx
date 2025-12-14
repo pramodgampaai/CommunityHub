@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -19,6 +19,7 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] 
   { name: 'Directory', icon: UserGroupIcon },
   { name: 'Maintenance', icon: CurrencyRupeeIcon },
   { name: 'Expenses', icon: BanknotesIcon },
+  { name: 'Billing', icon: CalculatorIcon },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
@@ -30,6 +31,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   }
 
   const filteredNavItems = navItems.filter(item => {
+    // SuperAdmin view
+    if (user?.role === UserRole.SuperAdmin) {
+        return ['Dashboard', 'Billing'].includes(item.name);
+    }
+
     if (user?.role === UserRole.HelpdeskAgent) {
       return ['Notices', 'Help Desk'].includes(item.name);
     }
@@ -40,15 +46,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
         return ['Notices', 'Visitors', 'Directory'].includes(item.name);
     }
     if (user?.role === UserRole.Admin) {
-       // Admins see everything
-       return true; 
+       // Admins see everything except Billing
+       return item.name !== 'Billing'; 
     }
     if (user?.role === UserRole.Resident) {
-        // Residents see everything except Expenses
-        return item.name !== 'Expenses';
+        // Residents see everything except Expenses and Billing
+        return item.name !== 'Expenses' && item.name !== 'Billing';
     }
 
-    return true;
+    return false;
   });
 
   return (

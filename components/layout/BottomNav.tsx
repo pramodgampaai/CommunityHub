@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -19,6 +19,7 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; lab
     { name: 'Directory', icon: UserGroupIcon, label: 'Directory' },
     { name: 'Maintenance', icon: CurrencyRupeeIcon, label: 'Pay' },
     { name: 'Expenses', icon: BanknotesIcon, label: 'Expenses' },
+    { name: 'Billing', icon: CalculatorIcon, label: 'Billing' },
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
@@ -30,6 +31,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
   }
 
   const filteredNavItems = navItems.filter(item => {
+    if (user?.role === UserRole.SuperAdmin) {
+        return ['Dashboard', 'Billing'].includes(item.name);
+    }
+
     if (user?.role === UserRole.HelpdeskAgent) {
       return ['Notices', 'Help Desk'].includes(item.name);
     }
@@ -40,13 +45,13 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
         return ['Notices', 'Visitors', 'Directory'].includes(item.name);
     }
     if (user?.role === UserRole.Admin) {
-       return true;
+       return item.name !== 'Billing';
     }
     if (user?.role === UserRole.Resident) {
-        return item.name !== 'Expenses';
+        return item.name !== 'Expenses' && item.name !== 'Billing';
     }
     
-    return true;
+    return false;
   });
 
   return (

@@ -59,6 +59,9 @@ export interface MaintenanceConfiguration {
 export interface CommunityStat extends Community {
     resident_count: number;
     admin_count: number;
+    helpdesk_count: number;
+    security_count: number;
+    staff_count: number; // Aggregate of all staff roles for billing
     income_generated: number;
 }
 
@@ -275,4 +278,4 @@ export interface AuditLog {
     };
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup';
+export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing';
