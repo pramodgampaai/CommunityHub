@@ -6,6 +6,7 @@ import type { Community, Block } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { PlusIcon, TrashIcon, CheckCircleIcon, AlertTriangleIcon, HomeIcon, CurrencyRupeeIcon } from '../components/icons';
 
 interface CommunitySetupProps {
@@ -23,6 +24,14 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
     const [error, setError] = useState<string | null>(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+
+    // Feedback State
+    const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+        isOpen: false,
+        type: 'success',
+        title: '',
+        message: ''
+    });
 
     // --- Landscape State ---
     const [blocks, setBlocks] = useState<Block[]>([]);
@@ -174,7 +183,12 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
 
             // If in Edit Mode AND user already has units, we are done
             if (isEditMode && userHasUnits) {
-                alert("Community configuration updated successfully.");
+                setFeedback({
+                    isOpen: true,
+                    type: 'success',
+                    title: 'Success',
+                    message: "Community configuration updated successfully."
+                });
                 onComplete();
             } else {
                 // Determine next step
@@ -189,7 +203,12 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
 
         } catch (err: any) {
             console.error("Save failed:", err);
-            setError(err.message || "Failed to save landscape.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Error',
+                message: err.message || "Failed to save landscape."
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -234,7 +253,12 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
 
         } catch (err: any) {
             console.error("Residence save failed:", err);
-            setError(err.message || "Failed to assign unit.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Error',
+                message: err.message || "Failed to assign unit."
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -593,6 +617,14 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                     )}
                 </Card>
             </div>
+            
+            <FeedbackModal 
+                isOpen={feedback.isOpen} 
+                onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+                title={feedback.title} 
+                message={feedback.message} 
+                type={feedback.type} 
+            />
         </div>
     );
 };

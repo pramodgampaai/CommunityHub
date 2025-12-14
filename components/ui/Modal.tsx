@@ -8,13 +8,14 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer, size = 'md' }) => {
   if (!isOpen) return null;
 
   const sizeClasses = {
+      sm: 'max-w-sm',
       md: 'max-w-md',
       lg: 'max-w-lg',
       xl: 'max-w-xl',

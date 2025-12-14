@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { useAuth } from '../hooks/useAuth';
 import { PlusIcon, TrashIcon, ClockIcon, AlertTriangleIcon, EyeSlashIcon, CheckCircleIcon, HistoryIcon } from '../components/icons';
 
@@ -54,6 +55,14 @@ const Amenities: React.FC = () => {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newCapacity, setNewCapacity] = useState<number>(10);
   const [newMaxDuration, setNewMaxDuration] = useState<number>(0);
+
+  // Feedback State
+  const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+      isOpen: false,
+      type: 'success',
+      title: '',
+      message: ''
+  });
 
   // Generic Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -188,7 +197,12 @@ const Amenities: React.FC = () => {
             endTime: endDateTime.toISOString(),
         }, user);
         
-        alert(`Booking for ${selectedAmenity?.name} confirmed!`);
+        setFeedback({
+            isOpen: true,
+            type: 'success',
+            title: 'Booking Confirmed',
+            message: `Booking for ${selectedAmenity?.name} confirmed!`
+        });
         handleCloseBookingModal();
         fetchAmenitiesAndBookings(); // Refresh bookings
       } catch (error: any) {
@@ -217,7 +231,12 @@ const Amenities: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
         if (file.size > 1024 * 1024) {
-            alert("File too large. Please select an image under 1MB.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'File Too Large',
+                message: "Please select an image under 1MB."
+            });
             return;
         }
         const reader = new FileReader();
@@ -232,7 +251,12 @@ const Amenities: React.FC = () => {
     e.preventDefault();
     if (!user) return;
     if (!newImageUrl) {
-        alert("Please select an image.");
+        setFeedback({
+            isOpen: true,
+            type: 'error',
+            title: 'Missing Image',
+            message: "Please select an image."
+        });
         return;
     }
     setIsSubmitting(true);
@@ -253,7 +277,12 @@ const Amenities: React.FC = () => {
         await fetchAmenitiesAndBookings(); 
     } catch (error) {
         console.error("Failed to create amenity:", error);
-        alert("Failed to create amenity. Please try again.");
+        setFeedback({
+            isOpen: true,
+            type: 'error',
+            title: 'Error',
+            message: "Failed to create amenity. Please try again."
+        });
     } finally {
         setIsSubmitting(false);
     }
@@ -298,7 +327,12 @@ const Amenities: React.FC = () => {
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
       } catch (error: any) {
           console.error("Action failed", error);
-          alert(`Failed to perform action: ${error.message}`);
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Action Failed',
+              message: error.message || "Failed to perform action."
+          });
       } finally {
           setIsSubmitting(false);
       }
@@ -596,6 +630,13 @@ const Amenities: React.FC = () => {
         title="Amenities & Bookings History"
       />
 
+      <FeedbackModal 
+        isOpen={feedback.isOpen} 
+        onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+        title={feedback.title} 
+        message={feedback.message} 
+        type={feedback.type} 
+      />
     </div>
   );
 };

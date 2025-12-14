@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon, ClipboardDocumentListIcon, ShieldCheckIcon, UsersIcon, UserGroupIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
@@ -60,6 +61,14 @@ const HelpDesk: React.FC = () => {
   const [category, setCategory] = useState<ComplaintCategory>(ComplaintCategory.Other);
   const [selectedUnitId, setSelectedUnitId] = useState<string>(''); // For multi-unit owners
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Feedback State
+  const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+      isOpen: false,
+      type: 'success',
+      title: '',
+      message: ''
+  });
 
   // Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -161,7 +170,12 @@ const HelpDesk: React.FC = () => {
         await fetchComplaints(user.communityId); 
     } catch (error) {
         console.error("Failed to create complaint:", error);
-        alert("Failed to create complaint. Please try again.");
+        setFeedback({
+            isOpen: true,
+            type: 'error',
+            title: 'Error',
+            message: "Failed to create complaint. Please try again."
+        });
     } finally {
         setIsSubmitting(false);
     }
@@ -174,7 +188,12 @@ const HelpDesk: React.FC = () => {
         setComplaints(prev => prev.map(c => c.id === complaintId ? updatedComplaint : c));
     } catch (error) {
         console.error("Failed to update status", error);
-        alert("Failed to update complaint status.");
+        setFeedback({
+            isOpen: true,
+            type: 'error',
+            title: 'Error',
+            message: "Failed to update complaint status."
+        });
     } finally {
         setUpdatingId(null);
     }
@@ -189,7 +208,12 @@ const HelpDesk: React.FC = () => {
           setComplaints(prev => prev.map(c => c.id === complaintId ? { ...c, assignedTo: agentId, assignedToName: agent?.name || 'Assigned' } : c));
       } catch (error) {
           console.error("Failed to assign agent", error);
-          alert("Failed to assign agent.");
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Error',
+              message: "Failed to assign agent."
+          });
       } finally {
           setAssigningId(null);
       }
@@ -215,7 +239,12 @@ const HelpDesk: React.FC = () => {
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
       } catch (error: any) {
           console.error("Action error:", error);
-          alert("Action failed. Please try again.");
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Error',
+              message: "Action failed. Please try again."
+          });
       } finally {
           setIsSubmitting(false);
       }
@@ -637,6 +666,14 @@ const HelpDesk: React.FC = () => {
         onClose={() => setIsAuditOpen(false)}
         entityType="Complaint"
         title="Help Desk History"
+      />
+
+      <FeedbackModal 
+        isOpen={feedback.isOpen} 
+        onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+        title={feedback.title} 
+        message={feedback.message} 
+        type={feedback.type} 
       />
     </div>
   );

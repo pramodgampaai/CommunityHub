@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { PlusIcon, ClockIcon, PencilIcon, TrashIcon, EyeSlashIcon, HistoryIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
@@ -59,6 +60,14 @@ const NoticeBoard: React.FC = () => {
   // Edit State
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Feedback State
+  const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+      isOpen: false,
+      type: 'success',
+      title: '',
+      message: ''
+  });
+
   // Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
       isOpen: boolean;
@@ -100,7 +109,12 @@ const NoticeBoard: React.FC = () => {
       if (!user) return;
       
       if (validUntil && new Date(validFrom) > new Date(validUntil)) {
-          alert("End date cannot be before start date.");
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Validation Error',
+              message: "End date cannot be before start date."
+          });
           return;
       }
 
@@ -130,7 +144,12 @@ const NoticeBoard: React.FC = () => {
           await fetchNotices(user.communityId); // Refresh list
       } catch (error) {
           console.error("Failed to save notice:", error);
-          alert("Failed to save notice. Please try again.");
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Error',
+              message: "Failed to save notice. Please try again."
+          });
       } finally {
           setIsSubmitting(false);
       }
@@ -195,7 +214,12 @@ const NoticeBoard: React.FC = () => {
           await confirmConfig.action();
           setConfirmConfig(prev => ({ ...prev, isOpen: false }));
       } catch (error: any) {
-          alert("Action failed: " + error.message);
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Action Failed',
+              message: error.message || "An unexpected error occurred."
+          });
       } finally {
           setIsSubmitting(false);
       }
@@ -377,6 +401,14 @@ const NoticeBoard: React.FC = () => {
         onClose={() => setIsAuditOpen(false)}
         entityType="Notice"
         title="Notice Board History"
+      />
+
+      <FeedbackModal 
+        isOpen={feedback.isOpen} 
+        onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+        title={feedback.title} 
+        message={feedback.message} 
+        type={feedback.type} 
       />
     </div>
   );

@@ -6,6 +6,7 @@ import { UserRole, MaintenanceStatus } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, AlertTriangleIcon, HistoryIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useScreen } from '../hooks/useScreen';
@@ -70,6 +71,14 @@ const Directory: React.FC = () => {
     const [newPassword, setNewPassword] = useState('');
     const [newStaffLocation, setNewStaffLocation] = useState(''); // For staff "flat number"
     
+    // Feedback State
+    const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+        isOpen: false,
+        type: 'success',
+        title: '',
+        message: ''
+    });
+
     // New Unit List State (1:M)
     const [newUnits, setNewUnits] = useState<UnitFormData[]>([{
         block: '',
@@ -220,17 +229,32 @@ const Directory: React.FC = () => {
         e.preventDefault();
         
         if (!user || !user.communityId) {
-            alert("Error: Your account is missing a valid Community ID.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Error',
+                message: "Your account is missing a valid Community ID."
+            });
             return;
         }
 
         if (!isGeneralValid) {
-            alert("Please fill all mandatory General Info fields correctly.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Validation Error',
+                message: "Please fill all mandatory General Info fields correctly."
+            });
             return;
         }
 
         if (newRole === UserRole.Resident && !isUnitsValid) {
-            alert("Please ensure at least one Unit is added with all details.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Validation Error',
+                message: "Please ensure at least one Unit is added with all details."
+            });
             return;
         }
         
@@ -270,11 +294,21 @@ const Directory: React.FC = () => {
             }
             
             setIsModalOpen(false);
-            alert(`${newRole} added successfully!`);
+            setFeedback({
+                isOpen: true,
+                type: 'success',
+                title: 'Success',
+                message: `${newRole} added successfully!`
+            });
             await fetchResidents(communityId);
         } catch (error: any) {
             console.error("Failed to create user:", error);
-            alert(error.message || "Failed to create user.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Error',
+                message: error.message || "Failed to create user."
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -294,7 +328,12 @@ const Directory: React.FC = () => {
             setMaintenanceHistory(history);
         } catch (error) {
             console.error("Failed to fetch history", error);
-            alert("Could not load maintenance history.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Error',
+                message: "Could not load maintenance history."
+            });
         } finally {
             setIsHistoryLoading(false);
         }
@@ -931,6 +970,14 @@ const Directory: React.FC = () => {
                      </div>
                  )}
             </Modal>
+
+            <FeedbackModal 
+                isOpen={feedback.isOpen} 
+                onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+                title={feedback.title} 
+                message={feedback.message} 
+                type={feedback.type} 
+            />
         </div>
     );
 };
