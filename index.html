@@ -112,6 +112,46 @@
         50% { top: 100%; }
         100% { top: 0; }
       }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #D1D5DB; /* Gray 300 */
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #9CA3AF; /* Gray 400 */
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #4B5563; /* Gray 600 */
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #6B7280; /* Gray 500 */
+      }
+
+      /* Input Autofill Dark Mode Fix */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover, 
+      input:-webkit-autofill:focus, 
+      input:-webkit-autofill:active{
+          -webkit-box-shadow: 0 0 0 30px var(--card-bg-light) inset !important;
+          -webkit-text-fill-color: var(--text-light) !important;
+          transition: background-color 5000s ease-in-out 0s;
+      }
+      
+      .dark input:-webkit-autofill,
+      .dark input:-webkit-autofill:hover, 
+      .dark input:-webkit-autofill:focus, 
+      .dark input:-webkit-autofill:active{
+          -webkit-box-shadow: 0 0 0 30px var(--card-bg-dark) inset !important;
+          -webkit-text-fill-color: var(--text-dark) !important;
+      }
     </style>
   <script type="importmap">
 {

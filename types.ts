@@ -63,6 +63,14 @@ export interface CommunityStat extends Community {
     security_count: number;
     staff_count: number; // Aggregate of all staff roles for billing
     income_generated: number;
+    current_month_paid?: number; // New field for billing status
+}
+
+export interface FinancialHistory {
+    year: number;
+    totalCollected: number;
+    monthlyBreakdown: { month: string; amount: number; transactionCount: number }[];
+    communityBreakdown: { communityName: string; totalPaid: number }[];
 }
 
 export interface Unit {
@@ -264,8 +272,8 @@ export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
 export interface AuditLog {
     id: string;
     createdAt: string;
-    communityId: string;
     actorId: string;
+    communityId: string;
     actorName?: string; // Joined
     actorRole?: string; // Joined
     entity: string; // e.g. 'Complaint', 'Visitor'
@@ -275,6 +283,7 @@ export interface AuditLog {
         old?: any;
         new?: any;
         description?: string;
+        amount?: number; // For fallback payments
     };
 }
 

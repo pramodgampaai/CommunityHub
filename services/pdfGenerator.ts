@@ -1,7 +1,7 @@
 
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { CommunityStat } from "../types";
+import type { CommunityStat, FinancialHistory } from "../types";
 
 export const generateInvoice = (stat: CommunityStat) => {
     const doc = new jsPDF();
@@ -103,4 +103,57 @@ export const generateInvoice = (stat: CommunityStat) => {
 
     // Save
     doc.save(`Elevate_Invoice_${stat.name.replace(/\s+/g, '_')}_${dateStr}.pdf`);
+};
+
+export const generateAnnualReport = (data: FinancialHistory) => {
+    const doc = new jsPDF();
+    const dateStr = new Date().toLocaleDateString();
+
+    // Header
+    doc.setFontSize(24);
+    doc.setTextColor(20, 184, 166);
+    doc.text("Elevate Annual Financial Report", 14, 20);
+    
+    doc.setFontSize(14);
+    doc.setTextColor(100);
+    doc.text(`Fiscal Year: ${data.year}`, 14, 30);
+    
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${dateStr}`, 14, 35);
+
+    // Grand Total
+    doc.setFontSize(16);
+    doc.setTextColor(0);
+    doc.text(`Total Revenue Collected: Rs. ${data.totalCollected.toLocaleString()}`, 14, 50);
+
+    // Monthly Table
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Monthly Breakdown", 14, 65);
+
+    autoTable(doc, {
+        startY: 70,
+        head: [['Month', 'Transactions', 'Collected Amount']],
+        body: data.monthlyBreakdown.map(m => [m.month, m.transactionCount, `Rs. ${m.amount.toLocaleString()}`]),
+        theme: 'striped',
+        headStyles: { fillColor: [20, 184, 166] },
+        foot: [['Total', '-', `Rs. ${data.totalCollected.toLocaleString()}`]]
+    });
+
+    // Community Table
+    // @ts-ignore
+    const secondTableY = doc.lastAutoTable.finalY + 20;
+    
+    doc.setFontSize(12);
+    doc.text("Community Breakdown", 14, secondTableY - 5);
+
+    autoTable(doc, {
+        startY: secondTableY,
+        head: [['Community Name', 'Total Contributed']],
+        body: data.communityBreakdown.map(c => [c.communityName, `Rs. ${c.totalPaid.toLocaleString()}`]),
+        theme: 'grid',
+        headStyles: { fillColor: [55, 65, 81] } // Gray 700
+    });
+
+    doc.save(`Elevate_Annual_Report_${data.year}.pdf`);
 };

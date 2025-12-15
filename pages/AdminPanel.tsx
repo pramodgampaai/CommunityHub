@@ -436,7 +436,7 @@ const AdminPanel: React.FC = () => {
                     <div className="flex border-b border-[var(--border-light)] dark:border-[var(--border-dark)] mb-6">
                         <button
                             className={`flex-1 pb-2 text-sm font-medium transition-colors 
-                                ${activeTab === 'details' ? 'border-b-2 border-[var(--accent)] text-[var(--accent)]' : 'text-gray-500'}
+                                ${activeTab === 'details' ? 'border-b-2 border-[var(--accent)] text-[var(--accent)]' : 'text-gray-500 dark:text-gray-400'}
                             `}
                             onClick={() => setActiveTab('details')}
                             type="button"
@@ -445,8 +445,8 @@ const AdminPanel: React.FC = () => {
                         </button>
                         <button
                             className={`flex-1 pb-2 text-sm font-medium transition-colors 
-                                ${activeTab === 'contacts' ? 'border-b-2 border-[var(--accent)] text-[var(--accent)]' : 'text-gray-500'}
-                                ${!isDetailsValid ? 'opacity-50 cursor-not-allowed' : 'hover:text-[var(--text-light)]'}
+                                ${activeTab === 'contacts' ? 'border-b-2 border-[var(--accent)] text-[var(--accent)]' : 'text-gray-500 dark:text-gray-400'}
+                                ${!isDetailsValid ? 'opacity-50 cursor-not-allowed' : 'hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)]'}
                             `}
                             onClick={() => {
                                 if (isDetailsValid) setActiveTab('contacts');
@@ -458,8 +458,8 @@ const AdminPanel: React.FC = () => {
                         </button>
                         <button
                             className={`flex-1 pb-2 text-sm font-medium transition-colors 
-                                ${activeTab === 'pricing' ? 'border-b-2 border-[var(--accent)] text-[var(--accent)]' : 'text-gray-500'}
-                                ${!isDetailsValid || !isContactsValid ? 'opacity-50 cursor-not-allowed' : 'hover:text-[var(--text-light)]'}
+                                ${activeTab === 'pricing' ? 'border-b-2 border-[var(--accent)] text-[var(--accent)]' : 'text-gray-500 dark:text-gray-400'}
+                                ${!isDetailsValid || !isContactsValid ? 'opacity-50 cursor-not-allowed' : 'hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)]'}
                             `}
                             onClick={() => {
                                 if (isDetailsValid && isContactsValid) setActiveTab('pricing');
@@ -513,7 +513,7 @@ const AdminPanel: React.FC = () => {
                                 </p>
                                 {contacts.map((contact, index) => (
                                     <div key={index} className="bg-black/5 dark:bg-white/5 p-4 rounded-lg relative border border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                                        <h4 className="text-sm font-bold mb-3 text-[var(--text-light)] dark:text-[var(--text-dark)] Contact Person {index + 1}">Contact Person {index + 1}</h4>
+                                        <h4 className="text-sm font-bold mb-3 text-[var(--text-light)] dark:text-[var(--text-dark)]">Contact Person {index + 1}</h4>
                                         {contacts.length > 1 && (
                                             <button 
                                                 type="button" 

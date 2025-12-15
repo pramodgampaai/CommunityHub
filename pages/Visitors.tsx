@@ -121,7 +121,8 @@ const Visitors: React.FC = () => {
                 vehicleNumber,
                 purpose, 
                 expectedAt: new Date(expectedTime).toISOString(),
-                targetFlat: targetFlat || undefined 
+                // Map local targetFlat state to flatNumber property expected by createVisitor
+                flatNumber: targetFlat || undefined 
             }, user);
             
             setIsModalOpen(false);

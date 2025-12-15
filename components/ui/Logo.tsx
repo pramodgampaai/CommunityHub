@@ -30,11 +30,11 @@ const Logo: React.FC<LogoProps> = ({ className }) => {
       <rect x="12" y="38" width="24" height="30" fill="currentColor" fillOpacity="0.6" />
       {/* Roof Parapet */}
       <line x1="11" y1="38" x2="37" y2="38" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      {/* Window Grid to imply floors */}
-      <rect x="16" y="43" width="6" height="6" rx="1" fill="white" fillOpacity="0.4" />
-      <rect x="26" y="43" width="6" height="6" rx="1" fill="white" fillOpacity="0.4" />
-      <rect x="16" y="55" width="6" height="6" rx="1" fill="white" fillOpacity="0.4" />
-      <rect x="26" y="55" width="6" height="6" rx="1" fill="white" fillOpacity="0.4" />
+      {/* Window Grid - Using CSS classes to switch window color based on theme instead of hardcoded white */}
+      <rect x="16" y="43" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
+      <rect x="26" y="43" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
+      <rect x="16" y="55" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
+      <rect x="26" y="55" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
 
 
       {/* CENTER: High Rise Tower (Tallest, Modern Skyscraper) */}
@@ -45,12 +45,12 @@ const Logo: React.FC<LogoProps> = ({ className }) => {
       {/* Rooftop Antenna */}
       <line x1="50" y1="16" x2="50" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       
-      {/* Horizontal Floor Strips to imply height */}
-      <rect x="44" y="28" width="12" height="2" fill="white" fillOpacity="0.3" />
-      <rect x="44" y="36" width="12" height="2" fill="white" fillOpacity="0.3" />
-      <rect x="44" y="44" width="12" height="2" fill="white" fillOpacity="0.3" />
-      <rect x="44" y="52" width="12" height="2" fill="white" fillOpacity="0.3" />
-      <rect x="44" y="60" width="12" height="2" fill="white" fillOpacity="0.3" />
+      {/* Horizontal Floor Strips */}
+      <rect x="44" y="28" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
+      <rect x="44" y="36" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
+      <rect x="44" y="44" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
+      <rect x="44" y="52" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
+      <rect x="44" y="60" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
 
 
       {/* RIGHT: Villa / Duplex (Pitched Roof, House-like) */}
@@ -69,7 +69,7 @@ const Logo: React.FC<LogoProps> = ({ className }) => {
          strokeLinecap="round"
       />
       {/* Doorway */}
-      <rect x="73" y="56" width="6" height="12" fill="white" fillOpacity="0.4" />
+      <rect x="73" y="56" width="6" height="12" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
 
       {/* Foundation Line merging them */}
       <rect x="8" y="68" width="84" height="4" rx="2" fill="currentColor" />
