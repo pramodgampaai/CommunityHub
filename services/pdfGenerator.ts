@@ -2,6 +2,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { CommunityStat, FinancialHistory } from "../types";
+import type { MonthlyLedger } from "./api";
 
 export const generateInvoice = (stat: CommunityStat) => {
     const doc = new jsPDF();
@@ -157,3 +158,165 @@ export const generateAnnualReport = (data: FinancialHistory) => {
 
     doc.save(`Elevate_Annual_Report_${data.year}.pdf`);
 };
+
+export const generateLedgerReport = (data: MonthlyLedger, month: string, year: number, communityName: string) => {
+    const doc = new jsPDF();
+    const dateStr = new Date().toLocaleDateString();
+    
+    // Month handling
+    const dateObj = new Date(year, parseInt(month) - 1, 1);
+    const monthName = dateObj.toLocaleString('default', { month: 'long' });
+
+    const brandColor = [20, 184, 166]; // RGB for Teal
+    const darkColor = [31, 41, 55]; // Gray 800
+
+    // 1. Header Banner
+    doc.setFillColor(brandColor[0], brandColor[1], brandColor[2]);
+    doc.rect(0, 0, 210, 40, 'F');
+
+    // Branding
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(26);
+    doc.setFont("helvetica", "bold");
+    doc.text("Elevate", 14, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Community Management Platform", 14, 32);
+
+    // Report Title in Banner
+    doc.setFontSize(22);
+    doc.text("MONTHLY LEDGER", 196, 25, { align: 'right' });
+    doc.setFontSize(12);
+    doc.text(`${monthName.toUpperCase()} ${year}`, 196, 32, { align: 'right' });
+
+    // 2. Info Section
+    const startY = 55;
+    
+    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(communityName, 14, startY);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Report Generated: ${dateStr}`, 14, startY + 6);
+
+    // 3. Summary Cards (Rounded Rectangles)
+    // Card Y Position
+    const cardY = startY + 15;
+    const cardWidth = 55;
+    const cardHeight = 25;
+    const gap = 10;
+
+    // Card 1: Collected
+    doc.setFillColor(240, 253, 244); // Green 50
+    doc.setDrawColor(220, 252, 231); // Green 100
+    doc.roundedRect(14, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+    
+    doc.setFontSize(9);
+    doc.setTextColor(22, 163, 74); // Green 600
+    doc.text("TOTAL COLLECTED", 14 + 5, cardY + 8);
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Rs. ${data.collectedThisMonth.toLocaleString()}`, 14 + 5, cardY + 18);
+
+    // Card 2: Expenses
+    doc.setFillColor(254, 242, 242); // Red 50
+    doc.setDrawColor(254, 226, 226); // Red 100
+    doc.roundedRect(14 + cardWidth + gap, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(220, 38, 38); // Red 600
+    doc.text("TOTAL EXPENSES", 14 + cardWidth + gap + 5, cardY + 8);
+
+    doc.setFontSize(14);
+    doc.text(`Rs. ${data.expensesThisMonth.toLocaleString()}`, 14 + cardWidth + gap + 5, cardY + 18);
+
+    // Card 3: Pending
+    doc.setFillColor(255, 251, 235); // Amber 50
+    doc.setDrawColor(254, 243, 199); // Amber 100
+    doc.roundedRect(14 + (cardWidth + gap) * 2, cardY, cardWidth, cardHeight, 2, 2, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(217, 119, 6); // Amber 600
+    doc.text("PENDING DUES", 14 + (cardWidth + gap) * 2 + 5, cardY + 8);
+
+    doc.setFontSize(14);
+    doc.text(`Rs. ${data.pendingThisMonth.toLocaleString()}`, 14 + (cardWidth + gap) * 2 + 5, cardY + 18);
+
+
+    // 4. Ledger Table
+    const tableStartY = cardY + cardHeight + 15;
+
+    // Formatting helper
+    const formatCurrency = (amount: number, prefix = '') => {
+        return `${prefix} Rs. ${amount.toLocaleString()}`;
+    };
+
+    const tableBody = [
+        ['Opening Balance', '(Carry forward from previous month)', formatCurrency(data.previousBalance)],
+        ['+ Inflow', `Maintenance collected in ${monthName}`, formatCurrency(data.collectedThisMonth)],
+        ['- Outflow', `Expenses approved in ${monthName}`, formatCurrency(data.expensesThisMonth)],
+        ['= Closing Balance', `Available funds at end of ${monthName}`, formatCurrency(data.closingBalance)],
+    ];
+
+    autoTable(doc, {
+        startY: tableStartY,
+        head: [['Category', 'Description', 'Amount']],
+        body: tableBody,
+        theme: 'grid',
+        headStyles: { 
+            fillColor: [243, 244, 246], // Gray 100
+            textColor: [55, 65, 81],   // Gray 700
+            fontStyle: 'bold',
+            lineWidth: 0
+        },
+        styles: { 
+            fontSize: 11, 
+            cellPadding: 6,
+            textColor: [55, 65, 81],
+            lineColor: [229, 231, 235], // Gray 200
+            lineWidth: 0.1
+        },
+        columnStyles: {
+            0: { cellWidth: 50, fontStyle: 'bold' },
+            1: { cellWidth: 'auto' }, // Description takes remaining space
+            2: { cellWidth: 50, halign: 'right' }
+        },
+        didParseCell: function(data) {
+            // Styling logic
+            const rowIdx = data.row.index;
+            const colIdx = data.column.index;
+
+            // Inflow Row Amount
+            if (rowIdx === 1 && colIdx === 2) {
+                data.cell.styles.textColor = [22, 163, 74]; // Green
+            }
+            // Outflow Row Amount
+            if (rowIdx === 2 && colIdx === 2) {
+                data.cell.styles.textColor = [220, 38, 38]; // Red
+            }
+            // Closing Balance Row
+            if (rowIdx === 3) {
+                data.cell.styles.fillColor = [20, 184, 166]; // Teal 500
+                data.cell.styles.textColor = [255, 255, 255];
+                data.cell.styles.fontStyle = 'bold';
+            }
+        }
+    });
+
+    // --- Footer ---
+    const pageHeight = doc.internal.pageSize.height;
+    
+    doc.setDrawColor(229, 231, 235);
+    doc.line(14, pageHeight - 20, 196, pageHeight - 20);
+    
+    doc.setFontSize(9);
+    doc.setTextColor(156, 163, 175); // Gray 400
+    doc.text("System Generated Report • Elevate Community Manager", 105, pageHeight - 12, { align: 'center' });
+
+    doc.save(`Ledger_${monthName}_${year}.pdf`);
+}

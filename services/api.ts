@@ -608,3 +608,44 @@ export const getFinancialYears = async (): Promise<number[]> => {
     if (data.error) throw new Error(data.error);
     return data.years;
 };
+
+export interface MonthlyLedger {
+    previousBalance: number;
+    collectedThisMonth: number;
+    pendingThisMonth: number;
+    expensesThisMonth: number;
+    closingBalance: number;
+}
+
+export const getMonthlyLedger = async (communityId: string, month: number, year: number): Promise<MonthlyLedger> => {
+    // Explicitly using the deployed URL as requested
+    const FUNCTION_URL = "https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/get-monthly-ledger";
+    
+    // We need to manually get the token to authorize the fetch request since we aren't using the SDK's invoke here
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    const response = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ community_id: communityId, month, year })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        // Try to parse error text as JSON if possible to be cleaner
+        try {
+            const errObj = JSON.parse(errorText);
+            if (errObj.error) throw new Error(errObj.error);
+        } catch (e) {
+            // If parsing fails, throw the raw text
+        }
+        throw new Error(`Failed to fetch ledger: ${errorText}`);
+    }
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error);
+    return data;
+};

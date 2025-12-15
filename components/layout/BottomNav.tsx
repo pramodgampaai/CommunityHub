@@ -48,7 +48,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
        return item.name !== 'Billing';
     }
     if (user?.role === UserRole.Resident) {
-        return item.name !== 'Expenses' && item.name !== 'Billing';
+        return item.name !== 'Billing';
     }
     
     return false;

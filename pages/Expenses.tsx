@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { createExpense, getExpenses, approveExpense, rejectExpense } from '../services/api';
+import { createExpense, getExpenses, approveExpense, rejectExpense, getMonthlyLedger } from '../services/api';
 import type { Expense } from '../types';
 import { ExpenseCategory, ExpenseStatus, UserRole } from '../types';
 import Card from '../components/ui/Card';
@@ -8,9 +8,10 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
-import { PlusIcon, BanknotesIcon, FunnelIcon, AlertTriangleIcon, HistoryIcon } from '../components/icons';
+import { PlusIcon, BanknotesIcon, FunnelIcon, AlertTriangleIcon, HistoryIcon, ChevronDownIcon, ArrowDownTrayIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 import { useScreen } from '../hooks/useScreen';
+import { generateLedgerReport } from '../services/pdfGenerator';
 
 const StatusPill: React.FC<{ status: ExpenseStatus }> = ({ status }) => {
     const statusStyles: Record<ExpenseStatus, string> = {
@@ -28,6 +29,15 @@ const Expenses: React.FC = () => {
     const { user } = useAuth();
     const { isMobile } = useScreen();
     const [isAuditOpen, setIsAuditOpen] = useState(false);
+
+    // Month Selection State
+    // Default to current month YYYY-MM
+    const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+    // For Admins, allow toggling "View All Time" vs "Monthly"
+    const [viewMode, setViewMode] = useState<'monthly' | 'all'>('monthly');
+
+    // Report Generation State
+    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
     // Receipt Modal State (Quick View)
     const [viewReceiptUrl, setViewReceiptUrl] = useState<string | null>(null);
@@ -51,7 +61,7 @@ const Expenses: React.FC = () => {
     // Loading States
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Filter State
+    // Filter State (Admin Only)
     const [filterStatus, setFilterStatus] = useState<ExpenseStatus | 'All'>('All');
 
     // Generic Confirmation State
@@ -69,6 +79,10 @@ const Expenses: React.FC = () => {
         action: async () => {},
         isDestructive: false
     });
+
+    // Permission Helpers
+    const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.HelpdeskAdmin;
+    const isResident = user?.role === UserRole.Resident;
 
     const fetchExpensesData = async () => {
         if (!user?.communityId) return;
@@ -128,8 +142,29 @@ const Expenses: React.FC = () => {
         }
     };
     
+    const handleDownloadReport = async () => {
+        if (!user?.communityId) return;
+        setIsGeneratingReport(true);
+        try {
+            const [yearStr, monthStr] = selectedMonth.split('-');
+            const year = parseInt(yearStr);
+            const month = parseInt(monthStr);
+
+            const ledgerData = await getMonthlyLedger(user.communityId, month, year);
+            const communityName = user.communityName || "Community";
+            
+            generateLedgerReport(ledgerData, monthStr, year, communityName);
+
+        } catch (error: any) {
+            console.error("Failed to generate report", error);
+            alert("Failed to generate report: " + (error.message || "Unknown error"));
+        } finally {
+            setIsGeneratingReport(false);
+        }
+    };
+
     const handleApproveClick = (expense: Expense) => {
-        if (!user) return;
+        if (!user || !isAdmin) return;
         if (expense.submittedBy === user.id) {
             alert("Action Restricted: You cannot approve your own expense. It must be verified by another admin.");
             return;
@@ -143,7 +178,6 @@ const Expenses: React.FC = () => {
             isDestructive: false,
             action: async () => {
                  await approveExpense(expense.id, user.id);
-                 // Force a small delay to ensure DB write is propagated before read
                  await new Promise(resolve => setTimeout(resolve, 500));
                  await fetchExpensesData();
             }
@@ -164,7 +198,7 @@ const Expenses: React.FC = () => {
     };
 
     const handleRejectClick = (expense: Expense) => {
-        if (!user) return;
+        if (!user || !isAdmin) return;
         if (expense.submittedBy === user.id) {
              alert("Action Restricted: You cannot reject your own expense.");
              return;
@@ -213,42 +247,141 @@ const Expenses: React.FC = () => {
         }
     }
     
-    const filteredExpenses = expenses.filter(e => filterStatus === 'All' || e.status === filterStatus);
+    // --- Filtering Logic ---
+    const filteredExpenses = expenses.filter(e => {
+        // 1. Role-based Restriction
+        if (isResident) {
+            // Residents ONLY see Approved expenses
+            if (e.status !== ExpenseStatus.Approved) return false;
+        } else {
+            // Admin Filter
+            if (filterStatus !== 'All' && e.status !== filterStatus) return false;
+        }
 
-    // Calculate totals for summary cards
-    const currentMonthStr = new Date().toISOString().slice(0, 7);
-    const approvedExpensesThisMonth = expenses
-        .filter(e => e.status === ExpenseStatus.Approved && e.date.startsWith(currentMonthStr))
+        // 2. Date Filtering (Shared logic)
+        // Residents ALWAYS use monthly view. Admins use it if viewMode is 'monthly'.
+        if (isResident || viewMode === 'monthly') {
+            // Check if expense date matches selectedMonth (YYYY-MM)
+            if (!e.date.startsWith(selectedMonth)) return false;
+        }
+
+        return true;
+    });
+
+    // Calculate totals based on filtered view
+    const approvedTotal = filteredExpenses
+        .filter(e => e.status === ExpenseStatus.Approved)
         .reduce((sum, e) => sum + e.amount, 0);
         
-    const pendingAmount = expenses
+    const pendingTotal = expenses // Pending always calculates from global (or active month depending on desired UX, sticking to global pending usually useful for admins)
         .filter(e => e.status === ExpenseStatus.Pending)
         .reduce((sum, e) => sum + e.amount, 0);
 
     const detailViewData = selectedExpense ? parseDescription(selectedExpense.description) : null;
 
+    // Format selected month for display
+    const monthDisplay = new Date(selectedMonth + '-01').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center animated-card">
                 <div>
-                    <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Expenses</h2>
-                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base mt-1">Manage community expenditures.</p>
+                    <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                        {isResident ? 'Community Expenses' : 'Expenses'}
+                    </h2>
+                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-base mt-1">
+                        {isResident ? 'View approved community expenditures.' : 'Manage community expenditures.'}
+                    </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button 
-                        onClick={() => setIsAuditOpen(true)} 
-                        variant="outlined" 
-                        size="sm"
-                        leftIcon={<HistoryIcon className="w-4 h-4" />}
-                        className="border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                        History
-                    </Button>
-                    <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Log New Expense" variant="fab">
-                        <span className="hidden sm:inline">Log Expense</span>
-                        <span className="sm:hidden">Log</span>
-                    </Button>
+                    {isAdmin && (
+                        <>
+                            <Button 
+                                onClick={() => setIsAuditOpen(true)} 
+                                variant="outlined" 
+                                size="sm"
+                                leftIcon={<HistoryIcon className="w-4 h-4" />}
+                                className="border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            >
+                                History
+                            </Button>
+                            <Button onClick={() => setIsModalOpen(true)} leftIcon={<PlusIcon className="w-5 h-5"/>} aria-label="Log New Expense" variant="fab">
+                                <span className="hidden sm:inline">Log Expense</span>
+                                <span className="sm:hidden">Log</span>
+                            </Button>
+                        </>
+                    )}
                 </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+                    {/* Month Picker */}
+                    <div className="relative flex-1 md:flex-none w-full sm:w-auto">
+                        <label className="block text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Select Month</label>
+                        <div className="flex gap-2">
+                            <input 
+                                type="month" 
+                                value={selectedMonth} 
+                                onChange={(e) => {
+                                    setSelectedMonth(e.target.value);
+                                    if (isAdmin) setViewMode('monthly'); // Auto-switch to monthly if admin picks a date
+                                }}
+                                className="block w-full md:w-auto px-3 py-2 text-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
+                            />
+                            {/* Download Report Button */}
+                            <Button 
+                                size="sm" 
+                                variant="outlined" 
+                                onClick={handleDownloadReport}
+                                disabled={isGeneratingReport}
+                                title="Download Monthly Ledger Report"
+                                className="h-[38px] w-[38px] px-0 flex items-center justify-center border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            >
+                                {isGeneratingReport ? (
+                                    <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
+                                ) : (
+                                    <ArrowDownTrayIcon className="w-5 h-5" />
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                    
+                    {/* Admin Toggle View Mode */}
+                    {isAdmin && (
+                        <div className="flex items-end h-full pt-5 w-full sm:w-auto">
+                            <button 
+                                onClick={() => setViewMode(viewMode === 'monthly' ? 'all' : 'monthly')}
+                                className={`text-sm font-medium px-3 py-2 rounded-md transition-colors w-full sm:w-auto ${viewMode === 'all' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary-light)] hover:bg-black/5 dark:hover:bg-white/5'}`}
+                            >
+                                {viewMode === 'all' ? 'Showing All History' : 'View All History'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Admin Status Filter */}
+                {isAdmin && (
+                    <div className="relative w-full md:w-48">
+                        <label className="block text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Status Filter</label>
+                        <div className="relative">
+                            <select 
+                                value={filterStatus} 
+                                onChange={(e) => setFilterStatus(e.target.value as any)}
+                                className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
+                            >
+                                <option value="All">All Status</option>
+                                <option value={ExpenseStatus.Pending}>Pending</option>
+                                <option value={ExpenseStatus.Approved}>Approved</option>
+                                <option value={ExpenseStatus.Rejected}>Rejected</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                <FunnelIcon className="w-4 h-4" />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Summary Cards */}
@@ -256,44 +389,31 @@ const Expenses: React.FC = () => {
                 <Card className="p-4 border-l-4 border-l-green-500 animated-card">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Approved (This Month)</p>
-                            <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mt-1">₹{approvedExpensesThisMonth.toLocaleString()}</p>
+                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                {viewMode === 'monthly' || isResident ? `Approved (${monthDisplay})` : 'Total Approved (All Time)'}
+                            </p>
+                            <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mt-1">₹{approvedTotal.toLocaleString()}</p>
                         </div>
                         <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-600 dark:text-green-400">
                             <BanknotesIcon className="w-6 h-6" />
                         </div>
                     </div>
                 </Card>
-                 <Card className="p-4 border-l-4 border-l-yellow-500 animated-card" style={{ animationDelay: '100ms' }}>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Pending Approval</p>
-                            <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mt-1">₹{pendingAmount.toLocaleString()}</p>
+                
+                {/* Pending Card - Admin Only */}
+                {isAdmin && (
+                    <Card className="p-4 border-l-4 border-l-yellow-500 animated-card" style={{ animationDelay: '100ms' }}>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Pending Approval (Total)</p>
+                                <p className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mt-1">₹{pendingTotal.toLocaleString()}</p>
+                            </div>
+                            <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg text-yellow-600 dark:text-yellow-400">
+                                <BanknotesIcon className="w-6 h-6" />
+                            </div>
                         </div>
-                        <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg text-yellow-600 dark:text-yellow-400">
-                            <BanknotesIcon className="w-6 h-6" />
-                        </div>
-                    </div>
-                </Card>
-            </div>
-            
-            {/* Filter */}
-            <div className="flex justify-end">
-                <div className="relative w-full md:w-48">
-                    <select 
-                        value={filterStatus} 
-                        onChange={(e) => setFilterStatus(e.target.value as any)}
-                        className="appearance-none bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
-                    >
-                        <option value="All">All Status</option>
-                        <option value={ExpenseStatus.Pending}>Pending</option>
-                        <option value={ExpenseStatus.Approved}>Approved</option>
-                        <option value={ExpenseStatus.Rejected}>Rejected</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
-                        <FunnelIcon className="w-4 h-4" />
-                    </div>
-                </div>
+                    </Card>
+                )}
             </div>
 
             {/* List */}
@@ -304,7 +424,7 @@ const Expenses: React.FC = () => {
                 </div>
             ) : filteredExpenses.length === 0 ? (
                 <div className="p-12 text-center text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
-                    No expenses found.
+                    No {isResident ? 'approved' : ''} expenses found {viewMode === 'monthly' ? `for ${monthDisplay}` : ''}.
                 </div>
             ) : (
                 <div className="space-y-4">
@@ -349,8 +469,8 @@ const Expenses: React.FC = () => {
                                         <div className="mt-1"><StatusPill status={expense.status} /></div>
                                     </div>
                                     
-                                    {/* Action Buttons for Pending Expenses */}
-                                    {expense.status === ExpenseStatus.Pending && (
+                                    {/* Action Buttons for Pending Expenses (Admins Only) */}
+                                    {isAdmin && expense.status === ExpenseStatus.Pending && (
                                         expense.submittedBy !== user?.id ? (
                                             <div className="flex gap-2 w-full md:w-auto">
                                                 <Button 
@@ -399,7 +519,7 @@ const Expenses: React.FC = () => {
                 </div>
             )}
 
-            {/* Log Expense Modal */}
+            {/* Log Expense Modal (Admins Only) */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Log New Expense">
                 <form className="space-y-4" onSubmit={handleFormSubmit}>
                     <div>
@@ -577,8 +697,8 @@ const Expenses: React.FC = () => {
                         <div className="flex justify-end pt-4 gap-2">
                             <Button variant="outlined" onClick={() => setSelectedExpense(null)}>Close</Button>
                             
-                            {/* Allow actions from modal too if pending */}
-                            {selectedExpense.status === ExpenseStatus.Pending && selectedExpense.submittedBy !== user?.id && (
+                            {/* Allow actions from modal too if pending AND Admin */}
+                            {isAdmin && selectedExpense.status === ExpenseStatus.Pending && selectedExpense.submittedBy !== user?.id && (
                                 <>
                                     <Button 
                                         variant="outlined" 

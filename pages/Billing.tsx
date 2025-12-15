@@ -5,7 +5,7 @@ import type { CommunityStat, FinancialHistory } from '../types';
 import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
 import ErrorCard from '../components/ui/ErrorCard';
-import { CalculatorIcon, CurrencyRupeeIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, ChevronDownIcon, CheckCircleIcon, BanknotesIcon } from '../components/icons';
+import { CalculatorIcon, CurrencyRupeeIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, ChevronDownIcon, CheckCircleIcon, BanknotesIcon, FunnelIcon } from '../components/icons';
 import { generateInvoice, generateAnnualReport } from '../services/pdfGenerator';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -29,6 +29,7 @@ const Billing: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [paymentFilter, setPaymentFilter] = useState<'All' | 'Paid' | 'Unpaid'>('All');
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
     // Payment Modal State
@@ -171,10 +172,31 @@ const Billing: React.FC = () => {
         };
     }, { total: 0, resident: 0, admin: 0, staff: 0 });
 
-    const filteredStats = stats.filter(stat => 
-        stat.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        stat.address.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredStats = stats.filter(stat => {
+        const matchesSearch = stat.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              stat.address.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        if (!matchesSearch) return false;
+
+        if (paymentFilter === 'All') return true;
+
+        // Re-calculate to determine status for filtering
+        const residentPrice = stat.pricePerUser?.resident || 0;
+        const adminPrice = stat.pricePerUser?.admin || 0;
+        const staffPrice = stat.pricePerUser?.staff || 0;
+
+        const residentTotal = stat.resident_count * residentPrice;
+        const adminTotal = stat.admin_count * adminPrice;
+        const staffTotal = stat.staff_count * staffPrice;
+        const communityTotal = residentTotal + adminTotal + staffTotal;
+        
+        const isPaid = (stat.current_month_paid || 0) >= communityTotal && communityTotal > 0;
+
+        if (paymentFilter === 'Paid') return isPaid;
+        if (paymentFilter === 'Unpaid') return !isPaid;
+
+        return true;
+    });
 
     const getPercent = (part: number, total: number) => total > 0 ? (part / total) * 100 : 0;
 
@@ -271,9 +293,9 @@ const Billing: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Search & List */}
-                    <div className="sticky top-[72px] z-10 -mx-4 px-4 py-2 bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] backdrop-blur-md bg-opacity-90">
-                        <div className="relative max-w-full">
+                    {/* Search & Filter */}
+                    <div className="sticky top-[72px] z-10 -mx-4 px-4 py-2 bg-gray-50/90 dark:bg-gray-900/90 backdrop-blur-md flex flex-col sm:flex-row gap-3 transition-colors">
+                        <div className="relative flex-1">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <MagnifyingGlassIcon className="h-5 w-5 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]" />
                             </div>
@@ -285,12 +307,26 @@ const Billing: React.FC = () => {
                                 className="block w-full pl-10 pr-4 py-3 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-all"
                             />
                         </div>
+                        <div className="relative w-full sm:w-40">
+                            <select 
+                                value={paymentFilter} 
+                                onChange={(e) => setPaymentFilter(e.target.value as any)}
+                                className="appearance-none block w-full pl-3 pr-8 py-3 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-[var(--text-light)] dark:text-[var(--text-dark)]"
+                            >
+                                <option value="All">All Status</option>
+                                <option value="Paid">Paid</option>
+                                <option value="Unpaid">Unpaid</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                <FunnelIcon className="w-4 h-4" />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="space-y-4">
                         {filteredStats.length === 0 ? (
                             <div className="text-center py-12 text-[var(--text-secondary-light)] border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-xl">
-                                No communities found matching "{searchQuery}".
+                                No communities found matching criteria.
                             </div>
                         ) : (
                             filteredStats.map((stat, index) => {

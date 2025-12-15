@@ -37,25 +37,32 @@ serve(async (req: any) => {
         throw new Error('Unauthorized access to community data')
     }
 
-    // Allow Security, Admin, SuperAdmin to view all visitors
-    const allowedRoles = ['Security', 'SecurityAdmin', 'Admin', 'SuperAdmin'];
-    // Case-insensitive check
+    // Allow Security, Admin, SuperAdmin AND Residents
+    const allowedRoles = ['Security', 'SecurityAdmin', 'Admin', 'SuperAdmin', 'Resident'];
     const userRole = profile.role ? profile.role : '';
     const isAllowed = allowedRoles.some(r => r.toLowerCase() === userRole.toLowerCase());
 
     if (!isAllowed) {
          return new Response(
-            JSON.stringify({ error: 'Unauthorized: Residents must use standard API' }),
+            JSON.stringify({ error: 'Unauthorized: Access denied' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
         );
     }
 
     // Fetch Visitors (Service Role bypasses RLS)
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
         .from('visitors')
         .select('*')
-        .eq('community_id', community_id)
-        .order('expected_at', { ascending: false });
+        .eq('community_id', community_id);
+
+    // If Resident, strictly filter by their own ID
+    if (userRole.toLowerCase() === 'resident') {
+        query = query.eq('user_id', user.id);
+    }
+
+    query = query.order('expected_at', { ascending: false });
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

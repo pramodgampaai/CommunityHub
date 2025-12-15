@@ -50,8 +50,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
        return item.name !== 'Billing'; 
     }
     if (user?.role === UserRole.Resident) {
-        // Residents see everything except Expenses and Billing
-        return item.name !== 'Expenses' && item.name !== 'Billing';
+        // Residents see everything except Billing
+        return item.name !== 'Billing';
     }
 
     return false;

@@ -32,7 +32,7 @@ serve(async (req: any) => {
     const { community_id } = await req.json()
     if (!community_id) throw new Error('Missing community_id')
 
-    // 3. Verify Role (Must be Admin, HelpdeskAdmin, SecurityAdmin OR HelpdeskAgent to use this bypass)
+    // 3. Verify Role
     const { data: profile } = await supabaseClient
         .from('users')
         .select('role, community_id')
@@ -43,28 +43,30 @@ serve(async (req: any) => {
         throw new Error('Unauthorized access to community data');
     }
 
-    const allowedRoles = ['admin', 'helpdeskadmin', 'securityadmin', 'superadmin', 'helpdeskagent'];
+    // Allowed roles now includes 'resident'
+    const allowedRoles = ['admin', 'helpdeskadmin', 'securityadmin', 'superadmin', 'helpdeskagent', 'resident'];
     const currentRole = profile.role ? profile.role.toLowerCase() : '';
     const isAllowed = allowedRoles.includes(currentRole);
 
     if (!isAllowed) {
         return new Response(
-            JSON.stringify({ error: 'Unauthorized: Resident access must use standard API' }),
+            JSON.stringify({ error: 'Unauthorized: Access denied' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403 }
         );
     }
 
-    // 4. Fetch Complaints (Bypassing RLS)
-    // We construct the query first
-    const query = supabaseClient
+    // 4. Fetch Complaints (Bypassing RLS via Service Role)
+    let query = supabaseClient
         .from('complaints')
         .select('*, assigned_user:users!assigned_to(name)')
-        .eq('community_id', community_id)
-        .order('created_at', { ascending: false });
+        .eq('community_id', community_id);
 
-    // NOTE: We removed the strict server-side filter for 'helpdeskagent'. 
-    // We now send all community tickets to the agent, allowing the Client UI 
-    // to filter "My Tasks" vs "Unassigned". This prevents the "empty list" bug.
+    // If Resident, strictly filter by their own ID
+    if (currentRole === 'resident') {
+        query = query.eq('user_id', user.id);
+    }
+
+    query = query.order('created_at', { ascending: false });
 
     const { data: complaints, error: fetchError } = await query;
 

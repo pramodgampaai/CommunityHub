@@ -106,8 +106,6 @@ function App() {
         } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
             const allowed = ['Notices', 'Visitors', 'Directory'];
             if (!allowed.includes(activePage)) setActivePage('Visitors');
-        } else if (user.role !== UserRole.Admin && activePage === 'Expenses') {
-            setActivePage('Dashboard');
         } else if (user.role !== UserRole.SuperAdmin && activePage === 'Billing') {
             setActivePage('Dashboard');
         }
@@ -180,7 +178,8 @@ function App() {
   }
 
   // Define allowed pages per role for rendering check
-  let allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance'];
+  // Residents now include 'Expenses'
+  let allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance', 'Expenses'];
   
   if (user.role === UserRole.HelpdeskAgent) {
       allowedPages = ['Notices', 'Help Desk'];
@@ -188,8 +187,6 @@ function App() {
       allowedPages = ['Notices', 'Help Desk', 'Directory'];
   } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
       allowedPages = ['Notices', 'Visitors', 'Directory'];
-  } else if (user.role === UserRole.Admin) {
-      allowedPages.push('Expenses');
   }
 
   // If the user is on a restricted page, don't render content, just wait for useEffect to redirect
