@@ -67,31 +67,63 @@ serve(async (req: any) => {
     
     if (!requesterProfile) throw new Error('Requester profile not found');
 
-    if (requesterProfile.community_id !== community_id && requesterProfile.role !== 'SuperAdmin') {
+    const requesterRole = requesterProfile.role;
+
+    // 1. Community Scope Check (SuperAdmin exempt)
+    if (requesterRole !== 'SuperAdmin' && requesterProfile.community_id !== community_id) {
          return new Response(
             JSON.stringify({ error: 'Unauthorized: Cannot create users for a different community' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
-    
-    // Helpdesk Admin (formerly 'Helpdesk') can only create Agents
-    if (requesterProfile.role === 'HelpdeskAdmin' && role !== 'HelpdeskAgent') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: corsHeaders });
-    }
-    // Security Admin can only create Security (Guard)
-    if (requesterProfile.role === 'SecurityAdmin' && role !== 'Security') {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: corsHeaders });
+
+    // 2. Role Hierarchy Check
+    let isAllowed = false;
+    let errorMessage = 'Unauthorized operation.';
+
+    switch (requesterRole) {
+        case 'SuperAdmin':
+            isAllowed = true;
+            break;
+            
+        case 'Admin':
+            // Admins can create: Resident, Admin, SecurityAdmin, HelpdeskAdmin
+            // Admins CANNOT create: HelpdeskAgent, Security (Must use sub-admins)
+            if (role === 'HelpdeskAgent' || role === 'Security') {
+                isAllowed = false;
+                errorMessage = 'Unauthorized: Admins cannot create Agents or Guards directly. Please assign this to the respective Sub-Admin.';
+            } else {
+                isAllowed = true;
+            }
+            break;
+            
+        case 'HelpdeskAdmin':
+        case 'Helpdesk': // Legacy Role Support
+            if (role === 'HelpdeskAgent') {
+                isAllowed = true;
+            } else {
+                errorMessage = 'Unauthorized: Helpdesk Admin can only create Helpdesk Agents.';
+            }
+            break;
+            
+        case 'SecurityAdmin':
+            if (role === 'Security') {
+                isAllowed = true;
+            } else {
+                errorMessage = 'Unauthorized: Security Admin can only create Security Guards.';
+            }
+            break;
+            
+        default:
+            isAllowed = false;
+            errorMessage = 'Unauthorized: Your role does not have user creation privileges.';
     }
 
-    // Admins restrictions
-    if (requesterProfile.role === 'Admin') {
-         if (role === 'HelpdeskAgent') {
-              return new Response(JSON.stringify({ error: 'Unauthorized: Only Helpdesk Admin can create Agents' }), { status: 403, headers: corsHeaders });
-         }
-         if (role === 'Security') {
-              return new Response(JSON.stringify({ error: 'Unauthorized: Only Security Admin can create Security Guards' }), { status: 403, headers: corsHeaders });
-         }
-         // Admins can create SecurityAdmin, HelpdeskAdmin, Resident
+    if (!isAllowed) {
+        return new Response(
+            JSON.stringify({ error: errorMessage }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
     }
 
     // 1. Create Auth User
@@ -102,8 +134,17 @@ serve(async (req: any) => {
       user_metadata: { name }
     })
 
-    if (createError) throw createError
-    if (!user) throw new Error('User creation failed')
+    if (createError) {
+        // If user already exists, check if they are in the 'users' table.
+        // If not in 'users' table, we might want to recover them or just error out.
+        // Usually clearer to just pass the message.
+        return new Response(
+            JSON.stringify({ error: createError.message }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+    
+    if (!user) throw new Error('User creation failed');
 
     // 2. Insert into Public Users (Profile)
     let displayFlatNumber = role === 'Resident' && units && units.length > 0 
@@ -129,6 +170,7 @@ serve(async (req: any) => {
       })
 
     if (profileError) {
+      // Rollback auth creation if profile fails (keep DB clean)
       await supabaseClient.auth.admin.deleteUser(user.id);
       throw profileError
     }
@@ -173,21 +215,28 @@ serve(async (req: any) => {
                 }
 
                 if (monthlyAmount > 0) {
-                    const startDate = new Date(unit.maintenance_start_date);
+                    const parts = unit.maintenance_start_date.split('-');
+                    const startYear = parseInt(parts[0]);
+                    const startMonth = parseInt(parts[1]) - 1;
+                    const startDay = parseInt(parts[2]);
+
                     const now = new Date();
-                    const currentPeriodDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-                    let iterDate = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), 1));
+                    let currentPeriodDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+                    let iterDate = new Date(Date.UTC(startYear, startMonth, 1));
+                    
+                    // Fix: If start date is ahead of server month (Timezone diff), extend loop range
+                    if (iterDate > currentPeriodDate) {
+                        currentPeriodDate = new Date(iterDate);
+                    }
                     
                     const newRecords = [];
 
                     while (iterDate <= currentPeriodDate) {
                         let finalAmount = monthlyAmount;
                         
-                        if (iterDate.getFullYear() === startDate.getFullYear() && iterDate.getMonth() === startDate.getMonth()) {
-                            const year = startDate.getFullYear();
-                            const month = startDate.getMonth();
-                            const daysInMonth = new Date(year, month + 1, 0).getDate();
-                            const daysRemaining = daysInMonth - startDate.getDate() + 1;
+                        if (iterDate.getUTCFullYear() === startYear && iterDate.getUTCMonth() === startMonth) {
+                            const daysInMonth = new Date(Date.UTC(startYear, startMonth + 1, 0)).getUTCDate();
+                            const daysRemaining = daysInMonth - startDay + 1;
                             
                             if (daysRemaining > 0 && daysRemaining < daysInMonth) {
                                 finalAmount = Math.round((monthlyAmount / daysInMonth) * daysRemaining);

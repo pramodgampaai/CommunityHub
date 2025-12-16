@@ -9,7 +9,7 @@ import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
 import FeedbackModal from '../components/ui/FeedbackModal';
-import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon, ClipboardDocumentListIcon, ShieldCheckIcon, UsersIcon, UserGroupIcon } from '../components/icons';
+import { PlusIcon, ChevronDownIcon, CheckCircleIcon, HistoryIcon, ClipboardDocumentListIcon, ShieldCheckIcon, UsersIcon, UserGroupIcon, ClockIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const StatusBadge: React.FC<{ status: ComplaintStatus }> = ({ status }) => {
@@ -53,7 +53,7 @@ const HelpDesk: React.FC = () => {
   
   // Routing / View State
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('unassigned');
-  const [activeAgentTab, setActiveAgentTab] = useState<AgentTab>('mine');
+  const [activeAgentTab, setActiveAgentTab] = useState<AgentTab>('unassigned'); // Default to Inbox for Agents
 
   // Form state
   const [title, setTitle] = useState('');
@@ -276,15 +276,25 @@ const HelpDesk: React.FC = () => {
       // 3. Helpdesk Agent: Distinct Tabs
       if (isAgent) {
           if (activeAgentTab === 'mine') {
-              // Assigned to Me AND Active
-              return complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved);
+              // Assigned to Me AND InProgress
+              // Completed tasks move to History
+              return complaints.filter(c => 
+                  c.assignedTo === user?.id && 
+                  c.status === ComplaintStatus.InProgress
+              );
           }
-          if (activeAgentTab === 'unassigned') {
-              // Unassigned work (Cherry Picking)
-              return complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved);
+          if (activeAgentTab === 'unassigned') { // Label: Inbox
+              // Unassigned work (Cherry Picking) OR (Assigned to Me AND Pending)
+              return complaints.filter(c => 
+                  (!c.assignedTo && c.status !== ComplaintStatus.Resolved) ||
+                  (c.assignedTo === user?.id && c.status === ComplaintStatus.Pending)
+              );
           }
-          // My History
-          return complaints.filter(c => c.assignedTo === user?.id && c.status === ComplaintStatus.Resolved);
+          // My History: Resolved OR Completed
+          return complaints.filter(c => 
+              c.assignedTo === user?.id && 
+              (c.status === ComplaintStatus.Resolved || c.status === ComplaintStatus.Completed)
+          );
       }
 
       // 4. Resident: See what API returned (Own)
@@ -293,12 +303,21 @@ const HelpDesk: React.FC = () => {
 
   const displayedComplaints = getFilteredComplaints();
   
-  // Badge Counts for Helpdesk Admin
-  const unassignedCount = complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved).length;
-  const myAdminCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
+  // --- Badge Calculations ---
+  // Admin
+  const adminUnassignedCount = complaints.filter(c => !c.assignedTo && c.status !== ComplaintStatus.Resolved).length;
+  const adminMyCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
   
-  // Badge Counts for Agent
-  const myAgentCount = complaints.filter(c => c.assignedTo === user?.id && c.status !== ComplaintStatus.Resolved).length;
+  // Agent
+  const agentInboxCount = complaints.filter(c => 
+      (!c.assignedTo && c.status !== ComplaintStatus.Resolved) || 
+      (c.assignedTo === user?.id && c.status === ComplaintStatus.Pending)
+  ).length;
+  
+  const agentMyTasksCount = complaints.filter(c => 
+      c.assignedTo === user?.id && 
+      c.status === ComplaintStatus.InProgress
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -342,9 +361,9 @@ const HelpDesk: React.FC = () => {
               >
                   <ShieldCheckIcon className="w-4 h-4" />
                   <span>Inbox</span>
-                  {unassignedCount > 0 && (
+                  {adminUnassignedCount > 0 && (
                       <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
-                          {unassignedCount}
+                          {adminUnassignedCount}
                       </span>
                   )}
               </button>
@@ -357,9 +376,9 @@ const HelpDesk: React.FC = () => {
                   }`}
               >
                   <span>My Tasks</span>
-                  {myAdminCount > 0 && (
+                  {adminMyCount > 0 && (
                       <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
-                          {myAdminCount}
+                          {adminMyCount}
                       </span>
                   )}
               </button>
@@ -391,21 +410,6 @@ const HelpDesk: React.FC = () => {
       {isAgent && (
           <div className="flex space-x-1 p-1 bg-black/5 dark:bg-white/5 rounded-xl mb-4 animated-card overflow-x-auto">
               <button
-                  onClick={() => setActiveAgentTab('mine')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
-                      activeAgentTab === 'mine'
-                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
-                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
-                  }`}
-              >
-                  <span>My Tasks</span>
-                  {myAgentCount > 0 && (
-                      <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
-                          {myAgentCount}
-                      </span>
-                  )}
-              </button>
-              <button
                   onClick={() => setActiveAgentTab('unassigned')}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
                       activeAgentTab === 'unassigned'
@@ -415,9 +419,24 @@ const HelpDesk: React.FC = () => {
               >
                   <ShieldCheckIcon className="w-4 h-4" />
                   <span>Inbox</span>
-                  {unassignedCount > 0 && (
+                  {agentInboxCount > 0 && (
                       <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
-                          {unassignedCount}
+                          {agentInboxCount}
+                      </span>
+                  )}
+              </button>
+              <button
+                  onClick={() => setActiveAgentTab('mine')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                      activeAgentTab === 'mine'
+                          ? 'bg-white dark:bg-gray-800 text-[var(--accent)] shadow-sm ring-1 ring-black/5 dark:ring-white/10'
+                          : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white/50 dark:hover:bg-black/20'
+                  }`}
+              >
+                  <span>My Tasks</span>
+                  {agentMyTasksCount > 0 && (
+                      <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center font-bold">
+                          {agentMyTasksCount}
                       </span>
                   )}
               </button>
@@ -444,8 +463,8 @@ const HelpDesk: React.FC = () => {
                     <ClipboardDocumentListIcon className="w-12 h-12 mb-3 opacity-20" />
                     <p className="text-lg font-medium">No tickets found.</p>
                     {isHelpdeskAdmin && activeAdminTab === 'unassigned' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">Inbox clear! All tickets dispatched.</p>}
-                    {isAgent && activeAgentTab === 'mine' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">You have no pending tasks assigned to you.</p>}
-                    {isAgent && activeAgentTab === 'unassigned' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">No unassigned tickets available.</p>}
+                    {isAgent && activeAgentTab === 'mine' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">You have no active tasks in progress.</p>}
+                    {isAgent && activeAgentTab === 'unassigned' && <p className="text-sm mt-1 text-green-600 dark:text-green-400">No new tickets in inbox.</p>}
                 </div>
             ) : (
                 displayedComplaints.map((complaint, index) => {
@@ -466,10 +485,15 @@ const HelpDesk: React.FC = () => {
                         complaint.status === ComplaintStatus.InProgress && 
                         (isAdmin || isHelpdeskAdmin || (isAgent && isAssignedToMe));
 
-                    // 3. Assignment: STRICTLY restricted to Helpdesk Admin.
+                    // 3. Start Progress Action: Visible to Assigned Agent/Admin when Pending
+                    const canStart = !isResolved && !isCompleted && 
+                        complaint.status === ComplaintStatus.Pending && 
+                        (isAdmin || isHelpdeskAdmin || (isAgent && isAssignedToMe));
+
+                    // 4. Assignment: STRICTLY restricted to Helpdesk Admin.
                     const canAssign = isHelpdeskAdmin && !isResolved && !isCompleted;
 
-                    // 4. Agent "Cherry Pick": If unassigned, Agent can assign to self
+                    // 5. Agent "Cherry Pick": If unassigned, Agent can assign to self
                     const canSelfAssign = isAgent && isUnassigned && !isResolved && !isCompleted;
 
                     return (
@@ -516,6 +540,18 @@ const HelpDesk: React.FC = () => {
                                     <div className="flex items-center gap-2 w-full justify-end">
                                         <StatusBadge status={complaint.status} />
                                     </div>
+
+                                    {/* Staff: Start Progress (Assigned but Pending) */}
+                                    {canStart && (
+                                        <Button 
+                                            size="sm" 
+                                            className="text-xs py-1.5 px-3 w-full justify-center bg-blue-600 hover:bg-blue-700 text-white"
+                                            onClick={() => handleStatusChange(complaint.id, ComplaintStatus.InProgress)}
+                                            leftIcon={<ClockIcon className="w-3.5 h-3.5" />}
+                                        >
+                                            Start Progress
+                                        </Button>
+                                    )}
 
                                     {/* Staff: Mark Completed */}
                                     {canComplete && (

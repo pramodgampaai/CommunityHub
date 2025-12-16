@@ -1,83 +1,289 @@
 
+// ... (imports remain the same)
 import { supabase } from './supabase';
-import { Notice, Complaint, Visitor, Amenity, Booking, User, ComplaintCategory, ComplaintStatus, CommunityStat, Community, UserRole, CommunityType, Block, MaintenanceRecord, MaintenanceStatus, Unit, Expense, ExpenseCategory, ExpenseStatus, VisitorStatus, VisitorType, MaintenanceConfiguration, AuditLog, AuditAction, FinancialHistory } from '../types';
+import { 
+    User, Community, CommunityStat, Notice, Complaint, Visitor, 
+    Amenity, Booking, MaintenanceRecord, Expense, AuditLog, 
+    FinancialHistory, Unit, MaintenanceConfiguration, UserRole, 
+    ComplaintStatus, VisitorStatus, ExpenseStatus, NoticeType,
+    ComplaintCategory, VisitorType, ExpenseCategory, CommunityType,
+    CommunityContact, CommunityPricing, MaintenanceStatus
+} from '../types';
 
-export const getCommunity = async (id: string): Promise<Community> => {
-    const { data, error } = await supabase.from('communities').select('*').eq('id', id).single();
-    if (error) throw error;
-    return data;
-};
+export interface MonthlyLedger {
+    previousBalance: number;
+    collectedThisMonth: number;
+    pendingThisMonth: number;
+    expensesThisMonth: number;
+    closingBalance: number;
+}
 
-export const updateTheme = async (userId: string, theme: 'light' | 'dark'): Promise<void> => {
-    const { error } = await supabase.from('users').update({ theme }).eq('id', userId);
-    if (error) throw error;
-};
+// --- Auth & Users ---
 
-export const requestPasswordReset = async (email: string): Promise<void> => {
+export const requestPasswordReset = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/reset-password',
     });
     if (error) throw error;
 };
 
-export const getNotices = async (communityId: string): Promise<Notice[]> => {
-    const { data, error } = await supabase.from('notices').select('*').eq('community_id', communityId).order('created_at', { ascending: false });
-    if (error) throw error;
-    return data.map((n: any) => ({
-        ...n,
-        communityId: n.community_id,
-        validFrom: n.valid_from,
-        validUntil: n.valid_until,
-        createdAt: n.created_at
-    }));
+export const updateTheme = async (userId: string, theme: 'light' | 'dark') => {
+    const { error } = await supabase.from('users').update({ theme }).eq('id', userId);
+    if (error) console.error("Failed to update theme", error);
 };
 
-export const createNotice = async (notice: Partial<Notice>, user: User): Promise<void> => {
-    const { error } = await supabase.from('notices').insert({
-        title: notice.title,
-        content: notice.content,
-        type: notice.type,
-        community_id: user.communityId,
-        author: notice.author,
-        valid_from: notice.validFrom,
-        valid_until: notice.validUntil
+export const updateUserPassword = async (password: string) => {
+    const { error } = await supabase.functions.invoke('update-user-password', {
+        body: { password }
     });
     if (error) throw error;
 };
 
-export const updateNotice = async (id: string, updates: Partial<Notice>): Promise<void> => {
-    const payload: any = { ...updates };
-    if (updates.validFrom) payload.valid_from = updates.validFrom;
-    if (updates.validUntil) payload.valid_until = updates.validUntil;
-    delete payload.validFrom;
-    delete payload.validUntil;
+export const createAdminUser = async (data: any) => {
+    const { error } = await supabase.functions.invoke('create-admin-user', {
+        body: data
+    });
+    if (error) throw error;
+};
+
+export const createCommunityUser = async (data: any) => {
+    const { error } = await supabase.functions.invoke('create-community-user', {
+        body: data
+    });
+    if (error) throw error;
+};
+
+export const getResidents = async (communityId: string): Promise<User[]> => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*, units(*)')
+        .eq('community_id', communityId);
     
+    if (error) throw error;
+    
+    return data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role as UserRole,
+        communityId: u.community_id,
+        status: u.status,
+        avatarUrl: u.avatar_url,
+        flatNumber: u.flat_number,
+        units: u.units ? u.units.map((unit: any) => ({
+            id: unit.id,
+            userId: unit.user_id,
+            communityId: unit.community_id,
+            flatNumber: unit.flat_number,
+            block: unit.block,
+            floor: unit.floor,
+            flatSize: unit.flat_size,
+            maintenanceStartDate: unit.maintenance_start_date
+        })) : [],
+        theme: u.theme
+    }));
+};
+
+export const assignAdminUnit = async (unitData: any, user: User, community: Community) => {
+    const { error } = await supabase.functions.invoke('assign-unit', {
+        body: { 
+            unitData, 
+            communityId: community.id, 
+            userId: user.id 
+        }
+    });
+    if (error) throw error;
+};
+
+// --- Community ---
+
+export const getCommunity = async (id: string): Promise<Community> => {
+    const { data, error } = await supabase
+        .from('communities')
+        .select('*')
+        .eq('id', id)
+        .single();
+    
+    if (error) throw error;
+    
+    return {
+        id: data.id,
+        name: data.name,
+        address: data.address,
+        status: data.status,
+        communityType: data.community_type,
+        blocks: data.blocks,
+        maintenanceRate: data.maintenance_rate,
+        fixedMaintenanceAmount: data.fixed_maintenance_amount,
+        contacts: data.contact_info,
+        subscriptionType: data.subscription_type,
+        subscriptionStartDate: data.subscription_start_date,
+        pricePerUser: data.pricing_config
+    };
+};
+
+export const getCommunityStats = async (): Promise<CommunityStat[]> => {
+    const { data, error } = await supabase.functions.invoke('get-community-stats');
+    if (error) throw error;
+    
+    // Map DB snake_case to frontend camelCase
+    const stats: CommunityStat[] = (data.data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        address: item.address,
+        status: item.status,
+        communityType: item.community_type,
+        blocks: item.blocks,
+        maintenanceRate: item.maintenance_rate,
+        fixedMaintenanceAmount: item.fixed_maintenance_amount,
+        contacts: item.contact_info,
+        subscriptionType: item.subscription_type,
+        subscriptionStartDate: item.subscription_start_date,
+        pricePerUser: item.pricing_config,
+        // Counts are returned as snake_case from the edge function/SQL
+        resident_count: item.resident_count,
+        admin_count: item.admin_count,
+        helpdesk_count: item.helpdesk_count,
+        security_count: item.security_count,
+        staff_count: item.staff_count,
+        income_generated: item.income_generated,
+        current_month_paid: item.current_month_paid
+    }));
+
+    return stats;
+};
+
+export const createCommunity = async (data: any) => {
+    // Mapping frontend camelCase to DB snake_case
+    const payload = {
+        name: data.name,
+        address: data.address,
+        community_type: data.communityType,
+        blocks: data.blocks,
+        maintenance_rate: data.maintenanceRate,
+        fixed_maintenance_amount: data.fixedMaintenanceAmount,
+        contact_info: data.contacts,
+        subscription_type: data.subscriptionType,
+        subscription_start_date: data.subscriptionStartDate,
+        pricing_config: data.pricePerUser,
+        status: 'active'
+    };
+    
+    const { error } = await supabase.from('communities').insert(payload);
+    if (error) throw error;
+};
+
+export const updateCommunity = async (id: string, data: any) => {
+    const payload: any = {};
+    if (data.name) payload.name = data.name;
+    if (data.address) payload.address = data.address;
+    if (data.blocks) payload.blocks = data.blocks;
+    if (data.maintenanceRate !== undefined) payload.maintenance_rate = data.maintenanceRate;
+    if (data.fixedMaintenanceAmount !== undefined) payload.fixed_maintenance_amount = data.fixedMaintenanceAmount;
+    if (data.contacts) payload.contact_info = data.contacts;
+    if (data.subscriptionType) payload.subscription_type = data.subscriptionType;
+    if (data.subscriptionStartDate) payload.subscription_start_date = data.subscriptionStartDate;
+    if (data.pricePerUser) payload.pricing_config = data.pricePerUser;
+    
+    // Allow updating community type if passed
+    if (data.communityType) payload.community_type = data.communityType;
+
+    const { error } = await supabase.from('communities').update(payload).eq('id', id);
+    if (error) throw error;
+};
+
+export const deleteCommunity = async (id: string) => {
+    // This calls https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/delete-community
+    const { data, error } = await supabase.functions.invoke('delete-community', {
+        body: { community_id: id }
+    });
+    
+    if (error) {
+        console.error("Delete function invocation failed:", error);
+        throw error;
+    }
+    
+    // Check if function returned a logical error (e.g. 400 Bad Request)
+    if (data && data.error) {
+        throw new Error(data.error);
+    }
+};
+
+// --- Notices ---
+
+export const getNotices = async (communityId: string): Promise<Notice[]> => {
+    const { data, error } = await supabase
+        .from('notices')
+        .select('*')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        author: n.author,
+        createdAt: n.created_at,
+        type: n.type as NoticeType,
+        communityId: n.community_id,
+        validFrom: n.valid_from,
+        validUntil: n.valid_until
+    }));
+};
+
+export const createNotice = async (data: Partial<Notice>, user: User) => {
+    // This calls https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-notice
+    const { error } = await supabase.functions.invoke('create-notice', {
+        body: {
+            title: data.title,
+            content: data.content,
+            type: data.type,
+            author_name: user.name,
+            community_id: user.communityId,
+            valid_from: data.validFrom,
+            valid_until: data.validUntil
+        }
+    });
+    if (error) throw error;
+};
+
+export const updateNotice = async (id: string, data: Partial<Notice>) => {
+    const payload: any = {};
+    if (data.title) payload.title = data.title;
+    if (data.content) payload.content = data.content;
+    if (data.type) payload.type = data.type;
+    if (data.validFrom !== undefined) payload.valid_from = data.validFrom;
+    if (data.validUntil !== undefined) payload.valid_until = data.validUntil;
+
     const { error } = await supabase.from('notices').update(payload).eq('id', id);
     if (error) throw error;
 };
 
-export const deleteNotice = async (id: string): Promise<void> => {
+export const deleteNotice = async (id: string) => {
     const { error } = await supabase.from('notices').delete().eq('id', id);
     if (error) throw error;
 };
 
-export const getComplaints = async (communityId: string, userId?: string, role?: string): Promise<Complaint[]> => {
+// --- Complaints ---
+
+export const getComplaints = async (communityId: string, userId?: string, role?: UserRole): Promise<Complaint[]> => {
     const { data, error } = await supabase.functions.invoke('get-complaints', {
         body: { community_id: communityId }
     });
     
     if (error) throw error;
-    if (data.error) throw new Error(data.error);
-
-    return data.data.map((c: any) => ({
+    
+    const raw = data.data || [];
+    return raw.map((c: any) => ({
         id: c.id,
         title: c.title,
         description: c.description,
-        category: c.category,
-        status: c.status,
-        createdAt: c.created_at,
         residentName: c.resident_name,
         flatNumber: c.flat_number,
+        status: c.status as ComplaintStatus,
+        createdAt: c.created_at,
+        category: c.category as ComplaintCategory,
         userId: c.user_id,
         communityId: c.community_id,
         assignedTo: c.assigned_to,
@@ -85,12 +291,12 @@ export const getComplaints = async (communityId: string, userId?: string, role?:
     }));
 };
 
-export const createComplaint = async (complaint: Partial<Complaint>, user: User, unitId?: string, flatNumber?: string): Promise<void> => {
+export const createComplaint = async (data: Partial<Complaint>, user: User, unitId?: string, flatNumber?: string) => {
     const { error } = await supabase.functions.invoke('create-complaint', {
         body: {
-            title: complaint.title,
-            description: complaint.description,
-            category: complaint.category,
+            title: data.title,
+            description: data.description,
+            category: data.category,
             community_id: user.communityId,
             user_id: user.id,
             resident_name: user.name,
@@ -101,83 +307,52 @@ export const createComplaint = async (complaint: Partial<Complaint>, user: User,
     if (error) throw error;
 };
 
-export const updateComplaintStatus = async (id: string, status: ComplaintStatus): Promise<Complaint> => {
+export const updateComplaintStatus = async (id: string, status: ComplaintStatus) => {
     const { data, error } = await supabase.functions.invoke('update-complaint', {
         body: { id, status }
     });
     if (error) throw error;
-    if (data.error) throw new Error(data.error);
     
     const c = data.data;
     return {
         id: c.id,
         title: c.title,
         description: c.description,
-        category: c.category,
-        status: c.status,
-        createdAt: c.created_at,
         residentName: c.resident_name,
         flatNumber: c.flat_number,
+        status: c.status as ComplaintStatus,
+        createdAt: c.created_at,
+        category: c.category as ComplaintCategory,
         userId: c.user_id,
         communityId: c.community_id,
         assignedTo: c.assigned_to,
         assignedToName: c.assigned_user?.name
-    };
+    } as Complaint;
 };
 
-export const assignComplaint = async (complaintId: string, agentId: string): Promise<void> => {
+export const assignComplaint = async (id: string, agentId: string) => {
     const { error } = await supabase.functions.invoke('update-complaint', {
-        body: { id: complaintId, assigned_to: agentId }
+        body: { id, assigned_to: agentId }
     });
     if (error) throw error;
 };
 
-export const getResidents = async (communityId: string): Promise<User[]> => {
-    const { data, error } = await supabase
-        .from('users')
-        .select(`
-            *,
-            units (*)
-        `)
-        .eq('community_id', communityId);
-        
-    if (error) throw error;
-    return data.map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        status: u.status,
-        communityId: u.community_id,
-        flatNumber: u.flat_number,
-        avatarUrl: u.avatar_url,
-        units: u.units ? u.units.map((unit: any) => ({
-            id: unit.id,
-            userId: unit.user_id,
-            communityId: unit.community_id,
-            flatNumber: unit.flat_number,
-            block: unit.block,
-            floor: unit.floor,
-            flatSize: unit.flat_size,
-            maintenanceStartDate: unit.maintenance_start_date
-        })) : []
-    }));
-};
+// --- Visitors ---
 
-export const getVisitors = async (communityId: string, role?: string): Promise<Visitor[]> => {
+export const getVisitors = async (communityId: string, role?: UserRole): Promise<Visitor[]> => {
     const { data, error } = await supabase.functions.invoke('get-visitors', {
         body: { community_id: communityId }
     });
     if (error) throw error;
-    if (data.error) throw new Error(data.error);
     
-    return data.data.map((v: any) => ({
+    const raw = data.data || [];
+    return raw.map((v: any) => ({
         id: v.id,
         name: v.name,
-        visitorType: v.visitor_type,
+        visitorType: v.visitor_type as VisitorType,
         vehicleNumber: v.vehicle_number,
         purpose: v.purpose,
-        status: v.status,
+        status: v.status as VisitorStatus,
         expectedAt: v.expected_at,
         validUntil: v.valid_until,
         entryTime: v.entry_time,
@@ -190,60 +365,64 @@ export const getVisitors = async (communityId: string, role?: string): Promise<V
     }));
 };
 
-export const createVisitor = async (visitor: Partial<Visitor>, user: User): Promise<Visitor> => {
-    const token = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const { data, error } = await supabase.from('visitors').insert({
-        name: visitor.name,
-        visitor_type: visitor.visitorType,
-        vehicle_number: visitor.vehicleNumber,
-        purpose: visitor.purpose,
-        expected_at: visitor.expectedAt,
-        status: 'Expected',
+export const createVisitor = async (data: Partial<Visitor>, user: User) => {
+    // Generating a simple token for QR/Entry
+    const entryToken = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    const { data: newVisitor, error } = await supabase.from('visitors').insert({
+        name: data.name,
+        visitor_type: data.visitorType,
+        vehicle_number: data.vehicleNumber,
+        purpose: data.purpose,
+        expected_at: data.expectedAt,
+        flat_number: data.flatNumber || user.flatNumber,
         resident_name: user.name,
-        flat_number: visitor.flatNumber || user.flatNumber,
         community_id: user.communityId,
         user_id: user.id,
-        entry_token: token
+        status: 'Expected',
+        entry_token: entryToken
     }).select().single();
 
     if (error) throw error;
     
     return {
-        id: data.id,
-        name: data.name,
-        visitorType: data.visitor_type,
-        vehicleNumber: data.vehicle_number,
-        purpose: data.purpose,
-        status: data.status,
-        expectedAt: data.expected_at,
-        entryToken: data.entry_token,
-        residentName: data.resident_name,
-        flatNumber: data.flat_number,
-        communityId: data.community_id,
-        userId: data.user_id
-    };
+        ...newVisitor,
+        visitorType: newVisitor.visitor_type,
+        vehicleNumber: newVisitor.vehicle_number,
+        expectedAt: newVisitor.expected_at,
+        entryToken: newVisitor.entry_token,
+        flatNumber: newVisitor.flat_number,
+        residentName: newVisitor.resident_name,
+        communityId: newVisitor.community_id,
+        userId: newVisitor.user_id
+    } as Visitor;
 };
 
-export const updateVisitorStatus = async (id: string, status: VisitorStatus): Promise<void> => {
+export const updateVisitorStatus = async (id: string, status: VisitorStatus) => {
     const update: any = { status };
     if (status === VisitorStatus.CheckedIn) update.entry_time = new Date().toISOString();
     if (status === VisitorStatus.CheckedOut) update.exit_time = new Date().toISOString();
-    
+
     const { error } = await supabase.from('visitors').update(update).eq('id', id);
     if (error) throw error;
 };
 
-export const verifyVisitorEntry = async (visitorId: string, token: string, user: User): Promise<void> => {
-    const { data, error } = await supabase.functions.invoke('verify-visitor', {
+export const verifyVisitorEntry = async (visitorId: string, token: string, user: User) => {
+    const { error } = await supabase.functions.invoke('verify-visitor', {
         body: { visitor_id: visitorId, entry_token: token }
     });
     if (error) throw error;
-    if (data.error) throw new Error(data.error);
 };
 
-export const checkOutVisitor = async (visitorId: string, user: User): Promise<void> => {
-    await updateVisitorStatus(visitorId, VisitorStatus.CheckedOut);
+export const checkOutVisitor = async (id: string, user: User) => {
+    const { error } = await supabase.from('visitors').update({
+        status: 'Checked Out',
+        exit_time: new Date().toISOString()
+    }).eq('id', id);
+    if (error) throw error;
 };
+
+// --- Amenities & Bookings ---
 
 export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
     const { data, error } = await supabase.from('amenities').select('*').eq('community_id', communityId);
@@ -260,32 +439,38 @@ export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
     }));
 };
 
-export const createAmenity = async (amenity: Partial<Amenity>, user: User): Promise<void> => {
+export const createAmenity = async (data: Partial<Amenity>, user: User) => {
     const { error } = await supabase.from('amenities').insert({
-        name: amenity.name,
-        description: amenity.description,
-        image_url: amenity.imageUrl,
-        capacity: amenity.capacity,
-        max_duration: amenity.maxDuration,
+        name: data.name,
+        description: data.description,
+        image_url: data.imageUrl,
+        capacity: data.capacity,
+        max_duration: data.maxDuration,
         community_id: user.communityId,
         status: 'Active'
     });
     if (error) throw error;
 };
 
-export const updateAmenity = async (amenityId: string, updates: Partial<Amenity>): Promise<void> => {
-    const { error } = await supabase.from('amenities').update(updates).eq('id', amenityId);
+export const updateAmenity = async (id: string, data: Partial<Amenity>) => {
+    const { error } = await supabase.from('amenities').update(data).eq('id', id);
     if (error) throw error;
 };
 
-export const deleteAmenity = async (amenityId: string): Promise<void> => {
-    const { error } = await supabase.from('amenities').delete().eq('id', amenityId);
+export const deleteAmenity = async (id: string) => {
+    const { error } = await supabase.from('amenities').delete().eq('id', id);
     if (error) throw error;
 };
 
 export const getBookings = async (communityId: string): Promise<Booking[]> => {
-    const { data, error } = await supabase.from('bookings').select('*').eq('community_id', communityId);
+    const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('community_id', communityId)
+        .gte('end_time', new Date().toISOString()); // Only future or current bookings
+    
     if (error) throw error;
+    
     return data.map((b: any) => ({
         id: b.id,
         amenityId: b.amenity_id,
@@ -297,40 +482,37 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
     }));
 };
 
-export const createBooking = async (booking: {amenityId: string, startTime: string, endTime: string}, user: User): Promise<void> => {
+export const createBooking = async (data: Partial<Booking>, user: User) => {
     const { error } = await supabase.from('bookings').insert({
-        amenity_id: booking.amenityId,
-        start_time: booking.startTime,
-        end_time: booking.endTime,
+        amenity_id: data.amenityId,
         user_id: user.id,
         resident_name: user.name,
         flat_number: user.flatNumber,
+        start_time: data.startTime,
+        end_time: data.endTime,
         community_id: user.communityId
     });
     if (error) throw error;
 };
 
-export const deleteBooking = async (bookingId: string): Promise<void> => {
-    const { error } = await supabase.from('bookings').delete().eq('id', bookingId);
+export const deleteBooking = async (id: string) => {
+    const { error } = await supabase.from('bookings').delete().eq('id', id);
     if (error) throw error;
 };
+
+// --- Maintenance ---
 
 export const getMaintenanceRecords = async (communityId: string, userId?: string): Promise<MaintenanceRecord[]> => {
     let query = supabase
         .from('maintenance_records')
-        .select(`
-            *,
-            users (name),
-            units (flat_number, block)
-        `)
-        .eq('community_id', communityId)
-        .order('period_date', { ascending: false });
-
+        .select('*, users(name), units(flat_number)')
+        .eq('community_id', communityId);
+    
     if (userId) {
         query = query.eq('user_id', userId);
     }
-
-    const { data, error } = await query;
+    
+    const { data, error } = await query.order('period_date', { ascending: false });
     if (error) throw error;
 
     return data.map((r: any) => ({
@@ -340,218 +522,30 @@ export const getMaintenanceRecords = async (communityId: string, userId?: string
         communityId: r.community_id,
         amount: r.amount,
         periodDate: r.period_date,
-        status: r.status,
+        status: r.status as MaintenanceStatus,
         paymentReceiptUrl: r.payment_receipt_url,
         upiTransactionId: r.upi_transaction_id,
         transactionDate: r.transaction_date,
         createdAt: r.created_at,
-        userName: r.users?.name || 'Unknown',
-        flatNumber: r.units ? (r.units.block ? `${r.units.block}-${r.units.flat_number}` : r.units.flat_number) : 'Unknown'
+        userName: r.users?.name,
+        flatNumber: r.units?.flat_number
     }));
 };
 
-export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, transactionDate: string): Promise<void> => {
+export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, date: string) => {
     const { error } = await supabase.from('maintenance_records').update({
         status: 'Submitted',
         payment_receipt_url: receiptUrl,
         upi_transaction_id: upiId,
-        transaction_date: transactionDate
+        transaction_date: date
     }).eq('id', recordId);
     if (error) throw error;
 };
 
-export const verifyMaintenancePayment = async (recordId: string): Promise<void> => {
+export const verifyMaintenancePayment = async (recordId: string) => {
     const { error } = await supabase.from('maintenance_records').update({
         status: 'Paid'
     }).eq('id', recordId);
-    if (error) throw error;
-};
-
-export const getExpenses = async (communityId: string): Promise<Expense[]> => {
-    const { data, error } = await supabase
-        .from('expenses')
-        .select(`
-            *,
-            submitted_user:users!submitted_by(name),
-            approved_user:users!approved_by(name)
-        `)
-        .eq('community_id', communityId)
-        .order('date', { ascending: false });
-        
-    if (error) throw error;
-    
-    return data.map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        amount: e.amount,
-        category: e.category,
-        description: e.description,
-        date: e.date,
-        submittedBy: e.submitted_by,
-        submittedByName: e.submitted_user?.name,
-        status: e.status,
-        approvedBy: e.approved_by,
-        approvedByName: e.approved_user?.name,
-        communityId: e.community_id,
-        createdAt: e.created_at,
-        receiptUrl: e.receipt_url
-    }));
-};
-
-export const createExpense = async (expense: Partial<Expense>, user: User): Promise<void> => {
-    const { error } = await supabase.from('expenses').insert({
-        title: expense.title,
-        amount: expense.amount,
-        category: expense.category,
-        description: expense.description,
-        date: expense.date,
-        receipt_url: expense.receiptUrl,
-        submitted_by: user.id,
-        community_id: user.communityId,
-        status: 'Pending'
-    });
-    if (error) throw error;
-};
-
-export const approveExpense = async (id: string, userId: string): Promise<void> => {
-    const { error } = await supabase.from('expenses').update({
-        status: 'Approved',
-        approved_by: userId
-    }).eq('id', id);
-    if (error) throw error;
-};
-
-export const rejectExpense = async (id: string, userId: string, reason: string): Promise<void> => {
-    const { data: current } = await supabase.from('expenses').select('description').eq('id', id).single();
-    const newDesc = `${current?.description || ''}\n[REJECTION REASON]: ${reason}`;
-    
-    const { error } = await supabase.from('expenses').update({
-        status: 'Rejected',
-        approved_by: userId,
-        description: newDesc
-    }).eq('id', id);
-    if (error) throw error;
-};
-
-export const getAuditLogs = async (communityId: string, userId: string, role: string): Promise<AuditLog[]> => {
-    const { data, error } = await supabase
-        .from('audit_logs')
-        .select(`
-            *,
-            users (name, role)
-        `)
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false });
-        
-    if (error) throw error;
-    
-    return data.map((log: any) => ({
-        id: log.id,
-        createdAt: log.created_at,
-        actorId: log.actor_id,
-        communityId: log.community_id,
-        actorName: log.users?.name || 'System',
-        actorRole: log.users?.role || 'System',
-        entity: log.entity,
-        entityId: log.entity_id,
-        action: log.action,
-        details: log.details
-    }));
-};
-
-export const getCommunityStats = async (): Promise<CommunityStat[]> => {
-    const { data, error } = await supabase.functions.invoke('get-community-stats');
-    if (error) throw error;
-    if (data.error) throw new Error(data.error);
-    
-    return data.data.map((c: any) => ({ 
-        id: c.id, 
-        name: c.name, 
-        address: c.address, 
-        status: c.status, 
-        communityType: c.community_type, 
-        blocks: c.blocks, 
-        maintenanceRate: c.maintenance_rate, 
-        fixedMaintenanceAmount: c.fixed_maintenance_amount, 
-        contacts: c.contact_info, 
-        subscriptionType: c.subscription_type, 
-        subscriptionStartDate: c.subscription_start_date, 
-        pricePerUser: c.pricing_config, 
-        resident_count: c.resident_count || 0, 
-        admin_count: c.admin_count || 0, 
-        helpdesk_count: c.helpdesk_count || 0, 
-        security_count: c.security_count || 0,
-        staff_count: c.staff_count || 0,
-        income_generated: c.income_generated || 0,
-        current_month_paid: c.current_month_paid || 0
-    }));
-};
-
-export const createCommunity = async (data: any): Promise<void> => {
-    const { error } = await supabase.from('communities').insert({
-        name: data.name,
-        address: data.address,
-        community_type: data.communityType,
-        blocks: data.blocks,
-        contact_info: data.contacts,
-        subscription_type: data.subscriptionType,
-        subscription_start_date: data.subscriptionStartDate,
-        pricing_config: data.pricePerUser,
-        status: 'active'
-    });
-    if (error) throw error;
-};
-
-export const updateCommunity = async (id: string, data: any): Promise<void> => {
-    const payload: any = {};
-    if (data.name) payload.name = data.name;
-    if (data.address) payload.address = data.address;
-    if (data.blocks) payload.blocks = data.blocks;
-    if (data.maintenanceRate !== undefined) payload.maintenance_rate = data.maintenanceRate;
-    if (data.fixedMaintenanceAmount !== undefined) payload.fixed_maintenance_amount = data.fixedMaintenanceAmount;
-    if (data.contacts) payload.contact_info = data.contacts;
-    if (data.subscriptionType) payload.subscription_type = data.subscriptionType;
-    if (data.subscriptionStartDate) payload.subscription_start_date = data.subscriptionStartDate;
-    if (data.pricePerUser) payload.pricing_config = data.pricePerUser;
-
-    const { error } = await supabase.from('communities').update(payload).eq('id', id);
-    if (error) throw error;
-};
-
-export const deleteCommunity = async (id: string): Promise<void> => {
-    const { error } = await supabase.from('communities').update({ status: 'disabled' }).eq('id', id);
-    if (error) throw error;
-};
-
-export const createAdminUser = async (data: any): Promise<void> => {
-    const { error } = await supabase.functions.invoke('create-admin-user', {
-        body: data
-    });
-    if (error) throw error;
-};
-
-export const createCommunityUser = async (data: any): Promise<void> => {
-    const { error } = await supabase.functions.invoke('create-community-user', {
-        body: data
-    });
-    if (error) throw error;
-};
-
-export const assignAdminUnit = async (unitData: any, user: User, community: Community): Promise<void> => {
-    const { error } = await supabase.functions.invoke('assign-unit', {
-        body: {
-            unitData,
-            communityId: community.id,
-            userId: user.id
-        }
-    });
-    if (error) throw error;
-};
-
-export const updateUserPassword = async (password: string): Promise<void> => {
-    const { error } = await supabase.functions.invoke('update-user-password', {
-        body: { password }
-    });
     if (error) throw error;
 };
 
@@ -563,7 +557,6 @@ export const getMaintenanceHistory = async (communityId: string): Promise<Mainte
         .order('effective_date', { ascending: false });
     
     if (error) throw error;
-    
     return data.map((c: any) => ({
         id: c.id,
         communityId: c.community_id,
@@ -574,17 +567,92 @@ export const getMaintenanceHistory = async (communityId: string): Promise<Mainte
     }));
 };
 
-export const addMaintenanceConfiguration = async (config: {communityId: string, maintenanceRate: number, fixedMaintenanceAmount: number, effectiveDate: string}): Promise<void> => {
+export const addMaintenanceConfiguration = async (data: any) => {
     const { error } = await supabase.from('maintenance_configurations').insert({
-        community_id: config.communityId,
-        maintenance_rate: config.maintenanceRate,
-        fixed_maintenance_amount: config.fixedMaintenanceAmount,
-        effective_date: config.effectiveDate
+        community_id: data.communityId,
+        maintenance_rate: data.maintenanceRate,
+        fixed_maintenance_amount: data.fixedMaintenanceAmount,
+        effective_date: data.effectiveDate
     });
     if (error) throw error;
 };
 
-export const recordCommunityPayment = async (data: any): Promise<void> => {
+// --- Expenses ---
+
+export const getExpenses = async (communityId: string): Promise<Expense[]> => {
+    const { data, error } = await supabase
+        .from('expenses')
+        .select('*, submitted_user:users!submitted_by(name), approved_user:users!approved_by(name)')
+        .eq('community_id', communityId)
+        .order('date', { ascending: false });
+    
+    if (error) throw error;
+    return data.map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        amount: e.amount,
+        category: e.category as ExpenseCategory,
+        description: e.description,
+        date: e.date,
+        submittedBy: e.submitted_by,
+        submittedByName: e.submitted_user?.name,
+        status: e.status as ExpenseStatus,
+        approvedBy: e.approved_by,
+        approvedByName: e.approved_user?.name,
+        communityId: e.community_id,
+        createdAt: e.created_at,
+        receiptUrl: e.receipt_url
+    }));
+};
+
+export const createExpense = async (data: Partial<Expense>, user: User) => {
+    const { error } = await supabase.from('expenses').insert({
+        title: data.title,
+        amount: data.amount,
+        category: data.category,
+        description: data.description,
+        date: data.date,
+        receipt_url: data.receiptUrl,
+        submitted_by: user.id,
+        community_id: user.communityId,
+        status: 'Pending'
+    });
+    if (error) throw error;
+};
+
+export const approveExpense = async (id: string, userId: string) => {
+    const { error } = await supabase.from('expenses').update({
+        status: 'Approved',
+        approved_by: userId
+    }).eq('id', id);
+    if (error) throw error;
+};
+
+export const rejectExpense = async (id: string, userId: string, reason: string) => {
+    // We append the rejection reason to the description or store in a separate note
+    // For simplicity, we assume we fetch the current description and append.
+    const { data: current } = await supabase.from('expenses').select('description').eq('id', id).single();
+    const newDescription = `${current?.description || ''} \n[REJECTION REASON]: ${reason}`;
+
+    const { error } = await supabase.from('expenses').update({
+        status: 'Rejected',
+        approved_by: userId,
+        description: newDescription
+    }).eq('id', id);
+    if (error) throw error;
+};
+
+export const getMonthlyLedger = async (communityId: string, month: number, year: number): Promise<MonthlyLedger> => {
+    const { data, error } = await supabase.functions.invoke('get-monthly-ledger', {
+        body: { community_id: communityId, month, year }
+    });
+    if (error) throw error;
+    return data;
+};
+
+// --- Billing (SuperAdmin) ---
+
+export const recordCommunityPayment = async (data: any) => {
     const { error } = await supabase.functions.invoke('record-payment', {
         body: data
     });
@@ -592,60 +660,44 @@ export const recordCommunityPayment = async (data: any): Promise<void> => {
 };
 
 export const getFinancialHistory = async (year: number): Promise<FinancialHistory> => {
-    // This SDK method calls: [PROJECT_URL]/functions/v1/get-financial-history
     const { data, error } = await supabase.functions.invoke('get-financial-history', {
         body: { year }
     });
     if (error) throw error;
-    if (data.error) throw new Error(data.error);
     return data;
 };
 
 export const getFinancialYears = async (): Promise<number[]> => {
-    // This calls https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/get-financial-years
     const { data, error } = await supabase.functions.invoke('get-financial-years');
     if (error) throw error;
-    if (data.error) throw new Error(data.error);
     return data.years;
 };
 
-export interface MonthlyLedger {
-    previousBalance: number;
-    collectedThisMonth: number;
-    pendingThisMonth: number;
-    expensesThisMonth: number;
-    closingBalance: number;
-}
+// --- Audit ---
 
-export const getMonthlyLedger = async (communityId: string, month: number, year: number): Promise<MonthlyLedger> => {
-    // Explicitly using the deployed URL as requested
-    const FUNCTION_URL = "https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/get-monthly-ledger";
+export const getAuditLogs = async (communityId: string, userId: string, role: string): Promise<AuditLog[]> => {
+    let query = supabase
+        .from('audit_logs')
+        .select('*, users(name, role)')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false });
+        
+    // Limit what helpdesk agents can see? Usually only Admins see audit logs.
+    // Assuming UI handles protection, API returns data.
     
-    // We need to manually get the token to authorize the fetch request since we aren't using the SDK's invoke here
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data, error } = await query;
+    if (error) throw error;
     
-    const response = await fetch(FUNCTION_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ community_id: communityId, month, year })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        // Try to parse error text as JSON if possible to be cleaner
-        try {
-            const errObj = JSON.parse(errorText);
-            if (errObj.error) throw new Error(errObj.error);
-        } catch (e) {
-            // If parsing fails, throw the raw text
-        }
-        throw new Error(`Failed to fetch ledger: ${errorText}`);
-    }
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    return data;
+    return data.map((l: any) => ({
+        id: l.id,
+        createdAt: l.created_at,
+        actorId: l.actor_id,
+        communityId: l.community_id,
+        actorName: l.users?.name || 'System',
+        actorRole: l.users?.role,
+        entity: l.entity,
+        entityId: l.entity_id,
+        action: l.action as any,
+        details: l.details
+    }));
 };

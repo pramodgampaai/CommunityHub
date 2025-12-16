@@ -17,8 +17,6 @@ serve(async (req: any) => {
   }
 
   try {
-    // Create a Supabase client with the Admin Service Role Key
-    // This is required to create users with specific passwords and modify roles
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -30,61 +28,69 @@ serve(async (req: any) => {
       }
     )
 
-    // Parse request body
     const { name, email, password, community_id } = await req.json()
 
-    // Validate inputs
     if (!email || !password || !name || !community_id) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields: name, email, password, community_id' }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400,
+          status: 200, // Return 200 so client can read error message
         }
       )
     }
 
-    // 1. Create the user in Supabase Auth
-    const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // Auto-confirm email since an admin is creating it
-      user_metadata: { name }
-    })
+    // 1. Check if user already exists in Auth
+    let userId;
+    const { data: existingUsers } = await supabaseClient.auth.admin.listUsers();
+    // Simple filter (in prod, use pagination or search)
+    const existingUser = existingUsers?.users.find(u => u.email === email);
 
-    if (createError) {
-      throw createError
+    if (existingUser) {
+        userId = existingUser.id;
+        // Check if public profile exists
+        const { data: profile } = await supabaseClient.from('users').select('id').eq('id', userId).single();
+        if (profile) {
+             return new Response(
+                JSON.stringify({ error: 'User with this email already exists in the system.' }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+        }
+        // If no profile, we can proceed to "recover" the account by creating the profile
+    } else {
+        // 2. Create new Auth User
+        const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true, 
+            user_metadata: { name }
+        })
+
+        if (createError) throw createError;
+        if (!user) throw new Error('User creation failed');
+        userId = user.id;
     }
 
-    if (!user) {
-      throw new Error('User creation failed')
-    }
-
-    // 2. Create or Update the user profile in the public.users table
-    // We use upsert here to handle cases where a database trigger (e.g., on auth.users insert)
-    // might have already created a basic row for the user.
-    // We force the role to 'Admin' and set the community_id.
+    // 3. Create/Upsert Profile
     const { error: profileError } = await supabaseClient
       .from('users')
       .upsert({
-        id: user.id,
+        id: userId,
         email: email,
         name: name,
         role: 'Admin',
         community_id: community_id,
         status: 'active',
-        flat_number: null, // Explicitly set to NULL for Admins
+        flat_number: null,
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
       })
 
     if (profileError) {
-      // In a production scenario, you might want to rollback (delete the auth user)
-      // if the profile creation fails, to maintain data consistency.
       throw profileError
     }
 
     return new Response(
-      JSON.stringify({ user, message: 'Admin user created successfully' }),
+      JSON.stringify({ message: 'Admin user created successfully' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
@@ -96,7 +102,7 @@ serve(async (req: any) => {
       JSON.stringify({ error: error.message || 'Internal Server Error' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400, // Using 400 to ensure the client receives the error message body
+        status: 200, // Return 200 to allow client SDK to parse JSON body
       }
     )
   }

@@ -63,6 +63,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                 if (data.maintenanceRate) setMaintenanceRate(data.maintenanceRate.toString());
                 if (data.fixedMaintenanceAmount) setFixedMaintenanceAmount(data.fixedMaintenanceAmount.toString());
 
+                // Check if setup is already done (blocks exist)
                 if (data.blocks && data.blocks.length > 0) {
                     setIsEditMode(true);
                     setBlocks(data.blocks);
@@ -88,6 +89,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                 } else {
                     // Initialize empty blocks for High-Rise if new
                     setBlocks([]);
+                    setStep('landscape'); // Explicitly stay on landscape
                 }
             } catch (err) {
                 console.error(err);
@@ -124,7 +126,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
         } else if (community.communityType?.includes('Standalone')) {
             structureValid = standaloneFloors > 0 && standaloneUnitsPerFloor > 0;
         } else {
-            // High-Rise
+            // High-Rise (Default)
             structureValid = blocks.length > 0 && blocks.every(b => b.name.trim() !== '' && b.floorCount > 0);
         }
 
@@ -177,11 +179,8 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
 
             await updateCommunity(user.communityId, updatePayload);
             
-            // Check if user needs to set up a unit
-            // If units is empty, they MUST go to residence step, regardless of edit mode.
             const userHasUnits = user?.units && user.units.length > 0;
 
-            // If in Edit Mode AND user already has units, we are done
             if (isEditMode && userHasUnits) {
                 setFeedback({
                     isOpen: true,
@@ -191,11 +190,9 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                 });
                 onComplete();
             } else {
-                // Determine next step
                 setCommunity({ ...community, ...updatePayload });
                 setStep('residence');
                 
-                // Pre-select block if only one (Standalone or 1 Tower)
                 if (finalBlocks.length === 1) {
                     setSelectedBlock(finalBlocks[0].name);
                 }
@@ -244,11 +241,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                 maintenanceStartDate
             }, user, community);
 
-            // Refresh user profile to get updated units and clear gatekeeper logic
-            // We await this to ensure context is updated before showing success
             await refreshUser();
-            
-            // Show Success Screen instead of immediate redirect
             setIsSuccess(true);
 
         } catch (err: any) {
@@ -266,7 +259,6 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
 
-    // --- Success View ---
     if (isSuccess) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4">
@@ -279,13 +271,6 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                         <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-6">
                             Your community and maintenance profile have been successfully created. You can now access the dashboard.
                         </p>
-                        
-                        <div className="bg-gray-50 dark:bg-white/5 rounded-lg p-4 mb-6 text-left border border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                            <p className="text-xs text-[var(--text-secondary-light)] uppercase font-bold mb-1">Your Profile</p>
-                            <p className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{flatNumber} • {flatSize} sq ft</p>
-                            <p className="text-sm text-[var(--text-secondary-light)]">{selectedBlock || 'Main Building'}</p>
-                        </div>
-
                         <Button onClick={onComplete} className="w-full" leftIcon={<HomeIcon className="w-5 h-5"/>}>
                             Go to Dashboard
                         </Button>
@@ -296,18 +281,20 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
     }
 
     const userHasUnits = user?.units && user.units.length > 0;
+    const isStandalone = community?.communityType?.includes('Standalone');
+    const isVilla = community?.communityType === 'Gated Community Villa';
+    const isHighRise = !isStandalone && !isVilla;
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4">
             <div className="w-full max-w-2xl">
-                {/* Header */}
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-brand font-bold text-brand-500 mb-2">
                         {isEditMode ? 'Community Configuration' : 'Welcome to Elevate'}
                     </h1>
                     <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                         {step === 'landscape' 
-                            ? "Define structure and maintenance rules." 
+                            ? "Let's set up your community structure." 
                             : "One last step! Tell us where you live."}
                     </p>
                 </div>
@@ -334,57 +321,67 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     1. Landscape Structure
                                 </h3>
 
-                                {/* High Rise Form */}
-                                {community?.communityType === 'High-Rise Apartment' && (
+                                {isHighRise && (
                                     <div className="space-y-4">
-                                        <div className="flex justify-between items-center">
-                                            <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Blocks / Towers</label>
-                                            <Button type="button" size="sm" variant="outlined" onClick={handleAddBlock} leftIcon={<PlusIcon className="w-4 h-4"/>}>
+                                        <div className="flex justify-between items-center bg-gray-50 dark:bg-white/5 p-3 rounded-lg">
+                                            <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
+                                                Add all blocks/towers in your society.
+                                            </p>
+                                            <Button type="button" size="sm" onClick={handleAddBlock} leftIcon={<PlusIcon className="w-4 h-4"/>}>
                                                 Add Block
                                             </Button>
                                         </div>
                                         
                                         {blocks.length === 0 && (
-                                            <p className="text-center text-sm text-[var(--text-secondary-light)] italic py-4">No blocks added yet.</p>
+                                            <div className="text-center p-6 border-2 border-dashed border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg text-[var(--text-secondary-light)]">
+                                                <p className="mb-2">No blocks added yet.</p>
+                                                <Button type="button" variant="outlined" size="sm" onClick={handleAddBlock}>
+                                                    Start by adding a Block
+                                                </Button>
+                                            </div>
                                         )}
 
                                         {blocks.map((block, index) => (
-                                            <div key={index} className="flex gap-4 items-start">
+                                            <div key={index} className="flex gap-4 items-start bg-gray-50 dark:bg-white/5 p-3 rounded-lg">
                                                 <div className="flex-1">
+                                                    <label className="block text-xs font-medium text-[var(--text-secondary-light)] mb-1">Block Name</label>
                                                     <input 
                                                         type="text" 
-                                                        placeholder="Block Name (e.g. A, Tower 1)" 
+                                                        placeholder="e.g. A, Tower 1" 
                                                         value={block.name}
                                                         onChange={e => handleBlockChange(index, 'name', e.target.value)}
-                                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)]"
                                                         required
                                                     />
                                                 </div>
                                                 <div className="w-32">
+                                                    <label className="block text-xs font-medium text-[var(--text-secondary-light)] mb-1">Floors</label>
                                                     <input 
                                                         type="number" 
-                                                        placeholder="Floors" 
+                                                        placeholder="Count" 
                                                         min="1"
                                                         value={block.floorCount}
                                                         onChange={e => handleBlockChange(index, 'floorCount', parseInt(e.target.value))}
-                                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
+                                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)]"
                                                         required
                                                     />
                                                 </div>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => handleRemoveBlock(index)}
-                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                                                >
-                                                    <TrashIcon className="w-5 h-5" />
-                                                </button>
+                                                <div className="pt-6">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => handleRemoveBlock(index)}
+                                                        className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                                        title="Remove Block"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
 
-                                {/* Villa Form */}
-                                {community?.communityType === 'Gated Community Villa' && (
+                                {isVilla && (
                                     <div>
                                         <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
                                             Number of Roads / Streets
@@ -404,8 +401,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     </div>
                                 )}
 
-                                {/* Standalone Form */}
-                                {community?.communityType?.includes('Standalone') && (
+                                {isStandalone && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
@@ -446,7 +442,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     This value will be used to calculate monthly maintenance bills for all units automatically on the 1st of every month.
                                 </p>
 
-                                {community?.communityType?.includes('Standalone') ? (
+                                {isStandalone ? (
                                     <div>
                                         <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-2">
                                             Fixed Monthly Maintenance Amount (₹)
@@ -510,10 +506,10 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                             </p>
 
                             {/* Block/Road Selection - Hidden for Standalone if auto-generated */}
-                            {!community?.communityType?.includes('Standalone') && (
+                            {!isStandalone && (
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
-                                        {community?.communityType === 'Gated Community Villa' ? 'Road / Street' : 'Block / Tower'}
+                                        {isVilla ? 'Road / Street' : 'Block / Tower'}
                                     </label>
                                     <select 
                                         value={selectedBlock} 
@@ -536,7 +532,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 {/* Floor Selection */}
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
-                                    {community?.communityType?.includes('Standalone') ? (
+                                    {isStandalone ? (
                                         <select 
                                             value={selectedFloor} 
                                             onChange={e => setSelectedFloor(e.target.value)}
@@ -544,7 +540,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                             className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
                                         >
                                             <option value="">Select...</option>
-                                            {Array.from({ length: community.blocks?.[0]?.floorCount || 0 }, (_, i) => i + 1).map(f => (
+                                            {Array.from({ length: community?.blocks?.[0]?.floorCount || 0 }, (_, i) => i + 1).map(f => (
                                                 <option key={f} value={f}>{f}</option>
                                             ))}
                                         </select>
@@ -567,7 +563,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 {/* Flat Number */}
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
-                                        {community?.communityType === 'Gated Community Villa' ? 'Villa Number' : 'Flat Number'}
+                                        {isVilla ? 'Villa Number' : 'Flat Number'}
                                     </label>
                                     <input 
                                         type="text" 

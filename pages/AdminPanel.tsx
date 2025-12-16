@@ -9,6 +9,7 @@ import { LogOutIcon, MoonIcon, SunIcon, PlusIcon, ChevronDownIcon, AlertTriangle
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 import Spinner from '../components/ui/Spinner';
 import ProfileModal from '../components/ProfileModal';
 import Logo from '../components/ui/Logo';
@@ -37,6 +38,22 @@ const AdminPanel: React.FC = () => {
         title: '',
         message: '',
         type: 'success'
+    });
+
+    // Confirmation Modal State
+    const [confirmConfig, setConfirmConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        action: () => Promise<void>;
+        isDestructive?: boolean;
+        confirmLabel?: string;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        action: async () => {},
+        isDestructive: false
     });
 
     // --- Create Community Wizard State ---
@@ -175,11 +192,10 @@ const AdminPanel: React.FC = () => {
 
         setIsSubmitting(true);
 
-        const payload = {
+        const payload: any = {
             name: communityName,
             address: communityAddress,
             communityType,
-            blocks: [], // Handled by community admin
             contacts,
             subscriptionType,
             subscriptionStartDate,
@@ -188,14 +204,55 @@ const AdminPanel: React.FC = () => {
 
         try {
             if (isEditMode && selectedCommunity) {
+                // When editing, do NOT send empty blocks array to preserve landscape structure
+                // Blocks are managed by community admin in setup, not here.
                 await updateCommunity(selectedCommunity.id, payload);
             } else {
+                // When creating, initialize empty blocks
+                payload.blocks = []; 
                 await createCommunity(payload);
             }
             setCommunityModalOpen(false);
             await fetchData();
         } catch (err: any) {
             alert(`Error: ${err.message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    const handleDeleteCommunity = (community: CommunityStat) => {
+        setConfirmConfig({
+            isOpen: true,
+            title: "Delete Community",
+            message: `Are you sure you want to permanently delete "${community.name}"? This will wipe ALL related data including users, payments, and history. This action cannot be undone.`,
+            confirmLabel: "Yes, Delete Everything",
+            isDestructive: true,
+            action: async () => {
+                await deleteCommunity(community.id);
+                await fetchData();
+                setFeedbackModal({
+                    isOpen: true,
+                    title: 'Deleted',
+                    message: `${community.name} has been deleted successfully.`,
+                    type: 'success'
+                });
+            }
+        });
+    };
+
+    const handleConfirmAction = async () => {
+        setIsSubmitting(true);
+        try {
+            await confirmConfig.action();
+            setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+        } catch (error: any) {
+            setFeedbackModal({
+                isOpen: true,
+                title: 'Error',
+                message: error.message || "Failed to perform action.",
+                type: 'error'
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -294,8 +351,11 @@ const AdminPanel: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-3 pt-3 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
+                <Button size="sm" variant="outlined" className="text-red-500 border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleDeleteCommunity(stat)}>
+                    Delete
+                </Button>
                 <Button size="sm" variant="outlined" onClick={() => openEditCommunityModal(stat)}>
-                    Edit Details
+                    Edit
                 </Button>
                 <Button size="sm" onClick={() => openAddAdminModal(stat)}>
                     Add Admin
@@ -381,6 +441,13 @@ const AdminPanel: React.FC = () => {
                                                 title="Edit Details"
                                             >
                                                 <PencilIcon className="w-5 h-5" />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteCommunity(stat)}
+                                                className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-red-500 transition-colors p-1"
+                                                title="Delete Community"
+                                            >
+                                                <TrashIcon className="w-5 h-5" />
                                             </button>
                                             <Button size="sm" onClick={() => openAddAdminModal(stat)}>Add Admin</Button>
                                         </td>
@@ -699,6 +766,18 @@ const AdminPanel: React.FC = () => {
                      </div>
                 </div>
             </Modal>
+
+            {/* Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={confirmConfig.isOpen}
+                onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+                onConfirm={handleConfirmAction}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                isDestructive={confirmConfig.isDestructive}
+                confirmLabel={confirmConfig.confirmLabel}
+                isLoading={isSubmitting}
+            />
         </div>
     );
 };

@@ -85,15 +85,24 @@ serve(async (req: any) => {
             const startDay = parseInt(parts[2]);
 
             const now = new Date();
-            const currentPeriodDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+            // Server 'current month' period start
+            let currentPeriodDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+            // User 'start date' period start
             let iterDate = new Date(Date.UTC(startYear, startMonth, 1));
+            
+            // Fix for Timezone Drifts: 
+            // If user's "Today" (start date) is ahead of Server UTC "Today" (e.g. Asia/Kolkata vs UTC),
+            // iterDate might be > currentPeriodDate. We must ensure the loop runs for the start month.
+            if (iterDate > currentPeriodDate) {
+                currentPeriodDate = new Date(iterDate);
+            }
             
             const newRecords = [];
 
             while (iterDate <= currentPeriodDate) {
                 let finalAmount = monthlyAmount;
 
-                // Pro-rata check
+                // Pro-rata check: If we are in the exact start month
                 if (iterDate.getUTCFullYear() === startYear && iterDate.getUTCMonth() === startMonth) {
                     const daysInMonth = new Date(Date.UTC(startYear, startMonth + 1, 0)).getUTCDate();
                     const daysRemaining = daysInMonth - startDay + 1;
