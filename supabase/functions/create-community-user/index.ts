@@ -37,17 +37,8 @@ serve(async (req: any) => {
       )
     }
     
-    // For Residents, we expect 'units' array
-    if (role === 'Resident' && (!units || !Array.isArray(units) || units.length === 0)) {
-         if (!units && flat_number) {
-             // Fallback support
-         } else {
-            return new Response(
-                JSON.stringify({ error: 'Residents must have at least one Unit/Flat assigned.' }),
-                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-            )
-         }
-    }
+    // NOTE: Removed previous check that enforced 'units' for Residents.
+    // We now allow creating residents without units to support deferred setup on first login.
 
     // --- PERMISSION CHECK ---
     const authHeader = req.headers.get('Authorization');

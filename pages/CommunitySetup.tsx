@@ -77,7 +77,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                     }
 
                     // SKIPPING LOGIC: 
-                    // If landscape is already set up, and the current user has no units (fresh admin),
+                    // If landscape is already set up, and the current user has no units (fresh admin or resident),
                     // skip directly to residence setup.
                     if (!user.units || user.units.length === 0) {
                         setStep('residence');
@@ -269,7 +269,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                         </div>
                         <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2">Setup Complete!</h2>
                         <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-6">
-                            Your community and maintenance profile have been successfully created. You can now access the dashboard.
+                            Your residence profile and maintenance schedule have been created. You can now access the dashboard.
                         </p>
                         <Button onClick={onComplete} className="w-full" leftIcon={<HomeIcon className="w-5 h-5"/>}>
                             Go to Dashboard
@@ -501,7 +501,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                             </div>
 
                             <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                                As an Admin, you are also a resident. Please enter the details of the unit you own/reside in. 
+                                Please enter the details of the unit you own/reside in. 
                                 This will create your maintenance profile.
                             </p>
 
@@ -529,39 +529,41 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                             )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                {/* Floor Selection */}
-                                <div>
-                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
-                                    {isStandalone ? (
-                                        <select 
-                                            value={selectedFloor} 
-                                            onChange={e => setSelectedFloor(e.target.value)}
-                                            required
-                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
-                                        >
-                                            <option value="">Select...</option>
-                                            {Array.from({ length: community?.blocks?.[0]?.floorCount || 0 }, (_, i) => i + 1).map(f => (
-                                                <option key={f} value={f}>{f}</option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <select 
-                                            value={selectedFloor} 
-                                            onChange={e => setSelectedFloor(e.target.value)}
-                                            required
-                                            disabled={!selectedBlock}
-                                            className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-50"
-                                        >
-                                            <option value="">Select...</option>
-                                            {getFloorOptions().map(f => (
-                                                <option key={f} value={f}>{f}</option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
+                                {/* Floor Selection - Hidden for Villas */}
+                                {!isVilla && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Floor</label>
+                                        {isStandalone ? (
+                                            <select 
+                                                value={selectedFloor} 
+                                                onChange={e => setSelectedFloor(e.target.value)}
+                                                required
+                                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]"
+                                            >
+                                                <option value="">Select...</option>
+                                                {Array.from({ length: community?.blocks?.[0]?.floorCount || 0 }, (_, i) => i + 1).map(f => (
+                                                    <option key={f} value={f}>{f}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <select 
+                                                value={selectedFloor} 
+                                                onChange={e => setSelectedFloor(e.target.value)}
+                                                required
+                                                disabled={!selectedBlock}
+                                                className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] disabled:opacity-50"
+                                            >
+                                                <option value="">Select...</option>
+                                                {getFloorOptions().map(f => (
+                                                    <option key={f} value={f}>{f}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Flat Number */}
-                                <div>
+                                <div className={isVilla ? "sm:col-span-2" : ""}>
                                     <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
                                         {isVilla ? 'Villa Number' : 'Flat Number'}
                                     </label>

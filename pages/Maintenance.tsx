@@ -8,7 +8,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import AuditLogModal from '../components/AuditLogModal';
-import { CurrencyRupeeIcon, MagnifyingGlassIcon, FunnelIcon, PencilIcon, ClockIcon, HistoryIcon } from '../components/icons';
+import { CurrencyRupeeIcon, MagnifyingGlassIcon, FunnelIcon, PencilIcon, ClockIcon, HistoryIcon, CheckCircleIcon } from '../components/icons';
 import { useScreen } from '../hooks/useScreen';
 
 interface MaintenanceProps {
@@ -529,43 +529,70 @@ const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
                     </div>
 
                     {!isAddingConfig ? (
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-md font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">Rate History</h3>
-                                <Button size="sm" onClick={() => setIsAddingConfig(true)} leftIcon={<ClockIcon className="w-4 h-4"/>}>New Rate</Button>
-                            </div>
+                        <div className="space-y-6">
                             
-                            <div className="overflow-x-auto border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg">
-                                <table className="min-w-full divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                                    <thead className="bg-black/5 dark:bg-white/5">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">Effective From</th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">
-                                                {community?.communityType?.includes('Standalone') ? 'Fixed Amount' : 'Rate / Sq Ft'}
-                                            </th>
-                                            <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">Created</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                                        {history.length === 0 ? (
-                                            <tr><td colSpan={3} className="px-4 py-4 text-center text-sm text-[var(--text-secondary-light)]">No history found.</td></tr>
-                                        ) : (
-                                            history.map((config) => (
-                                                <tr key={config.id}>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] font-medium">
-                                                        {new Date(config.effectiveDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                                        {community?.communityType?.includes('Standalone') ? `₹${config.fixedMaintenanceAmount}` : `₹${config.maintenanceRate}`}
-                                                    </td>
-                                                    <td className="px-4 py-3 whitespace-nowrap text-xs text-[var(--text-secondary-light)]">
-                                                        {new Date(config.createdAt).toLocaleDateString()}
-                                                    </td>
-                                                </tr>
-                                            ))
+                            {/* Current Active Rate Section - Always visible */}
+                            <div className="bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-lg border border-[var(--border-light)] dark:border-[var(--border-dark)] flex items-center justify-between shadow-sm">
+                                <div>
+                                    <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider font-semibold">Current Active Rate</p>
+                                    <div className="flex items-baseline gap-1 mt-1">
+                                        <span className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                            {community?.communityType?.includes('Standalone') 
+                                                ? `₹${community?.fixedMaintenanceAmount || 0}` 
+                                                : `₹${community?.maintenanceRate || 0}`
+                                            }
+                                        </span>
+                                        {!community?.communityType?.includes('Standalone') && (
+                                            <span className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">/ sq ft</span>
                                         )}
-                                    </tbody>
-                                </table>
+                                    </div>
+                                    <p className="text-xs text-[var(--text-secondary-light)] mt-1">
+                                        This rate applies to all current calculations unless overridden by history below.
+                                    </p>
+                                </div>
+                                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                                    <CheckCircleIcon className="w-6 h-6" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-md font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">Rate History</h3>
+                                    <Button size="sm" onClick={() => setIsAddingConfig(true)} leftIcon={<ClockIcon className="w-4 h-4"/>}>New Rate</Button>
+                                </div>
+                                
+                                <div className="overflow-x-auto border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg">
+                                    <table className="min-w-full divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                                        <thead className="bg-black/5 dark:bg-white/5">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">Effective From</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">
+                                                    {community?.communityType?.includes('Standalone') ? 'Fixed Amount' : 'Rate / Sq Ft'}
+                                                </th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">Created</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
+                                            {history.length === 0 ? (
+                                                <tr><td colSpan={3} className="px-4 py-4 text-center text-sm text-[var(--text-secondary-light)]">No history found.</td></tr>
+                                            ) : (
+                                                history.map((config) => (
+                                                    <tr key={config.id}>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] font-medium">
+                                                            {new Date(config.effectiveDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-[var(--text-light)] dark:text-[var(--text-dark)]">
+                                                            {community?.communityType?.includes('Standalone') ? `₹${config.fixedMaintenanceAmount}` : `₹${config.maintenanceRate}`}
+                                                        </td>
+                                                        <td className="px-4 py-3 whitespace-nowrap text-xs text-[var(--text-secondary-light)]">
+                                                            {new Date(config.createdAt).toLocaleDateString()}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     ) : (

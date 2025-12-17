@@ -1,5 +1,4 @@
 
-// ... (imports remain the same)
 import { supabase } from './supabase';
 import { 
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
@@ -61,16 +60,8 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     
     if (error) throw error;
     
-    return data.map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role as UserRole,
-        communityId: u.community_id,
-        status: u.status,
-        avatarUrl: u.avatar_url,
-        flatNumber: u.flat_number,
-        units: u.units ? u.units.map((unit: any) => ({
+    return data.map((u: any) => {
+        const units = u.units ? u.units.map((unit: any) => ({
             id: unit.id,
             userId: unit.user_id,
             communityId: unit.community_id,
@@ -79,9 +70,36 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             floor: unit.floor,
             flatSize: unit.flat_size,
             maintenanceStartDate: unit.maintenance_start_date
-        })) : [],
-        theme: u.theme
-    }));
+        })) : [];
+
+        // Logic to determine the display "flatNumber" string
+        // If units exist, use the primary unit's details.
+        // If multiple units, append count.
+        // Fallback to u.flat_number (Staff Location) if no units.
+        let displayFlatNumber = u.flat_number;
+        
+        if (units.length > 0) {
+            const primary = units[0];
+            displayFlatNumber = primary.block ? `${primary.block}-${primary.flatNumber}` : primary.flatNumber;
+            
+            if (units.length > 1) {
+                displayFlatNumber += ` (+${units.length - 1})`;
+            }
+        }
+
+        return {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role as UserRole,
+            communityId: u.community_id,
+            status: u.status,
+            avatarUrl: u.avatar_url,
+            flatNumber: displayFlatNumber,
+            units: units,
+            theme: u.theme
+        };
+    });
 };
 
 export const assignAdminUnit = async (unitData: any, user: User, community: Community) => {

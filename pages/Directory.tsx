@@ -27,8 +27,8 @@ const Directory: React.FC = () => {
     const [newPassword, setNewPassword] = useState('');
     const [newRole, setNewRole] = useState<UserRole>(UserRole.Resident);
     
-    // Resident Specific Form State
-    const [newFlatNumber, setNewFlatNumber] = useState('');
+    // Staff Specific Form State
+    const [newFlatNumber, setNewFlatNumber] = useState(''); // Used for Location/Desk for staff
     
     // Feedback
     const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
@@ -85,12 +85,11 @@ const Directory: React.FC = () => {
                 community_id: user.communityId
             };
 
-            if (newRole === UserRole.Resident) {
-                // For simplified creation via Directory, we just pass one unit
-                payload.units = [{
-                    flat_number: newFlatNumber,
-                    // defaults or empty for others
-                }];
+            if (newRole === UserRole.Resident || newRole === UserRole.Admin) {
+                // For Residents and Admins, unit assignment is deferred to their first login (CommunitySetup)
+                payload.units = [];
+                // Explicitly set flat_number to null to override any potential DB defaults
+                payload.flat_number = null;
             } else {
                 payload.flat_number = newFlatNumber; // Location for staff
             }
@@ -237,10 +236,13 @@ const Directory: React.FC = () => {
                         </select>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">{newRole === UserRole.Resident ? 'Flat Number' : 'Location / Desk'} {newRole === UserRole.Resident && <span className="text-red-500">*</span>}</label>
-                        <input type="text" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} required={newRole === UserRole.Resident} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md bg-transparent" placeholder="e.g. A-101" />
-                    </div>
+                    {/* Only show Location/Desk for Staff roles */}
+                    {newRole !== UserRole.Resident && newRole !== UserRole.Admin && (
+                        <div>
+                            <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Location / Desk</label>
+                            <input type="text" value={newFlatNumber} onChange={e => setNewFlatNumber(e.target.value)} className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md bg-transparent" placeholder="e.g. Gate 1" />
+                        </div>
+                    )}
 
                     <div className="flex justify-end pt-4 space-x-2">
                         <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>

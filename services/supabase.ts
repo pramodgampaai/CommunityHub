@@ -13,7 +13,6 @@ const supabaseKeyFromEnv = (import.meta as any).env?.VITE_SUPABASE_KEY ?? (typeo
 // This allows the AI Studio preview to work after you manually edit them.
 const supabaseUrlPlaceholder = "YOUR_SUPABASE_URL";
 const supabaseKeyPlaceholder = "YOUR_SUPABASE_KEY";
-
 const supabaseUrl = supabaseUrlFromEnv || supabaseUrlPlaceholder;
 export const supabaseKey = supabaseKeyFromEnv || supabaseKeyPlaceholder;
 

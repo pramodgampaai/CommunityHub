@@ -96,7 +96,19 @@ function App() {
             }
         }
 
-        // 2. Standard Role Redirects
+        // 2. Resident Unit Setup Check
+        if (user.role === UserRole.Resident && user.communityId) {
+             if (activePage !== 'CommunitySetup') {
+                 // Check if resident has units assigned
+                 const hasUnits = user.units && user.units.length > 0;
+                 if (!hasUnits) {
+                     setActivePage('CommunitySetup');
+                     return;
+                 }
+             }
+        }
+
+        // 3. Standard Role Redirects
         if (user.role === UserRole.HelpdeskAgent) {
             const allowed = ['Notices', 'Help Desk'];
             if (!allowed.includes(activePage)) setActivePage('Help Desk');
