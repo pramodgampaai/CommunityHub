@@ -64,11 +64,20 @@ const Visitors: React.FC = () => {
         if (!user || isVerifying || !code) return;
         setIsVerifying(true);
         try {
-            const cleanCode = code.trim();
+            // Smart Extraction: Some generic scanners might scan the full site URL if present
+            let cleanCode = code.trim();
+            if (cleanCode.includes('://') || cleanCode.includes('/')) {
+                // Try to extract the last segment of a path (handles both URL and nested tokens)
+                const segments = cleanCode.split(/[/?#]/).filter(s => s.length > 0);
+                if (segments.length > 0) {
+                    cleanCode = segments[segments.length - 1];
+                }
+            }
+
             const upperCode = cleanCode.toUpperCase();
             const lowerCode = cleanCode.toLowerCase();
             
-            // Find visitor with this token or ID in our current list
+            // Find visitor in local manifest first
             const targetVisitor = visitors.find(v => 
                 (v.entryToken && v.entryToken.toUpperCase() === upperCode) || 
                 v.id === lowerCode ||
@@ -80,14 +89,13 @@ const Visitors: React.FC = () => {
                     isOpen: true, 
                     type: 'error', 
                     title: 'Invalid Pass', 
-                    message: 'The security code or QR code does not match any expected visitors in today\'s manifest.' 
+                    message: `The scanned code (${cleanCode.substring(0, 12)}${cleanCode.length > 12 ? '...' : ''}) does not match any expected visitor for this community today.` 
                 });
                 setIsVerifying(false);
                 return;
             }
 
-            // Call edge function with exact ID and the original code scanned
-            // The Edge Function now handles internal casing comparisons correctly
+            // Remote Verification via Edge Function
             await verifyVisitorEntry(targetVisitor.id, cleanCode, user);
             
             setVerifiedVisitor(targetVisitor);
@@ -95,18 +103,19 @@ const Visitors: React.FC = () => {
             setIsVerifyModalOpen(false);
             setManualCode('');
             await fetchVisitors();
+            
             setFeedback({ 
                 isOpen: true, 
                 type: 'success', 
                 title: 'Access Granted', 
-                message: `${targetVisitor.name} has been checked in successfully for Unit ${targetVisitor.flatNumber}.` 
+                message: `${targetVisitor.name} verified for Unit ${targetVisitor.flatNumber}. Entry logged.` 
             });
         } catch (error: any) {
             setFeedback({ 
                 isOpen: true, 
                 type: 'error', 
-                title: 'Check-in Failed', 
-                message: error.message || 'The system could not verify this entry. Please check the credentials and try again.' 
+                title: 'Check-in Rejected', 
+                message: error.message || 'The security server rejected this entry. Please verify the visitor\'s ID manually.' 
             });
         } finally {
             setIsVerifying(false);
