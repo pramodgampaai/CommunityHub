@@ -20,81 +20,94 @@ serve(async (req: any) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // 1. Auth Check
+    // 1. Auth & Identity Verification
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Missing Authorization header')
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Invalid token')
-
-    // Fetch user profile to check role
-    const { data: profile } = await supabaseClient.from('users').select('role, community_id').eq('id', user.id).single();
+    if (!authHeader) throw new Error('Authentication header missing')
     
-    if (!profile) {
-        throw new Error('User profile not found');
-    }
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (userError || !user) throw new Error('Unauthorized session')
 
-    // Strict Role Check: Case-insensitive
+    // Fetch actor profile (using service role to bypass RLS)
+    const { data: profile, error: profileError } = await supabaseClient
+        .from('users')
+        .select('role, community_id')
+        .eq('id', user.id)
+        .single();
+    
+    if (profileError || !profile) throw new Error('Security staff profile not found');
+
+    // Case-insensitive role check
     const allowedRoles = ['security', 'securityadmin', 'admin', 'superadmin'];
     const currentRole = (profile.role || '').toLowerCase();
     
     if (!allowedRoles.includes(currentRole)) {
         return new Response(
-            JSON.stringify({ error: 'Unauthorized: Access restricted to Security and Admin roles.' }), 
+            JSON.stringify({ error: 'Permission Denied: Unauthorized role for gate verification.' }), 
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
 
-    const { visitor_id, entry_token } = await req.json()
-
-    if (!visitor_id || !entry_token) {
-      throw new Error('Missing visitor identification data')
+    // 2. Parse Request Payload
+    let body;
+    try {
+        body = await req.json();
+    } catch (e) {
+        throw new Error('Malformed request body');
     }
 
-    // 2. Fetch Visitor Record
+    const { visitor_id, entry_token } = body;
+    if (!visitor_id || !entry_token) {
+      throw new Error('Identification data (ID and Token) is mandatory for verification');
+    }
+
+    // 3. Fetch Visitor Record
     const { data: visitor, error: fetchError } = await supabaseClient
         .from('visitors')
         .select('*')
         .eq('id', visitor_id)
         .single();
 
-    if (fetchError || !visitor) throw new Error('Visitor record not found in manifest');
+    if (fetchError || !visitor) throw new Error('Visitor record not found in manifest for this community');
 
-    // 3. Community Check
+    // 4. Security Bound Check (Cross-community protection)
     if (visitor.community_id !== profile.community_id) {
-        throw new Error('Security Alert: Visitor manifest belongs to a different community');
+        throw new Error('Security Alert: This pass belongs to a different community');
     }
 
-    // 4. Token & Status Validation
-    // Support matching against either the token or the ID (for generic scans)
-    const submittedToken = String(entry_token).trim().toUpperCase();
-    const dbToken = String(visitor.entry_token || '').trim().toUpperCase();
-    const dbId = String(visitor.id).trim();
+    // 5. Token Validation - CRITICAL FIX: CASE INSENSITIVE COMPARISON
+    const submittedCode = String(entry_token).trim().toLowerCase();
+    const dbToken = String(visitor.entry_token || '').trim().toLowerCase();
+    const dbId = String(visitor.id).trim().toLowerCase();
 
-    if (submittedToken !== dbToken && entry_token !== dbId) {
-        throw new Error('Invalid Access Token: Verification failed');
+    // The code scanned could be either the 6-digit alphanumeric token OR the full visitor UUID
+    const isTokenMatch = submittedCode === dbToken;
+    const isIdMatch = submittedCode === dbId;
+
+    if (!isTokenMatch && !isIdMatch) {
+        throw new Error('Invalid Access Pass: Code/Token mismatch');
     }
 
+    // 6. Status & Expiry Validation
     if (visitor.status === 'Checked In') {
-        throw new Error('Replay Error: Visitor is already checked in');
+        throw new Error('Duplicate Entry: Visitor is already recorded as inside the premises');
     }
 
     if (visitor.status === 'Denied' || visitor.status === 'Checked Out') {
-        throw new Error(`Access Denied: Current status is ${visitor.status}`);
+        throw new Error(`Forbidden: Current pass status is ${visitor.status}`);
     }
 
-    // 5. Date Validation
     const now = new Date();
-    // Default to 24 hour expiry from expected arrival if not specified
+    // Default expiry: 24 hours after expected arrival if no valid_until is set
     const expiryDate = visitor.valid_until 
         ? new Date(visitor.valid_until) 
-        : new Date(new Date(visitor.expected_at).getTime() + 24 * 60 * 60 * 1000);
+        : new Date(new Date(visitor.expected_at).getTime() + (24 * 60 * 60 * 1000));
     
     if (now > expiryDate) {
         await supabaseClient.from('visitors').update({ status: 'Expired' }).eq('id', visitor_id);
         throw new Error('Access Denied: This pass has expired');
     }
 
-    // 6. Perform Check-In
+    // 7. Authorize Check-In
     const { data: updatedVisitor, error: updateError } = await supabaseClient
         .from('visitors')
         .update({
@@ -105,26 +118,27 @@ serve(async (req: any) => {
         .select()
         .single();
 
-    if (updateError) throw updateError;
+    if (updateError) throw new Error('Database Update Failed: Could not commit check-in');
 
-    // 7. Audit Log
+    // 8. Audit Gate Activity
     await supabaseClient.from('audit_logs').insert({
         community_id: profile.community_id,
         actor_id: user.id,
         action: 'UPDATE',
         entity: 'Visitor',
         entity_id: visitor_id,
-        details: { description: `Gate security verified check-in for ${visitor.name}` }
+        details: { description: `Gate security verified entry for ${visitor.name} (Unit ${visitor.flat_number})` }
     });
 
     return new Response(
-      JSON.stringify({ data: updatedVisitor, message: 'Check-in Authorized' }),
+      JSON.stringify({ data: updatedVisitor, message: 'Check-in successfully authorized' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
   } catch (error: any) {
+    console.error("verify-visitor-error:", error.message);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal Verification Error' }),
+      JSON.stringify({ error: error.message || 'Verification logic failure' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }

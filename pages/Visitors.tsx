@@ -66,12 +66,13 @@ const Visitors: React.FC = () => {
         try {
             const cleanCode = code.trim();
             const upperCode = cleanCode.toUpperCase();
+            const lowerCode = cleanCode.toLowerCase();
             
             // Find visitor with this token or ID in our current list
             const targetVisitor = visitors.find(v => 
                 (v.entryToken && v.entryToken.toUpperCase() === upperCode) || 
-                v.id === cleanCode ||
-                v.id === cleanCode.toLowerCase()
+                v.id === lowerCode ||
+                v.id === cleanCode
             );
             
             if (!targetVisitor) {
@@ -85,8 +86,9 @@ const Visitors: React.FC = () => {
                 return;
             }
 
-            // Call edge function with exact ID and the code scanned
-            await verifyVisitorEntry(targetVisitor.id, upperCode, user);
+            // Call edge function with exact ID and the original code scanned
+            // The Edge Function now handles internal casing comparisons correctly
+            await verifyVisitorEntry(targetVisitor.id, cleanCode, user);
             
             setVerifiedVisitor(targetVisitor);
             setVerificationMode('selection');
