@@ -9,7 +9,7 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
 import FeedbackModal from '../components/ui/FeedbackModal';
 import QRScanner from '../components/ui/QRScanner';
-import { PlusIcon, HistoryIcon, UsersIcon, ClockIcon, PencilIcon, TrashIcon, QrCodeIcon, IdentificationIcon, CheckCircleIcon, XIcon } from '../components/icons';
+import { PlusIcon, HistoryIcon, UsersIcon, ClockIcon, PencilIcon, TrashIcon, QrCodeIcon, IdentificationIcon, CheckCircleIcon, ShareIcon, XIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const Visitors: React.FC = () => {
@@ -25,6 +25,10 @@ const Visitors: React.FC = () => {
     const [manualCode, setManualCode] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
     const [verifiedVisitor, setVerifiedVisitor] = useState<Visitor | null>(null);
+
+    // Pass sharing states
+    const [isPassModalOpen, setIsPassModalOpen] = useState(false);
+    const [selectedPassVisitor, setSelectedPassVisitor] = useState<Visitor | null>(null);
 
     // Form state
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,7 +102,10 @@ const Visitors: React.FC = () => {
             if (editingId) {
                 await updateVisitor(editingId, payload);
             } else {
-                await createVisitor(payload, user);
+                const newVisitor = await createVisitor(payload, user);
+                // Immediately show the pass for the new visitor
+                setSelectedPassVisitor(newVisitor);
+                setIsPassModalOpen(true);
             }
 
             setIsModalOpen(false);
@@ -228,7 +235,7 @@ const Visitors: React.FC = () => {
                 ) : (
                     visitors.map(visitor => (
                         <Card key={visitor.id} className={`p-5 rounded-2xl bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 group ${visitor.status === 'Checked In' ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                            <div className="w-full sm:w-auto flex-1">
+                            <div className="w-full sm:w-auto flex-1 text-left">
                                 <div className="flex items-center gap-2 mb-1">
                                     <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{visitor.name}</h3>
                                     <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md ${visitor.status === 'Checked In' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}>
@@ -255,17 +262,68 @@ const Visitors: React.FC = () => {
                                     </p>
                                 </div>
                                 
-                                {visitor.userId === user?.id && visitor.status === 'Expected' && (
-                                    <div className="flex gap-1">
-                                        <button onClick={() => handleEdit(visitor)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg"><PencilIcon className="w-4 h-4" /></button>
-                                        <button onClick={() => setConfirmDelete({ isOpen: true, id: visitor.id })} className="p-2 text-slate-400 hover:text-rose-600 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg"><TrashIcon className="w-4 h-4" /></button>
-                                    </div>
-                                )}
+                                <div className="flex gap-1">
+                                    {visitor.status === 'Expected' && (
+                                        <button 
+                                            onClick={() => { setSelectedPassVisitor(visitor); setIsPassModalOpen(true); }}
+                                            className="p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors rounded-lg flex items-center gap-1.5 px-3"
+                                        >
+                                            <ShareIcon className="w-4 h-4" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">Share Pass</span>
+                                        </button>
+                                    )}
+                                    {visitor.userId === user?.id && visitor.status === 'Expected' && (
+                                        <>
+                                            <button onClick={() => handleEdit(visitor)} className="p-2 text-slate-400 hover:text-brand-600 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg"><PencilIcon className="w-4 h-4" /></button>
+                                            <button onClick={() => setConfirmDelete({ isOpen: true, id: visitor.id })} className="p-2 text-slate-400 hover:text-rose-600 transition-colors bg-slate-50 dark:bg-white/5 rounded-lg"><TrashIcon className="w-4 h-4" /></button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </Card>
                     ))
                 )}
             </div>
+
+            {/* PASS SHARING MODAL */}
+            <Modal
+                isOpen={isPassModalOpen}
+                onClose={() => { setIsPassModalOpen(false); setSelectedPassVisitor(null); }}
+                title="Visitor Access Pass"
+                subtitle="SECURE GATE PROTOCOL"
+                size="md"
+            >
+                {selectedPassVisitor && (
+                    <div className="space-y-8 py-2">
+                        <div className="bg-slate-50 dark:bg-white/5 p-8 rounded-[2.5rem] border border-slate-100 dark:border-white/5 flex flex-col items-center text-center">
+                            <div className="w-16 h-1 bg-brand-500 rounded-full mb-6 opacity-30" />
+                            
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Gate Access Token</h4>
+                            <p className="text-4xl font-brand font-black tracking-[0.4em] text-brand-600 mb-8">{selectedPassVisitor.entryToken || 'INV-EXT'}</p>
+                            
+                            <div className="bg-white p-6 rounded-3xl shadow-xl shadow-brand-500/10 mb-8">
+                                <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${selectedPassVisitor.entryToken || selectedPassVisitor.id}`} 
+                                    alt="Access QR Code"
+                                    className="w-40 h-40"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <p className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{selectedPassVisitor.name}</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Guest of <span className="text-brand-600">{selectedPassVisitor.residentName}</span> • Unit {selectedPassVisitor.flatNumber}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <Button size="lg" className="w-full" onClick={() => window.print()} leftIcon={<CheckCircleIcon />}>
+                                Download Pass Image
+                            </Button>
+                            <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Share this code with your guest for rapid entry</p>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             {/* VERIFICATION MODAL */}
             <Modal 
