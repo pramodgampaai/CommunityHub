@@ -18,6 +18,6 @@
     }
   },
   "scripts": {
-    "build": "mkdir -p dist && esbuild index.tsx --bundle --format=esm --outfile=dist/index.js --jsx=automatic --minify --define:process.env.VITE_SUPABASE_URL='\"$VITE_SUPABASE_URL\"' --define:process.env.VITE_SUPABASE_KEY='\"$VITE_SUPABASE_KEY\"' --external:react --external:react-dom --external:@supabase/supabase-js --external:framer-motion --external:jspdf --external:jspdf-autotable && cp index.html dist/ && (cp metadata.json dist/ || true)"
+    "build": "mkdir -p dist && esbuild index.tsx --bundle --format=esm --outfile=dist/index.js --jsx=automatic --minify --define:process.env.VITE_SUPABASE_URL='\"'${VITE_SUPABASE_URL:-$SUPABASE_URL}'\"' --define:process.env.VITE_SUPABASE_KEY='\"'${VITE_SUPABASE_KEY:-$SUPABASE_KEY}'\"' --external:react --external:react-dom --external:@supabase/supabase-js --external:framer-motion --external:jspdf --external:jspdf-autotable && cp index.html dist/ && (cp metadata.json dist/ || true)"
   }
 }
