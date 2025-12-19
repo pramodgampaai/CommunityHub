@@ -8,9 +8,10 @@
     "@supabase/supabase-js": "2.45.4",
     "framer-motion": "11.13.1",
     "jspdf": "2.5.1",
-    "jspdf-autotable": "3.5.29"
+    "jspdf-autotable": "3.5.29",
+    "esbuild": "0.24.0"
   },
   "scripts": {
-    "build": "mkdir -p dist && cp index.html dist/ && cp -r . dist/ || true"
+    "build": "esbuild index.tsx --bundle --format=esm --outfile=dist/index.js --jsx=automatic --minify --external:react --external:react-dom --external:@supabase/supabase-js --external:framer-motion --external:jspdf --external:jspdf-autotable && cp index.html dist/ && (cp metadata.json dist/ || true)"
   }
 }
