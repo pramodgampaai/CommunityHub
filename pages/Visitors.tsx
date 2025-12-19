@@ -64,20 +64,32 @@ const Visitors: React.FC = () => {
         if (!user || isVerifying || !code) return;
         setIsVerifying(true);
         try {
-            // Smart Extraction: Some generic scanners might scan the full site URL if present
-            let cleanCode = code.trim();
+            // Hyper-Cleaning: Extract raw token from URLs or JSON blobs
+            let cleanCode = String(code).trim();
+            
+            // 1. Detect if it's a URL
             if (cleanCode.includes('://') || cleanCode.includes('/')) {
-                // Try to extract the last segment of a path (handles both URL and nested tokens)
                 const segments = cleanCode.split(/[/?#]/).filter(s => s.length > 0);
                 if (segments.length > 0) {
                     cleanCode = segments[segments.length - 1];
                 }
             }
 
+            // 2. Detect if it's a JSON string
+            if (cleanCode.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(cleanCode);
+                    cleanCode = parsed.token || parsed.id || cleanCode;
+                } catch (e) { /* not JSON */ }
+            }
+
+            // Remove any hidden control characters or spaces
+            cleanCode = cleanCode.replace(/[^\w-]/gi, '').trim();
+
             const upperCode = cleanCode.toUpperCase();
             const lowerCode = cleanCode.toLowerCase();
             
-            // Find visitor in local manifest first
+            // Find visitor in local manifest
             const targetVisitor = visitors.find(v => 
                 (v.entryToken && v.entryToken.toUpperCase() === upperCode) || 
                 v.id === lowerCode ||
@@ -88,14 +100,14 @@ const Visitors: React.FC = () => {
                 setFeedback({ 
                     isOpen: true, 
                     type: 'error', 
-                    title: 'Invalid Pass', 
-                    message: `The scanned code (${cleanCode.substring(0, 12)}${cleanCode.length > 12 ? '...' : ''}) does not match any expected visitor for this community today.` 
+                    title: 'Pass Not Found', 
+                    message: `The scanned code (${cleanCode.substring(0, 8)}...) is not recognized in today's manifest.` 
                 });
                 setIsVerifying(false);
                 return;
             }
 
-            // Remote Verification via Edge Function
+            // Call the Edge Function
             await verifyVisitorEntry(targetVisitor.id, cleanCode, user);
             
             setVerifiedVisitor(targetVisitor);
@@ -107,15 +119,16 @@ const Visitors: React.FC = () => {
             setFeedback({ 
                 isOpen: true, 
                 type: 'success', 
-                title: 'Access Granted', 
-                message: `${targetVisitor.name} verified for Unit ${targetVisitor.flatNumber}. Entry logged.` 
+                title: 'Check-in Successful', 
+                message: `${targetVisitor.name} has been authorized to enter Unit ${targetVisitor.flatNumber}.` 
             });
         } catch (error: any) {
+            console.error("Verification Error Stack:", error);
             setFeedback({ 
                 isOpen: true, 
                 type: 'error', 
-                title: 'Check-in Rejected', 
-                message: error.message || 'The security server rejected this entry. Please verify the visitor\'s ID manually.' 
+                title: 'Security Rejection', 
+                message: error.message || 'Server rejected the scanned code. Verify credentials manually.' 
             });
         } finally {
             setIsVerifying(false);
@@ -138,7 +151,6 @@ const Visitors: React.FC = () => {
                 await updateVisitor(editingId, payload);
             } else {
                 const newVisitor = await createVisitor(payload, user);
-                // Immediately show the pass for the new visitor
                 setSelectedPassVisitor(newVisitor);
                 setIsPassModalOpen(true);
             }
@@ -287,13 +299,9 @@ const Visitors: React.FC = () => {
                             </div>
                             <div className="w-full sm:w-auto flex items-center gap-6 border-t sm:border-t-0 pt-3 sm:pt-0">
                                 <div className="text-left sm:text-right">
-                                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">{visitor.status === 'Checked In' ? 'Arrived At' : 'ETA'}</p>
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Time</p>
                                     <p className="text-sm font-brand font-extrabold text-brand-600">
-                                        {visitor.status === 'Checked In' && visitor.entryTime ? (
-                                            new Date(visitor.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                        ) : (
-                                            new Date(visitor.expectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                        )}
+                                        {new Date(visitor.expectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </p>
                                 </div>
                                 

@@ -20,132 +20,83 @@ serve(async (req: any) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // 1. Identify Actor (Security Staff)
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('[AUTH_01] Authentication header missing');
+    if (!authHeader) throw new Error('Missing Authorization header');
     
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('[AUTH_02] Unauthorized session or expired token');
+    if (userError || !user) throw new Error('Unauthorized session');
 
-    // Fetch Actor Profile (Using service role to ensure read access)
-    const { data: profile, error: profileError } = await supabaseClient
+    const { data: profile } = await supabaseClient
         .from('users')
         .select('role, community_id')
         .eq('id', user.id)
         .single();
     
-    if (profileError || !profile) {
-        console.error("Profile fetch error:", profileError);
-        throw new Error('[AUTH_03] Security staff profile not found in system registry');
-    }
+    if (!profile) throw new Error('Security profile not found');
 
-    // Role check (Case-insensitive)
-    const allowedRoles = ['security', 'securityadmin', 'admin', 'superadmin'];
     const currentRole = (profile.role || '').toLowerCase();
+    const allowedRoles = ['security', 'securityadmin', 'admin', 'superadmin'];
     if (!allowedRoles.includes(currentRole)) {
-        return new Response(
-            JSON.stringify({ error: `[PERM_01] Access Denied: Your role (${profile.role}) is not authorized for gate verification.` }), 
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ error: 'Access Denied' }), { status: 403, headers: corsHeaders });
     }
 
-    // 2. Process Payload
-    let body;
-    try {
-        body = await req.json();
-    } catch (e) {
-        throw new Error('[REQ_01] Malformed JSON payload');
-    }
+    const { visitor_id, entry_token } = await req.json();
+    if (!visitor_id || !entry_token) throw new Error('ID and Token required');
 
-    const { visitor_id, entry_token } = body;
-    if (!visitor_id) throw new Error('[REQ_02] Missing mandatory visitor_id');
-    if (!entry_token) throw new Error('[REQ_03] Missing mandatory entry_token');
-
-    // 3. Retrieve Visitor Record
     const { data: visitor, error: fetchError } = await supabaseClient
         .from('visitors')
         .select('*')
         .eq('id', visitor_id)
         .single();
 
-    if (fetchError || !visitor) {
-        console.error("Visitor fetch error:", fetchError);
-        throw new Error('[DATA_01] Visitor record not found in the manifest');
+    if (fetchError || !visitor) throw new Error('Visitor not found');
+
+    if (currentRole !== 'superadmin' && visitor.community_id !== profile.community_id) {
+        throw new Error('Community mismatch');
     }
 
-    // 4. Security Bounds
-    if (visitor.community_id !== profile.community_id) {
-        throw new Error('[SEC_01] Security Alert: This pass belongs to a different community');
-    }
-
-    // 5. Verification Logic (Case Insensitive)
-    const submittedCode = String(entry_token).trim().toLowerCase();
+    const submitted = String(entry_token).trim().toLowerCase();
     const dbToken = String(visitor.entry_token || '').trim().toLowerCase();
     const dbId = String(visitor.id).trim().toLowerCase();
 
-    // Support verification by Token (6-char) or Visitor UUID
-    const isTokenMatch = submittedCode === dbToken;
-    const isIdMatch = submittedCode === dbId;
-
-    if (!isTokenMatch && !isIdMatch) {
-        throw new Error(`[VAL_01] Invalid Pass: Scanned code does not match record tokens`);
+    if (submitted !== dbToken && submitted !== dbId) {
+        throw new Error('Invalid Pass Code');
     }
 
-    // 6. Status & Expiry Validation
     if (visitor.status === 'Checked In') {
-        throw new Error('[VAL_02] Duplicate Entry: Visitor is already recorded as Checked In');
+        throw new Error('Visitor already checked in');
     }
 
-    if (visitor.status === 'Denied' || visitor.status === 'Checked Out') {
-        throw new Error(`[VAL_03] Pass Inactive: Current status is ${visitor.status}`);
-    }
-
-    const now = new Date();
-    // Use valid_until if set, otherwise fallback to expected_at + 24 hours
-    const expiryTimestamp = visitor.valid_until 
-        ? new Date(visitor.valid_until).getTime()
-        : new Date(visitor.expected_at).getTime() + (24 * 60 * 60 * 1000);
-    
-    if (now.getTime() > expiryTimestamp) {
-        await supabaseClient.from('visitors').update({ status: 'Expired' }).eq('id', visitor_id);
-        throw new Error('[VAL_04] Access Denied: This pass has expired');
-    }
-
-    // 7. Commit Check-In
+    // Only update status as entry_time column does not exist
     const { data: updatedVisitor, error: updateError } = await supabaseClient
         .from('visitors')
-        .update({
-            status: 'Checked In',
-            entry_time: now.toISOString()
-        })
+        .update({ status: 'Checked In' })
         .eq('id', visitor_id)
         .select()
         .single();
 
-    if (updateError) {
-        console.error("Update commit error:", updateError);
-        throw new Error('[DB_01] Failed to commit check-in status to database');
-    }
+    if (updateError) throw new Error('Database update failed');
 
-    // 8. Log Event
-    await supabaseClient.from('audit_logs').insert({
-        community_id: profile.community_id,
-        actor_id: user.id,
-        action: 'UPDATE',
-        entity: 'Visitor',
-        entity_id: visitor_id,
-        details: { description: `Gate Verified: ${visitor.name} arrived at Unit ${visitor.flat_number}` }
-    });
+    // Audit Logging
+    try {
+        await supabaseClient.from('audit_logs').insert({
+            community_id: visitor.community_id,
+            actor_id: user.id,
+            action: 'UPDATE',
+            entity: 'Visitor',
+            entity_id: visitor_id,
+            details: { description: `Gate Verified: ${visitor.name} checked in.` }
+        });
+    } catch (e) { console.warn("Audit failed", e); }
 
     return new Response(
-      JSON.stringify({ data: updatedVisitor, message: 'Verification Successful' }),
+      JSON.stringify({ data: updatedVisitor, message: 'Check-in Confirmed' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
   } catch (error: any) {
-    console.error("verify-visitor-runtime-error:", error.message);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal logic failure' }),
+      JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }

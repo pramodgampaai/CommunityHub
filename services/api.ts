@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { 
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
@@ -68,7 +67,6 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             flatNumber: unit.flat_number,
             block: unit.block,
             floor: unit.floor,
-            // Fixed property names to match Unit interface (flatSize and maintenanceStartDate)
             flatSize: unit.flat_size,
             maintenanceStartDate: unit.maintenance_start_date
         })) : [];
@@ -209,7 +207,6 @@ export const deleteCommunity = async (id: string) => {
         });
         
         if (error) {
-            // Attempt to parse the error body if available
             let detailedError = error.message;
             try {
                 if (error instanceof Response) {
@@ -217,8 +214,6 @@ export const deleteCommunity = async (id: string) => {
                     detailedError = body.error || detailedError;
                 }
             } catch(e) {}
-            
-            console.error("Community deletion failed:", detailedError);
             throw new Error(detailedError);
         }
         
@@ -228,7 +223,6 @@ export const deleteCommunity = async (id: string) => {
         
         return data;
     } catch (err: any) {
-        console.error("Delete invocation error:", err);
         throw err;
     }
 };
@@ -401,8 +395,6 @@ export const getVisitors = async (communityId: string, role?: UserRole): Promise
         status: v.status as VisitorStatus,
         expectedAt: v.expected_at,
         validUntil: v.valid_until,
-        entryTime: v.entry_time,
-        exitTime: v.exit_time,
         entryToken: v.entry_token,
         residentName: v.resident_name,
         flatNumber: v.flat_number,
@@ -420,7 +412,6 @@ export const createVisitor = async (data: Partial<Visitor>, user: User) => {
         vehicle_number: data.vehicleNumber,
         purpose: data.purpose,
         expected_at: data.expectedAt,
-        // Fixed: Use flatNumber from Partial<Visitor> as defined in types.ts
         flat_number: data.flatNumber || user.flatNumber,
         resident_name: user.name,
         community_id: user.communityId,
@@ -463,11 +454,7 @@ export const deleteVisitor = async (id: string) => {
 };
 
 export const updateVisitorStatus = async (id: string, status: VisitorStatus) => {
-    const update: any = { status };
-    if (status === VisitorStatus.CheckedIn) update.entry_time = new Date().toISOString();
-    if (status === VisitorStatus.CheckedOut) update.exit_time = new Date().toISOString();
-
-    const { error } = await supabase.from('visitors').update(update).eq('id', id);
+    const { error } = await supabase.from('visitors').update({ status }).eq('id', id);
     if (error) throw error;
 };
 
@@ -480,8 +467,7 @@ export const verifyVisitorEntry = async (visitorId: string, token: string, user:
 
 export const checkOutVisitor = async (id: string, user: User) => {
     const { error } = await supabase.from('visitors').update({
-        status: 'Checked Out',
-        exit_time: new Date().toISOString()
+        status: 'Checked Out'
     }).eq('id', id);
     if (error) throw error;
 };
