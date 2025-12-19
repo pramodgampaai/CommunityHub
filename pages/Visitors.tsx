@@ -61,27 +61,51 @@ const Visitors: React.FC = () => {
     useEffect(() => { fetchVisitors(); }, [user]);
 
     const handleVerifySubmit = async (code: string) => {
-        if (!user || isVerifying) return;
+        if (!user || isVerifying || !code) return;
         setIsVerifying(true);
         try {
-            // Find visitor with this token or ID
-            const targetVisitor = visitors.find(v => v.entryToken === code.toUpperCase() || v.id === code);
+            const cleanCode = code.trim();
+            const upperCode = cleanCode.toUpperCase();
+            
+            // Find visitor with this token or ID in our current list
+            const targetVisitor = visitors.find(v => 
+                (v.entryToken && v.entryToken.toUpperCase() === upperCode) || 
+                v.id === cleanCode ||
+                v.id === cleanCode.toLowerCase()
+            );
             
             if (!targetVisitor) {
-                setFeedback({ isOpen: true, type: 'error', title: 'Invalid Pass', message: 'No expected visitor found matching this security code.' });
+                setFeedback({ 
+                    isOpen: true, 
+                    type: 'error', 
+                    title: 'Invalid Pass', 
+                    message: 'The security code or QR code does not match any expected visitors in today\'s manifest.' 
+                });
                 setIsVerifying(false);
                 return;
             }
 
-            await verifyVisitorEntry(targetVisitor.id, code.toUpperCase(), user);
+            // Call edge function with exact ID and the code scanned
+            await verifyVisitorEntry(targetVisitor.id, upperCode, user);
+            
             setVerifiedVisitor(targetVisitor);
             setVerificationMode('selection');
             setIsVerifyModalOpen(false);
             setManualCode('');
             await fetchVisitors();
-            setFeedback({ isOpen: true, type: 'success', title: 'Access Granted', message: `${targetVisitor.name} has been checked in successfully.` });
+            setFeedback({ 
+                isOpen: true, 
+                type: 'success', 
+                title: 'Access Granted', 
+                message: `${targetVisitor.name} has been checked in successfully for Unit ${targetVisitor.flatNumber}.` 
+            });
         } catch (error: any) {
-            setFeedback({ isOpen: true, type: 'error', title: 'Check-in Failed', message: error.message || 'Verification rejected by system.' });
+            setFeedback({ 
+                isOpen: true, 
+                type: 'error', 
+                title: 'Check-in Failed', 
+                message: error.message || 'The system could not verify this entry. Please check the credentials and try again.' 
+            });
         } finally {
             setIsVerifying(false);
         }
@@ -404,11 +428,11 @@ const Visitors: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Vehicle Number</label>
-                        <input type="text" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="e.g. KA 01 EB 1234" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold uppercase"/>
+                        <input type="text" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="e.g. KA 01 EB 1234" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold uppercase"/>
                     </div>
                     <div>
                         <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Expected Arrival</label>
-                        <input type="datetime-local" value={expectedAt} onChange={e => setExpectedAt(e.target.value)} required className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/>
+                        <input type="datetime-local" value={expectedAt} onChange={e => setExpectedAt(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
                     </div>
                     <div className="flex justify-end pt-2 gap-3">
                         <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)}>Cancel</Button>
