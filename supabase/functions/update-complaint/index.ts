@@ -30,57 +30,32 @@ serve(async (req: any) => {
     const { id, status, assigned_to } = await req.json()
     if (!id) throw new Error('Missing complaint ID')
 
-    // Fetch User Role from Profile
     const { data: profile } = await supabaseClient.from('users').select('role').eq('id', user.id).single();
     const role = profile?.role ? profile.role.toLowerCase() : '';
 
-    // Fetch Existing Complaint to verify permissions
-    const { data: complaint, error: fetchError } = await supabaseClient.from('complaints').select('*').eq('id', id).single();
-    
-    if (fetchError || !complaint) throw new Error('Complaint not found');
+    const { data: oldComplaint, error: fetchError } = await supabaseClient.from('complaints').select('*').eq('id', id).single();
+    if (fetchError || !oldComplaint) throw new Error('Complaint not found');
 
-    // Permission Logic
     const isAdmin = role === 'admin' || role === 'superadmin' || role === 'helpdeskadmin';
     const isAgent = role === 'helpdeskagent';
 
-    if (!isAdmin && !isAgent) {
-        // Allow resident to update status to "Resolved" if it's their own complaint? 
-        // For now, strict check based on original request context (Agents failing).
-        // If resident, check ownership
-        if (complaint.user_id !== user.id) throw new Error('Unauthorized');
-    }
-
     if (isAgent) {
-        const isAssignedToSelf = complaint.assigned_to === user.id;
-        const isUnassigned = complaint.assigned_to === null;
-
-        // 1. Changing Status
-        if (status) {
-            // Can update status if assigned to self OR if unassigned (cherry picking process)
-            if (!isAssignedToSelf && !isUnassigned) {
-                throw new Error('You can only update status of your own tickets');
-            }
-        }
-
-        // 2. Changing Assignment
-        if (assigned_to) {
-            // Can assign to self if unassigned
-            if (isUnassigned && assigned_to === user.id) {
-                // Allowed (Claiming)
-            } else if (isAssignedToSelf && assigned_to !== user.id) {
-                // Agent re-assigning? Allow for flexibility or block? 
-                // Let's block to keep it strict: Only Admins dispatch.
-                throw new Error('Agents cannot reassign tickets to others');
-            } else if (!isAssignedToSelf && !isUnassigned) {
-                 throw new Error('Cannot change assignment of this ticket');
-            }
-        }
+        const isAssignedToSelf = oldComplaint.assigned_to === user.id;
+        const isUnassigned = oldComplaint.assigned_to === null;
+        if (status && !isAssignedToSelf && !isUnassigned) throw new Error('You can only update status of your own tickets');
+        if (assigned_to && assigned_to !== user.id) throw new Error('Agents cannot reassign tickets to others');
     }
 
-    // Perform Update via Service Role
     const updates: any = {};
-    if (status) updates.status = status;
-    if (assigned_to) updates.assigned_to = assigned_to;
+    let auditDesc = "Complaint updated";
+    if (status) {
+        updates.status = status;
+        auditDesc = `Status transitioned to ${status}`;
+    }
+    if (assigned_to) {
+        updates.assigned_to = assigned_to;
+        auditDesc = assigned_to === user.id ? "Ticket claimed by staff" : "Ticket routed to new agent";
+    }
 
     const { data: updated, error: updateError } = await supabaseClient
         .from('complaints')
@@ -90,6 +65,20 @@ serve(async (req: any) => {
         .single();
 
     if (updateError) throw updateError;
+
+    // Record Event in Audit Logs for Trace
+    await supabaseClient.from('audit_logs').insert({
+        community_id: updated.community_id,
+        actor_id: user.id,
+        action: 'UPDATE',
+        entity: 'Complaint',
+        entity_id: id,
+        details: { 
+            description: auditDesc, 
+            old: { status: oldComplaint.status, assigned_to: oldComplaint.assigned_to }, 
+            new: { status: updated.status, assigned_to: updated.assigned_to } 
+        }
+    });
 
     return new Response(
       JSON.stringify({ data: updated }),

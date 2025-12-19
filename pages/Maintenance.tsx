@@ -1,671 +1,221 @@
-
 import React, { useState, useEffect } from 'react';
-import { getMaintenanceRecords, submitMaintenancePayment, verifyMaintenancePayment, getCommunity, getMaintenanceHistory, addMaintenanceConfiguration } from '../services/api';
-import type { MaintenanceRecord, Community, MaintenanceConfiguration } from '../types';
+import { getMaintenanceRecords, submitMaintenancePayment, verifyMaintenancePayment } from '../services/api';
+import type { MaintenanceRecord } from '../types';
 import { MaintenanceStatus, UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { useAuth } from '../hooks/useAuth';
 import AuditLogModal from '../components/AuditLogModal';
-import { CurrencyRupeeIcon, MagnifyingGlassIcon, FunnelIcon, PencilIcon, ClockIcon, HistoryIcon, CheckCircleIcon } from '../components/icons';
-import { useScreen } from '../hooks/useScreen';
+import { useAuth } from '../hooks/useAuth';
+import { HistoryIcon, CurrencyRupeeIcon, ClockIcon, CheckCircleIcon, ArrowDownTrayIcon } from '../components/icons';
 
-interface MaintenanceProps {
-    initialFilter?: MaintenanceStatus;
-}
-
-const StatusPill: React.FC<{ status: MaintenanceStatus }> = ({ status }) => {
-    const statusStyles: Record<MaintenanceStatus, string> = {
-        [MaintenanceStatus.Pending]: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-        [MaintenanceStatus.Submitted]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-        [MaintenanceStatus.Paid]: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-    };
-    return <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusStyles[status]}`}>{status}</span>;
-}
-
-// ... Skeletons ...
-const MaintenanceSkeleton: React.FC = () => (
-     <tr className="animate-pulse">
-        <td className="p-4"><div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-        <td className="p-4"><div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-        <td className="p-4"><div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full"></div></td>
-        <td className="p-4"><div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-        <td className="p-4"><div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div></td>
-    </tr>
-);
-
-const MobileCardSkeleton: React.FC = () => (
-    <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 animate-pulse mb-4">
-        <div className="flex justify-between mb-4">
-            <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-        <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
-        <div className="flex justify-between">
-            <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-            <div className="h-8 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-    </div>
-);
-
-const Maintenance: React.FC<MaintenanceProps> = ({ initialFilter }) => {
+const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
     const { user } = useAuth();
-    const canManage = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.HelpdeskAdmin;
-
-    // Default to 'manage' for admins, 'my_dues' for residents
-    const [activeTab, setActiveTab] = useState<'manage' | 'my_dues'>(canManage ? 'manage' : 'my_dues');
-    
     const [records, setRecords] = useState<MaintenanceRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-    
-    // Configuration Modal
-    const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-    const [community, setCommunity] = useState<Community | null>(null);
-    const [history, setHistory] = useState<MaintenanceConfiguration[]>([]);
     const [isAuditOpen, setIsAuditOpen] = useState(false);
-    
-    // Add New Config Form
-    const [newRate, setNewRate] = useState('');
-    const [newFixedAmount, setNewFixedAmount] = useState('');
-    const [newEffectiveDate, setNewEffectiveDate] = useState(new Date().toISOString().split('T')[0]);
-    const [isAddingConfig, setIsAddingConfig] = useState(false); // Toggle form inside modal
-
-    const { isMobile } = useScreen();
-    
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<MaintenanceRecord | null>(null);
     
-    // Payment Form State
-    const [receiptUrl, setReceiptUrl] = useState('');
+    // Form States
     const [upiId, setUpiId] = useState('');
-    const [transactionDate, setTransactionDate] = useState('');
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [receiptUrl, setReceiptUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    // Admin Filters
-    const [filterStatus, setFilterStatus] = useState<MaintenanceStatus | 'All'>('All');
-    const [searchQuery, setSearchQuery] = useState('');
 
-    useEffect(() => {
-        if (initialFilter) {
-            setFilterStatus(initialFilter);
-        }
-    }, [initialFilter]);
+    const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.HelpdeskAdmin;
 
     const fetchRecords = async () => {
-        if (!user?.communityId) return;
-        try {
+        if (user?.communityId) {
             setLoading(true);
-            // Fetch All if Admin is in 'manage' mode. Otherwise fetch specific user (for Resident OR Admin in 'my_dues' mode)
-            const shouldFetchAll = canManage && activeTab === 'manage';
-            const userId = shouldFetchAll ? undefined : user.id;
-            
-            const data = await getMaintenanceRecords(user.communityId, userId);
-            setRecords(data);
-        } catch (error) {
-            console.error("Failed to fetch maintenance records", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchCommunitySettings = async () => {
-        if (!user?.communityId || !canManage) return;
-        try {
-            const data = await getCommunity(user.communityId);
-            setCommunity(data);
-            const historyData = await getMaintenanceHistory(user.communityId);
-            setHistory(historyData);
-            
-            // Set defaults for new form based on latest
-            if (historyData.length > 0) {
-                setNewRate(historyData[0].maintenanceRate.toString());
-                setNewFixedAmount(historyData[0].fixedMaintenanceAmount.toString());
-            } else {
-                setNewRate(data.maintenanceRate?.toString() || '');
-                setNewFixedAmount(data.fixedMaintenanceAmount?.toString() || '');
+            try {
+                // Admins see everything, residents only see their own
+                const data = await getMaintenanceRecords(user.communityId, isAdmin ? undefined : user.id);
+                setRecords(data);
+            } catch (e) { 
+                console.error("Maintenance fetch error:", e); 
+            } finally { 
+                setLoading(false); 
             }
-        } catch (error) {
-            console.error("Failed to fetch community settings", error);
         }
-    }
-
-    useEffect(() => {
-        fetchRecords();
-        if (canManage) {
-            fetchCommunitySettings();
-        }
-    }, [user, activeTab]); // Re-fetch when tab changes
-
-    const handlePayClick = (record: MaintenanceRecord) => {
-        setSelectedRecord(record);
-        setIsModalOpen(true);
-        setTransactionDate(new Date().toISOString().split('T')[0]);
     };
 
-    const handleVerifyClick = (record: MaintenanceRecord) => {
-        setSelectedRecord(record);
-        setIsViewModalOpen(true);
-    }
+    useEffect(() => { fetchRecords(); }, [user, isAdmin]);
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedRecord) return;
+        if (!selectedRecord || !user) return;
         setIsSubmitting(true);
         try {
-            await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, transactionDate);
-            setIsModalOpen(false);
-            setReceiptUrl('');
-            setUpiId('');
-            alert("Payment Submitted successfully! Admin will verify shortly.");
+            await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, paymentDate);
+            setIsPaymentModalOpen(false); 
             await fetchRecords();
-        } catch (error: any) {
-            alert(error.message || "Failed to submit payment");
-        } finally {
-            setIsSubmitting(false);
+        } catch (err) { 
+            console.error("Payment submission failed:", err); 
+        } finally { 
+            setIsSubmitting(false); 
         }
     };
 
-    const handleVerifySubmit = async () => {
-         if (!selectedRecord) return;
-         setIsSubmitting(true);
-         try {
-             await verifyMaintenancePayment(selectedRecord.id);
-             setIsViewModalOpen(false);
-             alert("Payment Verified and marked as Paid.");
-             await fetchRecords();
-         } catch (error: any) {
-             alert(error.message || "Failed to verify");
-         } finally {
-             setIsSubmitting(false);
-         }
-    };
-
-    const handleAddConfigSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!community || !user?.communityId) return;
-        
-        setIsSubmitting(true);
-        try {
-            await addMaintenanceConfiguration({
-                communityId: user.communityId,
-                maintenanceRate: newRate ? parseFloat(newRate) : 0,
-                fixedMaintenanceAmount: newFixedAmount ? parseFloat(newFixedAmount) : 0,
-                effectiveDate: newEffectiveDate
-            });
-            
-            setIsAddingConfig(false);
-            alert("New maintenance rate added successfully.");
-            await fetchCommunitySettings();
-        } catch (error: any) {
-            alert("Failed to add configuration: " + error.message);
-        } finally {
-            setIsSubmitting(false);
+    const handleVerify = async (record: MaintenanceRecord) => {
+        if (!isAdmin) return;
+        try { 
+            await verifyMaintenancePayment(record.id); 
+            await fetchRecords(); 
+        } catch (err) { 
+            console.error("Verification failed:", err); 
         }
     };
-    
-    // ... File Upload Logic ...
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 1024 * 1024) {
-                alert("File too large. Please select an image under 1MB.");
-                return;
-            }
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setReceiptUrl(reader.result as string);
-            };
+            reader.onloadend = () => setReceiptUrl(reader.result as string);
             reader.readAsDataURL(file);
         }
-    }
+    };
 
-    const filteredRecords = records.filter(r => {
-        if (filterStatus !== 'All' && r.status !== filterStatus) return false;
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            return (
-                r.userName?.toLowerCase().includes(q) || 
-                r.flatNumber?.toLowerCase().includes(q) ||
-                r.upiTransactionId?.toLowerCase().includes(q)
-            );
+    const getStatusStyles = (status: MaintenanceStatus) => {
+        switch (status) {
+            case MaintenanceStatus.Paid: return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20';
+            case MaintenanceStatus.Submitted: return 'bg-blue-50 text-blue-600 dark:bg-blue-900/20';
+            default: return 'bg-amber-50 text-amber-600 dark:bg-amber-900/20';
         }
-        return true;
-    });
-
-    const renderMobileList = () => (
-        <div className="space-y-4">
-            {filteredRecords.length === 0 ? (
-                <div className="p-8 text-center text-[var(--text-secondary-light)]">No records found.</div>
-            ) : (
-                filteredRecords.map(record => {
-                    const isOwnRecord = record.userId === user?.id;
-                    return (
-                        <div key={record.id} className="p-4 rounded-xl bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] shadow-sm border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <h4 className="font-bold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.flatNumber}</h4>
-                                    {canManage && activeTab === 'manage' && <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.userName}</p>}
-                                </div>
-                                <span className="font-bold text-lg text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{record.amount}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-3">
-                                <span>{new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</span>
-                                {record.transactionDate && <span>Paid: {new Date(record.transactionDate).toLocaleDateString()}</span>}
-                            </div>
-                            <div className="flex justify-between items-center pt-2 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                                <StatusPill status={record.status} />
-                                
-                                {isOwnRecord && record.status === MaintenanceStatus.Pending && (
-                                    <Button size="sm" onClick={() => handlePayClick(record)} leftIcon={<CurrencyRupeeIcon className="w-4 h-4"/>}>Pay</Button>
-                                )}
-                                
-                                {canManage && record.status === MaintenanceStatus.Submitted && (
-                                    isOwnRecord ? (
-                                        <span className="text-xs text-gray-500 italic">Peer verification needed</span>
-                                    ) : (
-                                        <Button size="sm" onClick={() => handleVerifyClick(record)}>Verify</Button>
-                                    )
-                                )}
-                            </div>
-                        </div>
-                    );
-                })
-            )}
-        </div>
-    );
+    };
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center animated-card">
-                <div>
-                    <h2 className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">Maintenance History</h2>
-                    <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-lg mt-1">
-                        {canManage ? "Manage payments and rates." : "View dues and payment history."}
-                    </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+                <div className="flex items-start gap-2.5">
+                    <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
+                    <div>
+                        <span className="text-[8px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Finance & Ledger</span>
+                        <h2 className="text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight leading-tight">Maintenance</h2>
+                    </div>
                 </div>
-                <div className="flex gap-2">
-                    <Button 
-                        onClick={() => setIsAuditOpen(true)} 
-                        variant="outlined"
-                        size="sm"
-                        leftIcon={<HistoryIcon className="w-4 h-4" />}
-                        className="border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                        History
-                    </Button>
-                    {canManage && (
-                        <Button 
-                            onClick={() => setIsConfigModalOpen(true)}
-                            variant="outlined"
-                            leftIcon={<PencilIcon className="w-4 h-4"/>}
-                            className="hidden sm:inline-flex"
-                        >
-                            Configure Rates
-                        </Button>
-                    )}
-                </div>
+                <Button onClick={() => setIsAuditOpen(true)} variant="outlined" size="md" leftIcon={<HistoryIcon />}>Audit Logs</Button>
             </div>
-            
-            {/* Mobile Fab for Config */}
-            {canManage && isMobile && (
-                 <div className="flex justify-end -mt-4 mb-2">
-                    <Button size="sm" onClick={() => setIsConfigModalOpen(true)} variant="outlined" leftIcon={<PencilIcon className="w-4 h-4"/>}>
-                        Configure Rates
-                    </Button>
-                 </div>
-            )}
 
-            {/* Admin Tabs */}
-            {canManage && (
-                <div className="border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                    <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                        <button
-                            onClick={() => setActiveTab('manage')}
-                            className={`${activeTab === 'manage' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                        >
-                            Manage Records
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('my_dues')}
-                            className={`${activeTab === 'my_dues' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                        >
-                            My Dues
-                        </button>
-                    </nav>
-                </div>
-            )}
-
-            {canManage && activeTab === 'manage' && (
-                <div className="flex flex-col gap-4 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] animated-card">
-                     <div className="relative flex-1">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <MagnifyingGlassIcon className="h-5 w-5 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]" />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Search by resident, flat, or transaction ID..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="block w-full pl-10 pr-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                        />
-                    </div>
-                    <div className="relative">
-                         <select 
-                            value={filterStatus} 
-                            onChange={(e) => setFilterStatus(e.target.value as any)}
-                            className="appearance-none bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] border border-[var(--border-light)] dark:border-[var(--border-dark)] text-sm rounded-lg block w-full pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                        >
-                            <option value="All">All Status</option>
-                            <option value={MaintenanceStatus.Pending}>Pending</option>
-                            <option value={MaintenanceStatus.Submitted}>Submitted</option>
-                            <option value={MaintenanceStatus.Paid}>Paid</option>
-                        </select>
-                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-                            <FunnelIcon className="w-4 h-4" />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {loading ? (
-                isMobile ? (
-                    <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <MobileCardSkeleton key={i} />)}</div>
+            <div className="space-y-3">
+                {loading ? (
+                    Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse" />)
                 ) : (
-                    <Card className="overflow-x-auto animated-card">
-                         <table className="w-full text-left border-collapse whitespace-nowrap">
-                            <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                                {Array.from({ length: 5 }).map((_, i) => <MaintenanceSkeleton key={i} />)}
-                            </tbody>
-                        </table>
-                    </Card>
-                )
-            ) : isMobile ? (
-                renderMobileList()
-            ) : (
-                <Card className="overflow-x-auto animated-card">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
-                        <thead className="bg-black/5 dark:bg-white/5">
-                            <tr>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{activeTab === 'manage' ? 'Resident' : 'Unit'}</th>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Month</th>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Amount</th>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Status</th>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Payment Date</th>
-                                <th className="p-4 font-semibold text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                            {filteredRecords.length === 0 ? (
-                                <tr><td colSpan={6} className="p-4 text-center text-[var(--text-secondary-light)]">No records found.</td></tr>
-                            ) : (
-                                filteredRecords.map(record => {
-                                    const isOwnRecord = record.userId === user?.id;
-                                    return (
-                                        <tr key={record.id}>
-                                            <td className="p-4">
-                                                {canManage && activeTab === 'manage' ? (
-                                                    <div>
-                                                        <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.userName}</div>
-                                                        <div className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.flatNumber}</div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{record.flatNumber}</div>
-                                                )}
-                                            </td>
-                                            <td className="p-4 text-[var(--text-light)] dark:text-[var(--text-dark)]">{new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</td>
-                                            <td className="p-4 font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{record.amount}</td>
-                                            <td className="p-4"><StatusPill status={record.status} /></td>
-                                            <td className="p-4 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">{record.transactionDate ? new Date(record.transactionDate).toLocaleDateString() : '-'}</td>
-                                            <td className="p-4">
-                                                {isOwnRecord && record.status === MaintenanceStatus.Pending && (
-                                                    <Button size="sm" onClick={() => handlePayClick(record)} leftIcon={<CurrencyRupeeIcon className="w-4 h-4"/>}>Pay Now</Button>
-                                                )}
-                                                
-                                                {canManage && record.status === MaintenanceStatus.Submitted && (
-                                                    isOwnRecord ? (
-                                                        <span className="text-xs text-gray-500 italic cursor-help" title="Another admin must verify your payment.">Peer verification needed</span>
-                                                    ) : (
-                                                        <Button size="sm" onClick={() => handleVerifyClick(record)}>Verify</Button>
-                                                    )
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </Card>
-            )}
-
-            {/* Resident Payment Modal */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Submit Payment">
-                <form className="space-y-4" onSubmit={handlePaymentSubmit}>
-                    {/* ... Existing Payment Form ... */}
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md mb-4 border border-blue-100 dark:border-blue-900/30">
-                        <div className="flex justify-between items-start mb-2">
-                             <div>
-                                <p className="text-xs text-blue-600 dark:text-blue-300 uppercase tracking-wide font-semibold">Payment For</p>
-                                <p className="text-lg font-bold text-blue-900 dark:text-blue-100">{selectedRecord?.flatNumber}</p>
-                             </div>
-                             <div className="text-right">
-                                <p className="text-xs text-blue-600 dark:text-blue-300 uppercase tracking-wide font-semibold">Amount Due</p>
-                                <p className="text-lg font-bold text-blue-900 dark:text-blue-100">₹{selectedRecord?.amount}</p>
-                             </div>
+                    records.length === 0 ? (
+                        <div className="p-16 text-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
+                            <CurrencyRupeeIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                            <p className="font-bold uppercase tracking-widest text-[9px]">No billing records found</p>
                         </div>
-                        <p className="text-sm text-blue-700 dark:text-blue-300/80 border-t border-blue-200 dark:border-blue-800 pt-2 mt-1">
-                            Billing Month: <span className="font-semibold">{selectedRecord && new Date(selectedRecord.periodDate).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
-                        </p>
+                    ) : (
+                        records.map(record => (
+                            <Card key={record.id} className="p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-5 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 shadow-sm">
+                                <div className="flex-1 w-full text-left">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${getStatusStyles(record.status)}`}>{record.status}</span>
+                                        {isAdmin && record.userName && (
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase">Resident: <span className="text-slate-900 dark:text-slate-100">{record.userName}</span></span>
+                                        )}
+                                    </div>
+                                    <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50 leading-none">
+                                        {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+                                    </h3>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-600 mt-2">Unit ID: <span className="text-slate-500 dark:text-slate-400">{record.flatNumber || 'N/A'}</span></p>
+                                </div>
+
+                                <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0">
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-black uppercase tracking-tighter text-slate-400 mb-0.5">Amount Due</p>
+                                        <p className="text-2xl font-brand font-extrabold text-slate-900 dark:text-slate-50">₹{record.amount.toLocaleString()}</p>
+                                    </div>
+                                    
+                                    <div className="flex gap-2">
+                                        {/* Action: Pay (Visible to the record owner if Pending) */}
+                                        {record.status === MaintenanceStatus.Pending && record.userId === user?.id && (
+                                            <Button size="md" onClick={() => { setSelectedRecord(record); setReceiptUrl(''); setIsPaymentModalOpen(true); }} leftIcon={<CurrencyRupeeIcon />}>Pay Now</Button>
+                                        )}
+
+                                        {/* Action: Verify (Visible to Admin if Submitted) */}
+                                        {record.status === MaintenanceStatus.Submitted && isAdmin && (
+                                            <Button size="md" onClick={() => handleVerify(record)} className="bg-emerald-600 hover:bg-emerald-700 text-white" leftIcon={<CheckCircleIcon />}>Verify</Button>
+                                        )}
+
+                                        {/* Action: View Receipt (Visible if Submitted/Paid and URL exists) */}
+                                        {(record.status === MaintenanceStatus.Submitted || record.status === MaintenanceStatus.Paid) && record.paymentReceiptUrl && (
+                                            <Button variant="outlined" size="md" onClick={() => { setSelectedRecord(record); setIsReceiptModalOpen(true); }} leftIcon={<ArrowDownTrayIcon />}>Proof</Button>
+                                        )}
+                                    </div>
+                                </div>
+                            </Card>
+                        ))
+                    )
+                )}
+            </div>
+
+            {/* Payment Submission Modal */}
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Settle Maintenance" subtitle="SECURE GATEWAY" size="md">
+                <form className="space-y-6" onSubmit={handlePaymentSubmit}>
+                    <div className="bg-slate-50 dark:bg-white/5 p-6 rounded-[2rem] text-center border border-slate-100 dark:border-white/5">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Total Outstanding</p>
+                        <h4 className="text-4xl font-brand font-extrabold text-brand-600">₹{selectedRecord?.amount.toLocaleString()}</h4>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Payment Receipt (Image)</label>
-                        <input type="file" accept="image/*" onChange={handleFileUpload} required={!receiptUrl} className="block w-full text-sm text-[var(--text-secondary-light)] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                        {receiptUrl && <p className="text-xs text-green-600 mt-1">Receipt attached.</p>}
+                    
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">UPI Transaction Reference</label>
+                            <input type="text" value={upiId} onChange={e => setUpiId(e.target.value)} required placeholder="e.g. 324567890123" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold uppercase"/>
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Date of Transfer</label>
+                            <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Payment Confirmation (Screenshot)</label>
+                            <div className="mt-1 flex items-center gap-4">
+                                <input type="file" accept="image/*" onChange={handleFileUpload} required className="block w-full text-[11px] text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 cursor-pointer"/>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">UPI Transaction ID</label>
-                        <input type="text" value={upiId} onChange={e => setUpiId(e.target.value)} required placeholder="e.g. 1234567890" className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">Transaction Date</label>
-                        <input type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} required className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"/>
-                    </div>
-                    <div className="flex justify-end pt-4 space-x-2">
-                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting || !receiptUrl}>{isSubmitting ? 'Submitting...' : 'Submit Payment'}</Button>
+                    
+                    <div className="pt-2">
+                        <Button type="submit" disabled={isSubmitting} className="w-full shadow-xl shadow-brand-500/10" size="lg" leftIcon={<CheckCircleIcon />}>
+                            {isSubmitting ? 'Transmitting Data...' : 'Confirm Payment'}
+                        </Button>
                     </div>
                 </form>
             </Modal>
 
-            {/* Admin Verification Modal */}
-             <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Verify Payment">
-                {/* ... Existing Verify Modal ... */}
-                <div className="space-y-4">
-                    <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-md">
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                            <span className="text-[var(--text-secondary-light)]">Resident:</span>
-                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.userName}</span>
-                            <span className="text-[var(--text-secondary-light)]">Unit:</span>
-                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.flatNumber}</span>
-                            <span className="text-[var(--text-secondary-light)]">Amount:</span>
-                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">₹{selectedRecord?.amount}</span>
-                            <span className="text-[var(--text-secondary-light)]">UPI ID:</span>
-                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.upiTransactionId}</span>
-                             <span className="text-[var(--text-secondary-light)]">Date:</span>
-                            <span className="font-medium text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedRecord?.transactionDate}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium mb-2 text-[var(--text-secondary-light)]">Attached Receipt:</p>
-                        {selectedRecord?.paymentReceiptUrl ? (
-                            <div className="border rounded-lg p-2 bg-white dark:bg-black">
-                                <img src={selectedRecord.paymentReceiptUrl} alt="Receipt" className="max-h-64 object-contain mx-auto" />
+            {/* Receipt Viewing Modal */}
+            <Modal isOpen={isReceiptModalOpen} onClose={() => setIsReceiptModalOpen(false)} title="Payment Verification" subtitle="AUDIT PROOF" size="lg">
+                {selectedRecord && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                                <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Transaction ID</p>
+                                <p className="text-sm font-bold break-all">{selectedRecord.upiTransactionId || 'N/A'}</p>
                             </div>
-                        ) : (
-                            <p className="text-red-500 text-sm">No receipt attached.</p>
-                        )}
-                    </div>
-                    <div className="flex justify-end pt-4 space-x-2">
-                        <Button type="button" variant="outlined" onClick={() => setIsViewModalOpen(false)} disabled={isSubmitting}>Close</Button>
-                        <Button type="button" onClick={handleVerifySubmit} disabled={isSubmitting}>{isSubmitting ? 'Verifying...' : 'Verify & Approve'}</Button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Configuration History Modal */}
-            <Modal isOpen={isConfigModalOpen} onClose={() => { setIsConfigModalOpen(false); setIsAddingConfig(false); }} title="Maintenance Configuration" size="lg">
-                <div className="space-y-6">
-                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-100 dark:border-blue-900/30">
-                        <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                            Community Type: {community?.communityType}
-                        </p>
-                        <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
-                            {community?.communityType?.includes('Standalone') 
-                                ? "Calculated as a fixed monthly amount per unit." 
-                                : "Calculated as Rate x Unit Size (sq ft)."}
-                        </p>
-                    </div>
-
-                    {!isAddingConfig ? (
-                        <div className="space-y-6">
-                            
-                            {/* Current Active Rate Section - Always visible */}
-                            <div className="bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] p-4 rounded-lg border border-[var(--border-light)] dark:border-[var(--border-dark)] flex items-center justify-between shadow-sm">
-                                <div>
-                                    <p className="text-xs text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider font-semibold">Current Active Rate</p>
-                                    <div className="flex items-baseline gap-1 mt-1">
-                                        <span className="text-2xl font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                            {community?.communityType?.includes('Standalone') 
-                                                ? `₹${community?.fixedMaintenanceAmount || 0}` 
-                                                : `₹${community?.maintenanceRate || 0}`
-                                            }
-                                        </span>
-                                        {!community?.communityType?.includes('Standalone') && (
-                                            <span className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">/ sq ft</span>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-[var(--text-secondary-light)] mt-1">
-                                        This rate applies to all current calculations unless overridden by history below.
-                                    </p>
-                                </div>
-                                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
-                                    <CheckCircleIcon className="w-6 h-6" />
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h3 className="text-md font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)]">Rate History</h3>
-                                    <Button size="sm" onClick={() => setIsAddingConfig(true)} leftIcon={<ClockIcon className="w-4 h-4"/>}>New Rate</Button>
-                                </div>
-                                
-                                <div className="overflow-x-auto border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-lg">
-                                    <table className="min-w-full divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                                        <thead className="bg-black/5 dark:bg-white/5">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">Effective From</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">
-                                                    {community?.communityType?.includes('Standalone') ? 'Fixed Amount' : 'Rate / Sq Ft'}
-                                                </th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-wider">Created</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
-                                            {history.length === 0 ? (
-                                                <tr><td colSpan={3} className="px-4 py-4 text-center text-sm text-[var(--text-secondary-light)]">No history found.</td></tr>
-                                            ) : (
-                                                history.map((config) => (
-                                                    <tr key={config.id}>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-[var(--text-light)] dark:text-[var(--text-dark)] font-medium">
-                                                            {new Date(config.effectiveDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-[var(--text-light)] dark:text-[var(--text-dark)]">
-                                                            {community?.communityType?.includes('Standalone') ? `₹${config.fixedMaintenanceAmount}` : `₹${config.maintenanceRate}`}
-                                                        </td>
-                                                        <td className="px-4 py-3 whitespace-nowrap text-xs text-[var(--text-secondary-light)]">
-                                                            {new Date(config.createdAt).toLocaleDateString()}
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <div className="p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                                <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Payment Date</p>
+                                <p className="text-sm font-bold">{selectedRecord.transactionDate ? new Date(selectedRecord.transactionDate).toLocaleDateString() : 'N/A'}</p>
                             </div>
                         </div>
-                    ) : (
-                        <form onSubmit={handleAddConfigSubmit} className="space-y-4 border border-[var(--border-light)] dark:border-[var(--border-dark)] p-4 rounded-lg bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
-                            <h3 className="text-md font-semibold text-[var(--text-light)] dark:text-[var(--text-dark)] mb-2">Set New Effective Rate</h3>
-                            
-                            {community?.communityType?.includes('Standalone') ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
-                                        Fixed Monthly Amount (₹)
-                                    </label>
-                                    <input 
-                                        type="number" 
-                                        min="0"
-                                        step="0.01"
-                                        value={newFixedAmount}
-                                        onChange={e => setNewFixedAmount(e.target.value)}
-                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
-                                        required
-                                    />
-                                </div>
+                        
+                        <div className="rounded-3xl overflow-hidden border-2 border-slate-100 dark:border-white/5 bg-black/5">
+                            {selectedRecord.paymentReceiptUrl ? (
+                                <img src={selectedRecord.paymentReceiptUrl} alt="Payment Proof" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
                             ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
-                                        Rate per Sq. Ft. (₹)
-                                    </label>
-                                    <input 
-                                        type="number" 
-                                        min="0"
-                                        step="0.01"
-                                        value={newRate}
-                                        onChange={e => setNewRate(e.target.value)}
-                                        className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
-                                        required
-                                    />
-                                </div>
+                                <div className="p-20 text-center text-slate-400 italic">No image attachment found.</div>
                             )}
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mb-1">
-                                    Effective From
-                                </label>
-                                <input 
-                                    type="date" 
-                                    value={newEffectiveDate}
-                                    onChange={e => setNewEffectiveDate(e.target.value)}
-                                    className="block w-full px-3 py-2 border border-[var(--border-light)] dark:border-[var(--border-dark)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] bg-transparent"
-                                    required
-                                />
-                                <p className="text-xs text-[var(--text-secondary-light)] mt-1">
-                                    Bills generated for months after this date will use this rate.
-                                </p>
-                            </div>
-
-                            <div className="flex justify-end pt-2 gap-2">
-                                <Button type="button" variant="outlined" onClick={() => setIsAddingConfig(false)} disabled={isSubmitting}>Cancel</Button>
-                                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save Configuration'}</Button>
-                            </div>
-                        </form>
-                    )}
-
-                    <div className="flex justify-end pt-4 border-t border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                        <Button type="button" variant="outlined" onClick={() => { setIsConfigModalOpen(false); setIsAddingConfig(false); }}>Close</Button>
+                        <div className="flex justify-end pt-2">
+                            <Button variant="outlined" onClick={() => setIsReceiptModalOpen(false)} size="md">Close Preview</Button>
+                        </div>
                     </div>
-                </div>
+                )}
             </Modal>
 
-            <AuditLogModal
-                isOpen={isAuditOpen}
-                onClose={() => setIsAuditOpen(false)}
-                entityType="Maintenance"
-                title="Maintenance History"
-            />
+            <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType="MaintenanceRecord" title="Billing Ledger" />
         </div>
     );
 };

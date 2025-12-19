@@ -83,7 +83,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
         <Modal isOpen={isOpen} onClose={handleClose} title="My Profile">
             <div className="space-y-6">
                 <div className="flex items-center space-x-4 pb-4 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
-                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white flex items-center justify-center text-2xl font-bold shadow-md">
+                    <div className="w-16 h-16 rounded-xl bg-brand-500 text-white flex items-center justify-center text-2xl font-bold shadow-md">
                         {getInitials(user.name)}
                     </div>
                     <div>

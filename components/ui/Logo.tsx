@@ -1,78 +1,60 @@
-
 import React from 'react';
 
 interface LogoProps {
   className?: string;
+  color?: string; // Optional override for specific inline color
 }
 
-const Logo: React.FC<LogoProps> = ({ className }) => {
+const Logo: React.FC<LogoProps> = ({ className, color = "currentColor" }) => {
   return (
     <svg
       viewBox="0 0 100 100"
-      fill="currentColor"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       aria-label="Elevate Logo"
     >
-      {/* Design: 'The Connected Townships' - Refined High Rise */}
+      {/* Design: 'The Connected Townships' - Refined Human-Centric Style */}
       
-      {/* The Unifying Arc (The Community/Platform) */}
+      {/* The Unifying Arc - Dynamic Connection */}
       <path
         d="M10 68 Q 50 95 90 68"
-        fill="none"
-        stroke="currentColor"
+        stroke={color}
         strokeWidth="4"
         strokeLinecap="round"
-        opacity="0.2"
+        opacity="0.25"
       />
 
-      {/* LEFT: Standalone Apartment (Boxy, Flat Roof) */}
-      <rect x="12" y="38" width="24" height="30" fill="currentColor" fillOpacity="0.6" />
-      {/* Roof Parapet */}
-      <line x1="11" y1="38" x2="37" y2="38" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      {/* Window Grid - Using CSS classes to switch window color based on theme instead of hardcoded white */}
-      <rect x="16" y="43" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
-      <rect x="26" y="43" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
-      <rect x="16" y="55" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
-      <rect x="26" y="55" width="6" height="6" rx="1" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
+      {/* LEFT: Residential Block (Humanist Rounded Rect) */}
+      <rect x="14" y="42" width="22" height="26" rx="3" fill={color} fillOpacity="0.6" />
+      <rect x="18" y="48" width="4" height="4" rx="1" fill="white" fillOpacity="0.8" />
+      <rect x="28" y="48" width="4" height="4" rx="1" fill="white" fillOpacity="0.8" />
+      <rect x="18" y="58" width="4" height="4" rx="1" fill="white" fillOpacity="0.8" />
+      <rect x="28" y="58" width="4" height="4" rx="1" fill="white" fillOpacity="0.8" />
 
 
-      {/* CENTER: High Rise Tower (Tallest, Modern Skyscraper) */}
-      {/* Main Body */}
-      <rect x="41" y="24" width="18" height="44" fill="currentColor" fillOpacity="0.9" />
-      {/* Upper Setback (Penthouse level) */}
-      <rect x="44" y="16" width="12" height="8" fill="currentColor" fillOpacity="0.9" />
-      {/* Rooftop Antenna */}
-      <line x1="50" y1="16" x2="50" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      
-      {/* Horizontal Floor Strips */}
-      <rect x="44" y="28" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
-      <rect x="44" y="36" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
-      <rect x="44" y="44" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
-      <rect x="44" y="52" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
-      <rect x="44" y="60" width="12" height="2" className="fill-white dark:fill-gray-900" fillOpacity="0.3" />
+      {/* CENTER: The Spire (Highest Elevation) */}
+      <path 
+        d="M42 68 V 32 Q 42 28 46 28 H 54 Q 58 28 58 32 V 68 H 42Z" 
+        fill={color} 
+        fillOpacity="0.9" 
+      />
+      <rect x="46" y="36" width="8" height="2" rx="0.5" fill="white" fillOpacity="0.3" />
+      <rect x="46" y="44" width="8" height="2" rx="0.5" fill="white" fillOpacity="0.3" />
+      <rect x="46" y="52" width="8" height="2" rx="0.5" fill="white" fillOpacity="0.3" />
+      <rect x="46" y="60" width="8" height="2" rx="0.5" fill="white" fillOpacity="0.3" />
 
 
-      {/* RIGHT: Villa / Duplex (Pitched Roof, House-like) */}
+      {/* RIGHT: Villa / Home (Soft Pitch) */}
       <path
-        d="M64 68 V 48 L 76 36 L 88 48 V 68"
-        fill="currentColor"
-        fillOpacity="0.7"
+        d="M66 68 V 52 L 78 40 L 90 52 V 68 H 66Z"
+        fill={color}
+        fillOpacity="0.75"
       />
-      {/* Roof Overhang detail */}
-      <path
-         d="M62 48 L 76 34 L 90 48"
-         fill="none"
-         stroke="currentColor"
-         strokeWidth="2"
-         strokeLinejoin="round"
-         strokeLinecap="round"
-      />
-      {/* Doorway */}
-      <rect x="73" y="56" width="6" height="12" className="fill-white dark:fill-gray-900" fillOpacity="0.4" />
+      <rect x="75" y="58" width="6" height="10" rx="1" fill="white" fillOpacity="0.5" />
 
-      {/* Foundation Line merging them */}
-      <rect x="8" y="68" width="84" height="4" rx="2" fill="currentColor" />
+      {/* Ground Foundation */}
+      <rect x="8" y="68" width="84" height="4" rx="2" fill={color} />
 
     </svg>
   );

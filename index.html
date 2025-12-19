@@ -1,32 +1,40 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Elevate</title>
+    <title>Elevate | Community Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Pacifico&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@500;700&family=Bricolage+Grotesque:opsz,wght@12..96,800&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              display: ['Playfair Display', 'serif'],
-              brand: ['Pacifico', 'cursive'],
+              sans: ['"Urbanist"', 'sans-serif'],
+              display: ['"Urbanist"', 'sans-serif'],
+              mono: ['"Space Grotesk"', 'monospace'],
+              brand: ['"Bricolage Grotesque"', 'sans-serif'],
             },
             colors: {
-              // Modern Teal Palette
               brand: {
-                500: '#14B8A6', // Teal 500 - Primary Button / Accent
-                600: '#0D9488', // Teal 600 - Hover / Darker Text
+                50: '#f0fdfa',
+                100: '#ccfbf1',
+                200: '#99f6e4',
+                500: '#14b8a6',
+                600: '#0d9488',
+                700: '#0f766e',
+                900: '#134e4a',
               }
+            },
+            boxShadow: {
+              'premium': '0 10px 40px -10px rgba(0, 0, 0, 0.05), 0 2px 10px -5px rgba(0, 0, 0, 0.02)',
+              'premium-hover': '0 25px 50px -12px rgba(0, 0, 0, 0.08), 0 10px 20px -10px rgba(0, 0, 0, 0.04)',
             }
           },
         },
@@ -34,140 +42,104 @@
     </script>
     <style>
       :root {
-        --bg-light: #F8F9FA;
-        --bg-dark: #111827; /* Gray 900 */
-        --card-bg-light: #FFFFFF;
-        --card-bg-dark: #1F2937; /* Gray 800 */
+        --bg-light: #f9fafb;
+        --card-bg-light: #ffffff;
         --text-light: #111827;
-        --text-dark: #F9FAFB;
-        --text-secondary-light: #6B7280;
-        --text-secondary-dark: #9CA3AF;
-        --border-light: #E5E7EB;
-        --border-dark: #374151;
-        --accent: #14B8A6; /* brand-500 (Teal) */
-        --accent-hover: #0D9488; /* brand-600 (Teal) */
+        --text-secondary-light: #6b7280;
+        --border-light: #e5e7eb;
+        --accent: #0d9488;
+        
+        --bg-dark: #0a0a0b;
+        --card-bg-dark: #121214;
+        --modal-bg-dark: #18181b;
+        --text-dark: #f9fafb;
+        --text-secondary-dark: #9ca3af;
+        --border-dark: #26262b;
       }
 
       body {
-        transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+        transition: background-color 0.4s ease;
+        -webkit-font-smoothing: antialiased;
+        letter-spacing: -0.01em;
       }
       
-      .animated-card {
-        animation: fadeInSlideUp 0.5s ease-out forwards;
-        opacity: 0;
+      .font-mono { font-family: 'Space Grotesk', monospace; }
+
+      .glass {
+        background-color: var(--card-bg-light);
+        border: 1px solid var(--border-light);
+        backdrop-filter: blur(16px);
+      }
+
+      .dark .glass {
+        background-color: var(--card-bg-dark);
+        border: 1px solid var(--border-dark);
       }
       
-      .modal-backdrop {
-        animation: fadeIn 0.3s ease-out forwards;
-      }
-
-      .modal-content {
-        animation: scaleIn 0.3s ease-out forwards;
-      }
-
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
+      .input-field {
+        background-color: #ffffff;
+        border: 1.5px solid var(--border-light);
+        color: var(--text-light);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 600;
       }
       
-      @keyframes fadeInSlideUp {
-        from {
-          opacity: 0;
-          transform: translateY(20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      .dark .input-field {
+        background-color: #1a1a1e;
+        border: 1.5px solid #3f3f46;
+        color: var(--text-dark);
       }
 
-      @keyframes scaleIn {
-        from { transform: scale(0.95); opacity: 0; }
-        to { transform: scale(1); opacity: 1; }
-      }
-      
-      /* Hide scrollbar for Chrome, Safari and Opera */
-      .no-scrollbar::-webkit-scrollbar {
-          display: none;
-      }
-      /* Hide scrollbar for IE, Edge and Firefox */
-      .no-scrollbar {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
+      .input-field:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+        outline: none;
       }
 
-      .qr-scanner-line {
-        position: absolute;
-        width: 100%;
-        height: 2px;
-        background: #14B8A6;
-        top: 0;
-        left: 0;
-        animation: scan 2s infinite linear;
-        box-shadow: 0 0 4px #14B8A6;
+      .tracking-tight-title { letter-spacing: -0.03em; }
+      .tracking-wide-label { letter-spacing: 0.25em; }
+
+      ::selection {
+        background-color: rgba(20, 184, 166, 0.2);
+        color: var(--accent);
       }
 
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Animation keyframes for QR scanner line */
       @keyframes scan {
-        0% { top: 0; }
-        50% { top: 100%; }
-        100% { top: 0; }
+        0% { transform: translateY(0); opacity: 0; }
+        50% { opacity: 1; }
+        100% { transform: translateY(220px); opacity: 0; }
       }
-
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #D1D5DB; /* Gray 300 */
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #9CA3AF; /* Gray 400 */
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #4B5563; /* Gray 600 */
-      }
-      .dark ::-webkit-scrollbar-thumb:hover {
-        background: #6B7280; /* Gray 500 */
-      }
-
-      /* Input Autofill Dark Mode Fix */
-      input:-webkit-autofill,
-      input:-webkit-autofill:hover, 
-      input:-webkit-autofill:focus, 
-      input:-webkit-autofill:active{
-          -webkit-box-shadow: 0 0 0 30px var(--card-bg-light) inset !important;
-          -webkit-text-fill-color: var(--text-light) !important;
-          transition: background-color 5000s ease-in-out 0s;
-      }
-      
-      .dark input:-webkit-autofill,
-      .dark input:-webkit-autofill:hover, 
-      .dark input:-webkit-autofill:focus, 
-      .dark input:-webkit-autofill:active{
-          -webkit-box-shadow: 0 0 0 30px var(--card-bg-dark) inset !important;
-          -webkit-text-fill-color: var(--text-dark) !important;
+      .qr-scanner-line {
+        height: 2px;
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+        animation: scan 2s linear infinite;
       }
     </style>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.81.1",
+    "react": "https://esm.sh/react@19.0.0",
+    "react/": "https://esm.sh/react@19.0.0/",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
-    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.5.29"
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.5.29",
+    "framer-motion": "https://esm.sh/framer-motion@11.13.1?external=react,react-dom",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
   }
 }
 </script>
-</head>
-  <body class="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
+  </head>
+  <body class="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] font-sans text-[var(--text-light)] dark:text-[var(--text-dark)]">
     <div id="root"></div>
+    <!-- Modal portal root -->
+    <div id="modal-root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

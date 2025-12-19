@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon, Cog6ToothIcon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -10,79 +9,63 @@ interface SidebarProps {
   setActivePage: (page: Page) => void;
 }
 
-const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>> }[] = [
-  { name: 'Dashboard', icon: HomeIcon },
-  { name: 'Notices', icon: BellIcon },
-  { name: 'Help Desk', icon: ShieldCheckIcon },
-  { name: 'Visitors', icon: UsersIcon },
-  { name: 'Amenities', icon: SparklesIcon },
-  { name: 'Directory', icon: UserGroupIcon },
-  { name: 'Maintenance', icon: CurrencyRupeeIcon },
-  { name: 'Expenses', icon: BanknotesIcon },
-  { name: 'Billing', icon: CalculatorIcon },
+const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; label: string }[] = [
+  { name: 'Dashboard', icon: HomeIcon, label: 'Home' },
+  { name: 'Notices', icon: BellIcon, label: 'Notice Board' },
+  { name: 'Help Desk', icon: ShieldCheckIcon, label: 'Help Desk' },
+  { name: 'Visitors', icon: UsersIcon, label: 'Visitors' },
+  { name: 'Amenities', icon: SparklesIcon, label: 'Amenities' },
+  { name: 'Directory', icon: UserGroupIcon, label: 'Directory' },
+  { name: 'Maintenance', icon: CurrencyRupeeIcon, label: 'Maintenance' },
+  { name: 'Expenses', icon: BanknotesIcon, label: 'Expenses' },
+  { name: 'Billing', icon: CalculatorIcon, label: 'Billing' },
+  { name: 'CommunitySetup', icon: Cog6ToothIcon, label: 'Property Config' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const { user } = useAuth();
 
-  // Hide sidebar during initial setup
-  if (activePage === 'CommunitySetup') {
-      return null;
-  }
-
   const filteredNavItems = navItems.filter(item => {
-    // SuperAdmin view
-    if (user?.role === UserRole.SuperAdmin) {
-        return ['Dashboard', 'Billing'].includes(item.name);
-    }
-
-    if (user?.role === UserRole.HelpdeskAgent) {
-      return ['Notices', 'Help Desk'].includes(item.name);
-    }
-    if (user?.role === UserRole.HelpdeskAdmin) {
-      return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
-    }
-    if (user?.role === UserRole.SecurityAdmin || user?.role === UserRole.Security) {
-        return ['Notices', 'Visitors', 'Directory'].includes(item.name);
-    }
-    if (user?.role === UserRole.Admin) {
-       // Admins see everything except Billing
-       return item.name !== 'Billing'; 
-    }
-    if (user?.role === UserRole.Resident) {
-        // Residents see everything except Billing
-        return item.name !== 'Billing';
-    }
-
-    return false;
+    if (user?.role === UserRole.SuperAdmin) return ['Dashboard', 'Billing'].includes(item.name);
+    if (user?.role === UserRole.HelpdeskAgent) return ['Notices', 'Help Desk'].includes(item.name);
+    if (user?.role === UserRole.HelpdeskAdmin) return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
+    if (user?.role === UserRole.SecurityAdmin || user?.role === UserRole.Security) return ['Notices', 'Visitors', 'Directory'].includes(item.name);
+    if (user?.role === UserRole.Admin) return item.name !== 'Billing';
+    return item.name !== 'Billing' && item.name !== 'CommunitySetup';
   });
 
   return (
-    <aside className="hidden md:flex w-64 flex-col bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] border-r border-[var(--border-light)] dark:border-[var(--border-dark)]">
-       <div className="h-20 flex items-center justify-center">
-         {/* The title is in the Header component */}
-      </div>
-      <nav className="flex-1 px-4 py-6">
-        <ul className="space-y-2">
-          {filteredNavItems.map((item) => (
-            <li key={item.name}>
+    <aside className="hidden md:flex w-72 flex-col bg-[var(--bg-light)]/40 dark:bg-[var(--bg-dark)]/60 backdrop-blur-xl border-r border-[var(--border-light)] dark:border-[var(--border-dark)] z-20">
+       <div className="h-20" /> {/* Spacer for Header */}
+      
+      <div className="p-6">
+          <p className="text-[10px] font-black text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-[0.2em] mb-4 ml-4 opacity-70">
+              Main Menu
+          </p>
+          <nav className="space-y-1">
+            {filteredNavItems.map((item) => (
               <button
+                key={item.name}
                 onClick={() => setActivePage(item.name)}
-                className={`w-full flex items-center p-3 rounded-full transition-all duration-200 group ${
+                className={`w-full flex items-center p-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden ${
                   activePage === item.name
-                    ? 'bg-teal-100 dark:bg-teal-500/20 text-brand-600 dark:text-teal-300'
-                    : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-gray-100 dark:hover:bg-white/5'
+                    ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
+                    : 'text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:bg-white dark:hover:bg-zinc-800 hover:text-[var(--text-light)] dark:hover:text-white'
                 }`}
               >
-                <item.icon className="w-6 h-6" />
-                <span className={`ml-4 font-medium ${activePage === item.name ? 'text-brand-600 dark:text-teal-200' : ''}`}>
-                    {item.name}
+                <item.icon className={`w-5 h-5 flex-shrink-0 z-10 transition-transform group-hover:scale-110 ${activePage === item.name ? 'stroke-[2.5px]' : 'stroke-[1.5px]'}`} />
+                <span className={`ml-4 font-bold text-sm z-10 tracking-tight`}>
+                    {item.label}
                 </span>
+                
+                {/* Active Indicator Bar */}
+                {activePage === item.name && (
+                    <div className="absolute right-0 top-1/4 bottom-1/4 w-1 bg-white rounded-l-full" />
+                )}
               </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
+            ))}
+          </nav>
+      </div>
     </aside>
   );
 };

@@ -1,8 +1,7 @@
-
 import React from 'react';
 import Modal from './Modal';
 import Button from './Button';
-import { AlertTriangleIcon } from '../icons';
+import { AlertTriangleIcon, CheckCircleIcon, XIcon } from '../icons';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -28,25 +27,28 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   isLoading = false,
 }) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <div className="space-y-4">
-        <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-full flex-shrink-0 ${isDestructive ? 'bg-red-100 text-red-600 dark:bg-red-900/30' : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30'}`}>
-            <AlertTriangleIcon className="w-6 h-6" />
+    <Modal isOpen={isOpen} onClose={onClose} title={title} subtitle="SECURITY PROTOCOL">
+      <div className="space-y-8">
+        <div className="flex items-start gap-5 p-8 bg-slate-50 dark:bg-white/5 rounded-[2.5rem] border border-slate-100 dark:border-white/5">
+          <div className={`p-4 rounded-2xl flex-shrink-0 shadow-sm ${isDestructive ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/30' : 'bg-brand-50 text-brand-600 dark:bg-brand-900/30'}`}>
+            <AlertTriangleIcon className="w-8 h-8" />
           </div>
-          <p className="text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] pt-1 text-sm leading-relaxed">
-            {message}
-          </p>
+          <div className="flex flex-col gap-2">
+            <p className="text-slate-900 dark:text-[var(--text-dark)] font-bold text-xl leading-snug tracking-tight">Attention Required</p>
+            <p className="text-slate-500 dark:text-[var(--text-secondary-dark)] text-base leading-relaxed font-medium">{message}</p>
+          </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4">
-          <Button variant="outlined" onClick={onClose} disabled={isLoading}>
+        <div className="flex justify-end gap-3 px-2">
+          <Button variant="ghost" onClick={onClose} disabled={isLoading} size="md" leftIcon={<XIcon />}>
             {cancelLabel}
           </Button>
           <Button
             onClick={onConfirm}
             disabled={isLoading}
-            className={isDestructive ? 'bg-red-600 hover:bg-red-700 text-white border-transparent' : ''}
+            size="md"
+            leftIcon={<CheckCircleIcon />}
+            className={`${isDestructive ? 'bg-rose-600 hover:bg-rose-700 text-white' : ''}`}
           >
             {isLoading ? 'Processing...' : confirmLabel}
           </Button>

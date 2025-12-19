@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
@@ -34,10 +33,9 @@ const LoginPage: React.FC = () => {
           }
       }
       
-      // Case-insensitive check for common credential errors
       const lowerMsg = errorMessage.toLowerCase();
       if (lowerMsg.includes("invalid login credentials") || lowerMsg.includes("invalid email or password")) {
-          errorMessage = "Invalid email or password. If you are a new user, please contact your administrator to create an account.";
+          errorMessage = "Invalid credentials. Verify your email or contact your property administrator.";
       }
       
       setError(errorMessage);
@@ -74,102 +72,100 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4 relative overflow-hidden">
-      {/* Background Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-[0.03] dark:opacity-[0.05]">
-          <Logo className="w-[120vw] h-[120vw] text-[var(--text-light)] dark:text-[var(--text-dark)]" />
+      {/* Background Architectural Grid Pattern */}
+      <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none">
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(var(--text-light) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
       </div>
 
-      <div className="w-full max-w-md p-6 sm:p-8 space-y-6 bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-sm relative z-10">
+      <div className="w-full max-w-md p-10 sm:p-14 space-y-10 bg-white dark:bg-[#121214] rounded-[3.5rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl relative z-10">
         <div className="flex flex-col items-center text-center">
-            <Logo className="w-16 h-16 text-[var(--accent)] mb-3" />
-            <h1 className="text-4xl font-brand font-bold text-brand-500 tracking-wide">Elevate</h1>
-            <p className="text-xs sm:text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] mt-1 uppercase tracking-wide">Community Living, Elevated</p>
+            {/* Logo Container - Clean look matching dashboard header */}
+            <div className="mb-6">
+                <Logo className="w-20 h-20 text-brand-600" />
+            </div>
+            {/* Brand Title */}
+            <h1 className="text-5xl font-brand font-extrabold text-brand-600 tracking-tight">Elevate</h1>
+            <p className="font-mono text-[10px] font-bold text-slate-400 dark:text-zinc-500 mt-2 uppercase tracking-[0.4em]">Modern Living Access</p>
+            
             {view === 'login' ? (
-                <p className="mt-6 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Welcome back! Please sign in.</p>
+                <p className="mt-10 text-lg font-medium text-slate-500 dark:text-zinc-400">Welcome back. Please authenticate.</p>
             ) : (
-                <p className="mt-6 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">Reset your password</p>
+                <p className="mt-10 text-lg font-medium text-slate-500 dark:text-zinc-400">Initialize credential recovery.</p>
             )}
         </div>
         
         {view === 'login' ? (
-            <form className="mt-6 space-y-6" onSubmit={handleLoginSubmit}>
-            {error && <div className="p-3 text-sm text-red-600 bg-red-100 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800 text-center">{error}</div>}
-            <div className="space-y-4">
+            <form className="mt-8 space-y-8" onSubmit={handleLoginSubmit}>
+            {error && <div className="p-5 text-sm text-red-600 font-bold bg-red-50 dark:bg-red-900/20 rounded-3xl border border-red-100 dark:border-red-800 text-center">{error}</div>}
+            <div className="space-y-6">
                 <div>
-                <label htmlFor="email-address" className="sr-only">Email address</label>
-                <input
-                    id="email-address"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="relative block w-full px-3 py-2.5 border border-[var(--border-light)] dark:border-[var(--border-dark)] placeholder-[var(--text-secondary-light)] dark:placeholder-[var(--text-secondary-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg-light)] dark:focus:ring-offset-[var(--card-bg-dark)] focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm"
-                    placeholder="Email address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                />
+                    <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Email Identity</label>
+                    <input
+                        type="email"
+                        autoComplete="email"
+                        required
+                        className="input-field block w-full px-6 py-4 rounded-2xl text-base"
+                        placeholder="e.g. resident@elevate.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
                 </div>
                 <div>
-                <label htmlFor="password" className="sr-only">Password</label>
-                <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    className="relative block w-full px-3 py-2.5 border border-[var(--border-light)] dark:border-[var(--border-dark)] placeholder-[var(--text-secondary-light)] dark:placeholder-[var(--text-secondary-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg-light)] dark:focus:ring-offset-[var(--card-bg-dark)] focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                />
+                    <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Security Key</label>
+                    <input
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        className="input-field block w-full px-6 py-4 rounded-2xl text-base"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                    />
                 </div>
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end px-2">
                     <button
                         type="button"
                         onClick={() => toggleView('forgot_password')}
-                        className="text-sm font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+                        className="font-mono text-[11px] font-bold text-brand-600 hover:text-brand-700 uppercase tracking-widest transition-colors"
                     >
-                        Forgot Password?
+                        Recover Credentials
                     </button>
                 </div>
             </div>
 
             <div className="pt-2">
-                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? 'Signing In...' : 'Sign In'}
+                <Button type="submit" size="lg" className="w-full shadow-xl" disabled={isLoading}>
+                    {isLoading ? 'Verifying...' : 'Authenticate'}
                 </Button>
             </div>
             </form>
         ) : (
-            <form className="mt-6 space-y-6" onSubmit={handleForgotSubmit}>
-                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            <form className="mt-8 space-y-8" onSubmit={handleForgotSubmit}>
+                {error && <p className="text-red-500 text-sm text-center font-bold">{error}</p>}
                 {resetSuccess ? (
-                    <div className="text-green-600 dark:text-green-400 text-center text-sm bg-green-50 dark:bg-green-900/20 p-3 rounded-md">
-                        <p>Password reset link sent!</p>
-                        <p className="mt-1">Check your email for instructions.</p>
+                    <div className="text-green-600 dark:text-green-400 text-center text-base font-bold bg-green-50 dark:bg-green-900/20 p-8 rounded-[2.5rem] border border-green-100 dark:border-green-900/30">
+                        <p>Recovery link dispatched.</p>
+                        <p className="mt-3 text-xs opacity-70 leading-relaxed font-medium">Please inspect your registered inbox for further instructions.</p>
                     </div>
                 ) : (
                     <>
-                        <p className="text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] text-center">
-                            Enter your email address and we'll send you a link to reset your password.
-                        </p>
-                        <div>
-                            <label htmlFor="reset-email" className="sr-only">Email address</label>
-                            <input
-                                id="reset-email"
-                                name="email"
-                                type="email"
-                                autoComplete="email"
-                                required
-                                className="relative block w-full px-3 py-2.5 border border-[var(--border-light)] dark:border-[var(--border-dark)] placeholder-[var(--text-secondary-light)] dark:placeholder-[var(--text-secondary-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--card-bg-light)] dark:focus:ring-offset-[var(--card-bg-dark)] focus:ring-[var(--accent)] focus:border-[var(--accent)] sm:text-sm"
-                                placeholder="Email address"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                            />
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Registration Email</label>
+                                <input
+                                    type="email"
+                                    autoComplete="email"
+                                    required
+                                    className="input-field block w-full px-6 py-4 rounded-2xl text-base"
+                                    placeholder="your@email.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                            </div>
                         </div>
                         <div className="pt-2">
-                            <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                                {isLoading ? 'Sending Link...' : 'Send Reset Link'}
+                            <Button type="submit" size="lg" className="w-full shadow-xl" disabled={isLoading}>
+                                {isLoading ? 'Sending...' : 'Request Recovery'}
                             </Button>
                         </div>
                     </>
@@ -178,9 +174,9 @@ const LoginPage: React.FC = () => {
                      <button
                         type="button"
                         onClick={() => toggleView('login')}
-                        className="text-sm font-medium text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] hover:text-[var(--text-light)] dark:hover:text-[var(--text-dark)] transition-colors"
+                        className="font-mono text-[11px] font-bold text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-all"
                     >
-                        Back to Sign In
+                        Back to Portal
                     </button>
                 </div>
             </form>

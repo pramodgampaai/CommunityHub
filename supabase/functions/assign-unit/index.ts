@@ -40,6 +40,8 @@ serve(async (req: any) => {
         throw new Error("Missing required fields");
     }
 
+    console.log(`Assigning unit for user ${userId} in community ${communityId}. Type: Standalone check incoming.`);
+
     // 1. Insert Unit (Service Role bypasses RLS)
     const { data: unit, error: unitError } = await supabaseClient
         .from('units')
@@ -68,12 +70,21 @@ serve(async (req: any) => {
 
     // 3. Maintenance Logic
     let monthlyAmount = 0;
-    const type = community.community_type ? community.community_type.toLowerCase() : 'high-rise apartment';
+    const rawType = community.community_type || '';
+    const type = rawType.toLowerCase();
     
-    if (type.includes('standalone')) {
-        monthlyAmount = Number(community.fixed_maintenance_amount) || 0;
+    const fixedAmount = Number(community.fixed_maintenance_amount) || 0;
+    const rate = Number(community.maintenance_rate) || 0;
+
+    // Robust Standalone Detection: Check string OR check if only fixed amount is present
+    const isStandalone = type.includes('standalone') || (fixedAmount > 0 && rate === 0);
+
+    if (isStandalone) {
+        monthlyAmount = fixedAmount;
+        console.log(`Identified as STANDALONE community. Using fixed amount: ${monthlyAmount}`);
     } else {
-        monthlyAmount = (Number(community.maintenance_rate) || 0) * (Number(unitData.flatSize) || 0);
+        monthlyAmount = rate * (Number(unitData.flatSize) || 0);
+        console.log(`Identified as AREA-BASED community. Rate: ${rate}, Size: ${unitData.flatSize}, Total: ${monthlyAmount}`);
     }
 
     if (monthlyAmount > 0 && unitData.maintenanceStartDate) {
@@ -91,8 +102,6 @@ serve(async (req: any) => {
             let iterDate = new Date(Date.UTC(startYear, startMonth, 1));
             
             // Fix for Timezone Drifts: 
-            // If user's "Today" (start date) is ahead of Server UTC "Today" (e.g. Asia/Kolkata vs UTC),
-            // iterDate might be > currentPeriodDate. We must ensure the loop runs for the start month.
             if (iterDate > currentPeriodDate) {
                 currentPeriodDate = new Date(iterDate);
             }
@@ -128,10 +137,13 @@ serve(async (req: any) => {
             }
 
             if (newRecords.length > 0) {
+                console.log(`Generating ${newRecords.length} maintenance records for user.`);
                 const { error: recordsError } = await supabaseClient.from('maintenance_records').insert(newRecords);
                 if (recordsError) throw recordsError;
             }
         }
+    } else {
+        console.warn(`Skipping record generation: monthlyAmount is ${monthlyAmount} or startDate is missing.`);
     }
 
     return new Response(
@@ -140,6 +152,7 @@ serve(async (req: any) => {
     )
 
   } catch (error: any) {
+    console.error(`Edge Function Error (assign-unit): ${error.message}`);
     return new Response(
       JSON.stringify({ error: error.message || 'Internal Server Error' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }

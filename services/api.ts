@@ -68,14 +68,11 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             flatNumber: unit.flat_number,
             block: unit.block,
             floor: unit.floor,
+            // Fixed property names to match Unit interface (flatSize and maintenanceStartDate)
             flatSize: unit.flat_size,
             maintenanceStartDate: unit.maintenance_start_date
         })) : [];
 
-        // Logic to determine the display "flatNumber" string
-        // If units exist, use the primary unit's details.
-        // If multiple units, append count.
-        // Fallback to u.flat_number (Staff Location) if no units.
         let displayFlatNumber = u.flat_number;
         
         if (units.length > 0) {
@@ -144,7 +141,6 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
     const { data, error } = await supabase.functions.invoke('get-community-stats');
     if (error) throw error;
     
-    // Map DB snake_case to frontend camelCase
     const stats: CommunityStat[] = (data.data || []).map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -158,7 +154,6 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
         subscriptionType: item.subscription_type,
         subscriptionStartDate: item.subscription_start_date,
         pricePerUser: item.pricing_config,
-        // Counts are returned as snake_case from the edge function/SQL
         resident_count: item.resident_count,
         admin_count: item.admin_count,
         helpdesk_count: item.helpdesk_count,
@@ -172,14 +167,13 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
 };
 
 export const createCommunity = async (data: any) => {
-    // Mapping frontend camelCase to DB snake_case
     const payload = {
         name: data.name,
         address: data.address,
         community_type: data.communityType,
         blocks: data.blocks,
-        maintenance_rate: data.maintenanceRate,
-        fixed_maintenance_amount: data.fixedMaintenanceAmount,
+        maintenance_rate: data.maintenance_rate,
+        fixed_maintenance_amount: data.fixed_maintenance_amount,
         contact_info: data.contacts,
         subscription_type: data.subscriptionType,
         subscription_start_date: data.subscriptionStartDate,
@@ -202,8 +196,6 @@ export const updateCommunity = async (id: string, data: any) => {
     if (data.subscriptionType) payload.subscription_type = data.subscriptionType;
     if (data.subscriptionStartDate) payload.subscription_start_date = data.subscriptionStartDate;
     if (data.pricePerUser) payload.pricing_config = data.pricePerUser;
-    
-    // Allow updating community type if passed
     if (data.communityType) payload.community_type = data.communityType;
 
     const { error } = await supabase.from('communities').update(payload).eq('id', id);
@@ -211,19 +203,33 @@ export const updateCommunity = async (id: string, data: any) => {
 };
 
 export const deleteCommunity = async (id: string) => {
-    // This calls https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/delete-community
-    const { data, error } = await supabase.functions.invoke('delete-community', {
-        body: { community_id: id }
-    });
-    
-    if (error) {
-        console.error("Delete function invocation failed:", error);
-        throw error;
-    }
-    
-    // Check if function returned a logical error (e.g. 400 Bad Request)
-    if (data && data.error) {
-        throw new Error(data.error);
+    try {
+        const { data, error } = await supabase.functions.invoke('delete-community', {
+            body: { community_id: id }
+        });
+        
+        if (error) {
+            // Attempt to parse the error body if available
+            let detailedError = error.message;
+            try {
+                if (error instanceof Response) {
+                    const body = await error.json();
+                    detailedError = body.error || detailedError;
+                }
+            } catch(e) {}
+            
+            console.error("Community deletion failed:", detailedError);
+            throw new Error(detailedError);
+        }
+        
+        if (data && data.error) {
+            throw new Error(data.error);
+        }
+        
+        return data;
+    } catch (err: any) {
+        console.error("Delete invocation error:", err);
+        throw err;
     }
 };
 
@@ -251,7 +257,6 @@ export const getNotices = async (communityId: string): Promise<Notice[]> => {
 };
 
 export const createNotice = async (data: Partial<Notice>, user: User) => {
-    // This calls https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/create-notice
     const { error } = await supabase.functions.invoke('create-notice', {
         body: {
             title: data.title,
@@ -306,6 +311,29 @@ export const getComplaints = async (communityId: string, userId?: string, role?:
         communityId: c.community_id,
         assignedTo: c.assigned_to,
         assignedToName: c.assigned_user?.name
+    }));
+};
+
+export const getComplaintActivity = async (id: string): Promise<AuditLog[]> => {
+    const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*, users(name, role)')
+        .eq('entity', 'Complaint')
+        .eq('entity_id', id)
+        .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    return data.map((l: any) => ({
+        id: l.id,
+        createdAt: l.created_at,
+        actorId: l.actor_id,
+        communityId: l.community_id,
+        actorName: l.users?.name || 'System',
+        actorRole: l.users?.role,
+        entity: l.entity,
+        entityId: l.entity_id,
+        action: l.action as any,
+        details: l.details
     }));
 };
 
@@ -384,7 +412,6 @@ export const getVisitors = async (communityId: string, role?: UserRole): Promise
 };
 
 export const createVisitor = async (data: Partial<Visitor>, user: User) => {
-    // Generating a simple token for QR/Entry
     const entryToken = Math.random().toString(36).substring(2, 8).toUpperCase();
     
     const { data: newVisitor, error } = await supabase.from('visitors').insert({
@@ -393,6 +420,7 @@ export const createVisitor = async (data: Partial<Visitor>, user: User) => {
         vehicle_number: data.vehicleNumber,
         purpose: data.purpose,
         expected_at: data.expectedAt,
+        // Fixed: Use flatNumber from Partial<Visitor> as defined in types.ts
         flat_number: data.flatNumber || user.flatNumber,
         resident_name: user.name,
         community_id: user.communityId,
@@ -414,6 +442,24 @@ export const createVisitor = async (data: Partial<Visitor>, user: User) => {
         communityId: newVisitor.community_id,
         userId: newVisitor.user_id
     } as Visitor;
+};
+
+export const updateVisitor = async (id: string, data: Partial<Visitor>) => {
+    const payload: any = {
+        name: data.name,
+        visitor_type: data.visitorType,
+        vehicle_number: data.vehicleNumber,
+        purpose: data.purpose,
+        expected_at: data.expectedAt,
+    };
+
+    const { error } = await supabase.from('visitors').update(payload).eq('id', id);
+    if (error) throw error;
+};
+
+export const deleteVisitor = async (id: string) => {
+    const { error } = await supabase.from('visitors').delete().eq('id', id);
+    if (error) throw error;
 };
 
 export const updateVisitorStatus = async (id: string, status: VisitorStatus) => {
@@ -485,7 +531,7 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
         .from('bookings')
         .select('*')
         .eq('community_id', communityId)
-        .gte('end_time', new Date().toISOString()); // Only future or current bookings
+        .gte('end_time', new Date().toISOString());
     
     if (error) throw error;
     
@@ -588,9 +634,9 @@ export const getMaintenanceHistory = async (communityId: string): Promise<Mainte
 export const addMaintenanceConfiguration = async (data: any) => {
     const { error } = await supabase.from('maintenance_configurations').insert({
         community_id: data.communityId,
-        maintenance_rate: data.maintenanceRate,
-        fixed_maintenance_amount: data.fixedMaintenanceAmount,
-        effective_date: data.effectiveDate
+        maintenance_rate: data.maintenance_rate,
+        fixed_maintenance_amount: data.fixed_maintenance_amount,
+        effective_date: data.effective_date
     });
     if (error) throw error;
 };
@@ -647,8 +693,6 @@ export const approveExpense = async (id: string, userId: string) => {
 };
 
 export const rejectExpense = async (id: string, userId: string, reason: string) => {
-    // We append the rejection reason to the description or store in a separate note
-    // For simplicity, we assume we fetch the current description and append.
     const { data: current } = await supabase.from('expenses').select('description').eq('id', id).single();
     const newDescription = `${current?.description || ''} \n[REJECTION REASON]: ${reason}`;
 
@@ -700,9 +744,6 @@ export const getAuditLogs = async (communityId: string, userId: string, role: st
         .eq('community_id', communityId)
         .order('created_at', { ascending: false });
         
-    // Limit what helpdesk agents can see? Usually only Admins see audit logs.
-    // Assuming UI handles protection, API returns data.
-    
     const { data, error } = await query;
     if (error) throw error;
     

@@ -27,10 +27,8 @@ serve(async (req: any) => {
       throw new Error('Missing required fields')
     }
 
-    // Insert the Complaint as UNASSIGNED (assigned_to: null)
-    // We intentionally removed auto-assignment to prevent tickets being hidden
-    // from other admins due to RLS policies favoring specific user IDs.
-    const { data, error } = await supabaseClient
+    // 1. Insert Complaint
+    const { data: complaint, error: complaintError } = await supabaseClient
         .from('complaints')
         .insert({
             title,
@@ -47,10 +45,20 @@ serve(async (req: any) => {
         .select()
         .single();
 
-    if (error) throw error;
+    if (complaintError) throw complaintError;
+
+    // 2. Add Audit Log for Creation
+    await supabaseClient.from('audit_logs').insert({
+        community_id,
+        actor_id: user_id,
+        action: 'CREATE',
+        entity: 'Complaint',
+        entity_id: complaint.id,
+        details: { description: `Ticket created: ${title}`, new: complaint }
+    });
 
     return new Response(
-      JSON.stringify({ data }),
+      JSON.stringify({ data: complaint }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
