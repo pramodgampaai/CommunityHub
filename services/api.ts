@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, supabaseKey } from './supabase';
 import { 
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
     Amenity, Booking, MaintenanceRecord, Expense, AuditLog, 
@@ -15,6 +15,26 @@ export interface MonthlyLedger {
     expensesThisMonth: number;
     closingBalance: number;
 }
+
+// --- Helper for calling the manage-amenity Edge Function ---
+const callManageAmenity = async (body: any) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/manage-amenity', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': supabaseKey
+        },
+        body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+        throw new Error(result.error || 'Failed to manage amenity');
+    }
+    return result;
+};
 
 // --- Auth & Users ---
 
@@ -68,7 +88,7 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             block: unit.block,
             floor: unit.floor,
             flatSize: unit.flat_size,
-            maintenanceStartDate: unit.maintenance_start_date
+            maintenance_start_date: unit.maintenance_start_date
         })) : [];
 
         let displayFlatNumber = u.flat_number;
@@ -490,26 +510,40 @@ export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
 };
 
 export const createAmenity = async (data: Partial<Amenity>, user: User) => {
-    const { error } = await supabase.from('amenities').insert({
-        name: data.name,
-        description: data.description,
-        image_url: data.imageUrl,
-        capacity: data.capacity,
-        max_duration: data.maxDuration,
-        community_id: user.communityId,
-        status: 'Active'
+    await callManageAmenity({
+        action: 'CREATE',
+        data: {
+            name: data.name,
+            description: data.description,
+            image_url: data.imageUrl,
+            capacity: data.capacity,
+            max_duration: data.maxDuration,
+            community_id: user.communityId,
+            status: 'Active'
+        }
     });
-    if (error) throw error;
 };
 
 export const updateAmenity = async (id: string, data: Partial<Amenity>) => {
-    const { error } = await supabase.from('amenities').update(data).eq('id', id);
-    if (error) throw error;
+    await callManageAmenity({
+        action: 'UPDATE',
+        id,
+        data: {
+            name: data.name,
+            description: data.description,
+            image_url: data.imageUrl,
+            capacity: data.capacity,
+            max_duration: data.maxDuration,
+            status: data.status
+        }
+    });
 };
 
 export const deleteAmenity = async (id: string) => {
-    const { error } = await supabase.from('amenities').delete().eq('id', id);
-    if (error) throw error;
+    await callManageAmenity({
+        action: 'DELETE',
+        id
+    });
 };
 
 export const getBookings = async (communityId: string): Promise<Booking[]> => {

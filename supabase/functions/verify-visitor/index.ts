@@ -35,9 +35,10 @@ serve(async (req: any) => {
     if (!profile) throw new Error('Security profile not found');
 
     const currentRole = (profile.role || '').toLowerCase();
-    const allowedRoles = ['security', 'securityadmin', 'admin', 'superadmin'];
+    // Restriction: Remove 'admin' from verification permissions
+    const allowedRoles = ['security', 'securityadmin', 'superadmin'];
     if (!allowedRoles.includes(currentRole)) {
-        return new Response(JSON.stringify({ error: 'Access Denied' }), { status: 403, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Access Denied: Verification restricted to security personnel' }), { status: 403, headers: corsHeaders });
     }
 
     const { visitor_id, entry_token } = await req.json();

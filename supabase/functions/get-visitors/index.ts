@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -37,10 +36,11 @@ serve(async (req: any) => {
         throw new Error('Unauthorized access to community data')
     }
 
-    // Allow Security, Admin, SuperAdmin AND Residents
-    const allowedRoles = ['Security', 'SecurityAdmin', 'Admin', 'SuperAdmin', 'Resident'];
-    const userRole = profile.role ? profile.role : '';
-    const isAllowed = allowedRoles.some(r => r.toLowerCase() === userRole.toLowerCase());
+    const userRole = (profile.role || '').toLowerCase();
+    
+    // Allowed roles
+    const allowedRoles = ['security', 'securityadmin', 'admin', 'superadmin', 'resident'];
+    const isAllowed = allowedRoles.includes(userRole);
 
     if (!isAllowed) {
          return new Response(
@@ -55,8 +55,9 @@ serve(async (req: any) => {
         .select('*')
         .eq('community_id', community_id);
 
-    // If Resident, strictly filter by their own ID
-    if (userRole.toLowerCase() === 'resident') {
+    // If Resident OR Property Admin, strictly filter by their own ID
+    // Property Admins are treated as residents for visitor management
+    if (userRole === 'resident' || userRole === 'admin') {
         query = query.eq('user_id', user.id);
     }
 

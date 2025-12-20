@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { createNotice, getNotices, updateNotice, deleteNotice } from '../services/api';
@@ -69,10 +68,18 @@ const NoticeBoard: React.FC = () => {
       if (!user) return;
       setIsSubmitting(true);
       try {
+          const payload = { 
+              title, 
+              content, 
+              type: noticeType, 
+              validFrom: validFrom ? new Date(validFrom).toISOString() : undefined, 
+              validUntil: validUntil ? new Date(validUntil).toISOString() : undefined 
+          };
+
           if (editingId) {
-              await updateNotice(editingId, { title, content, type: noticeType, validFrom: validFrom ? new Date(validFrom).toISOString() : undefined, validUntil: validUntil ? new Date(validUntil).toISOString() : undefined });
+              await updateNotice(editingId, payload);
           } else {
-              await createNotice({ title, content, type: noticeType, author: user.name, validFrom: validFrom ? new Date(validFrom).toISOString() : undefined, validUntil: validUntil ? new Date(validUntil).toISOString() : undefined }, user);
+              await createNotice({ ...payload, author: user.name }, user);
           }
           setIsModalOpen(false);
           resetForm();
@@ -90,8 +97,22 @@ const NoticeBoard: React.FC = () => {
   };
 
   const handleEditClick = (notice: Notice) => {
-      setTitle(notice.title); setContent(notice.content); setNoticeType(notice.type);
-      setEditingId(notice.id); setIsModalOpen(true);
+      setTitle(notice.title); 
+      setContent(notice.content); 
+      setNoticeType(notice.type);
+      
+      // Format ISO string to YYYY-MM-DD for date input
+      if (notice.validFrom) {
+          setValidFrom(new Date(notice.validFrom).toISOString().split('T')[0]);
+      }
+      if (notice.validUntil) {
+          setValidUntil(new Date(notice.validUntil).toISOString().split('T')[0]);
+      } else {
+          setValidUntil('');
+      }
+
+      setEditingId(notice.id); 
+      setIsModalOpen(true);
   };
 
   const handleDeleteClick = (id: string) => {

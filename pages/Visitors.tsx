@@ -46,7 +46,11 @@ const Visitors: React.FC = () => {
     // Delete Confirmation state
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
-    const isSecurity = user?.role === UserRole.Security || user?.role === UserRole.SecurityAdmin || user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin;
+    // Gate Control logic: Restricted to Security and Platform Owners (SuperAdmin)
+    const isGateStaff = user?.role === UserRole.Security || user?.role === UserRole.SecurityAdmin || user?.role === UserRole.SuperAdmin;
+    
+    // Management Logic: Property Admin and Residents manage their own guests
+    const canInvite = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
 
     const fetchVisitors = async () => {
         if (user?.communityId) {
@@ -216,14 +220,14 @@ const Visitors: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     <Button onClick={() => setIsAuditOpen(true)} variant="outlined" size="md" leftIcon={<HistoryIcon />}>Audit</Button>
-                    {user?.role === UserRole.Resident && (
+                    {canInvite && (
                         <Button onClick={() => { resetForm(); setIsModalOpen(true); }} size="md" leftIcon={<PlusIcon />}>Invite Guest</Button>
                     )}
                 </div>
             </div>
 
-            {/* GATE CONTROL CENTER FOR SECURITY */}
-            {isSecurity && (
+            {/* GATE CONTROL CENTER: Restricted to Security Staff & SuperAdmin */}
+            {isGateStaff && (
                 <Card className="p-6 bg-brand-600 dark:bg-[#0f1115] border-none rounded-3xl shadow-xl overflow-hidden relative">
                     <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                         <QrCodeIcon className="w-40 h-40 text-white" />
@@ -271,7 +275,9 @@ const Visitors: React.FC = () => {
             )}
 
             <div className="space-y-3">
-                <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">Active Manifest</h3>
+                <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">
+                    {isGateStaff ? "Today's Manifest" : "My Invitations"}
+                </h3>
                 {loading ? (
                     Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-slate-100 dark:bg-white/5 rounded-xl animate-pulse" />)
                 ) : visitors.length === 0 ? (
