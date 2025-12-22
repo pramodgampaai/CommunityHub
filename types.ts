@@ -1,4 +1,3 @@
-
 export enum UserRole {
   SuperAdmin = 'SuperAdmin',
   Admin = 'Admin',
@@ -288,4 +287,4 @@ export interface AuditLog {
     };
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing';
+export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';

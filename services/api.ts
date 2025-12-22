@@ -71,6 +71,26 @@ export const createCommunityUser = async (data: any) => {
     if (error) throw error;
 };
 
+export const bulkCreateCommunityUsers = async (users: any[], communityId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    // Using the specific URL provided by the user
+    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/bulk-create-users', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': supabaseKey
+        },
+        body: JSON.stringify({ users, community_id: communityId })
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+        throw new Error(result.error || 'Bulk processing failed');
+    }
+    return result;
+};
+
 export const getResidents = async (communityId: string): Promise<User[]> => {
     const { data, error } = await supabase
         .from('users')
@@ -167,7 +187,7 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
         communityType: item.community_type,
         blocks: item.blocks,
         maintenanceRate: item.maintenance_rate,
-        fixedMaintenanceAmount: item.fixed_maintenance_amount,
+        fixed_maintenance_amount: item.fixed_maintenance_amount,
         contacts: item.contact_info,
         subscriptionType: item.subscription_type,
         subscriptionStartDate: item.subscription_start_date,
@@ -216,7 +236,7 @@ export const updateCommunity = async (id: string, data: any) => {
     if (data.pricePerUser) payload.pricing_config = data.pricePerUser;
     if (data.communityType) payload.community_type = data.communityType;
 
-    const { error } = await supabase.from('communities').update(payload).eq('id', id);
+    const { error = null } = await supabase.from('communities').update(payload).eq('id', id);
     if (error) throw error;
 };
 

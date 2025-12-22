@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
@@ -14,6 +13,7 @@ import Maintenance from './pages/Maintenance';
 import Expenses from './pages/Expenses';
 import CommunitySetup from './pages/CommunitySetup';
 import Billing from './pages/Billing';
+import BulkOperations from './pages/BulkOperations';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
@@ -120,6 +120,8 @@ function App() {
             if (!allowed.includes(activePage)) setActivePage('Visitors');
         } else if (user.role !== UserRole.SuperAdmin && activePage === 'Billing') {
             setActivePage('Dashboard');
+        } else if (user.role !== UserRole.Admin && activePage === 'BulkOperations') {
+            setActivePage('Dashboard');
         }
     };
 
@@ -190,9 +192,12 @@ function App() {
   }
 
   // Define allowed pages per role for rendering check
-  // Residents now include 'Expenses'
   let allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance', 'Expenses'];
   
+  if (user.role === UserRole.Admin) {
+      allowedPages.push('BulkOperations');
+  }
+
   if (user.role === UserRole.HelpdeskAgent) {
       allowedPages = ['Notices', 'Help Desk'];
   } else if (user.role === UserRole.HelpdeskAdmin) {
@@ -222,6 +227,7 @@ function App() {
       {activePage === 'Directory' && <Directory />}
       {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
       {activePage === 'Expenses' && <Expenses />}
+      {activePage === 'BulkOperations' && <BulkOperations />}
     </Layout>
   );
 }
