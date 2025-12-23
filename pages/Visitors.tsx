@@ -9,7 +9,7 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
 import FeedbackModal from '../components/ui/FeedbackModal';
 import QRScanner from '../components/ui/QRScanner';
-import { PlusIcon, HistoryIcon, UsersIcon, ClockIcon, PencilIcon, TrashIcon, QrCodeIcon, IdentificationIcon, CheckCircleIcon, ShareIcon, XIcon } from '../components/icons';
+import { PlusIcon, HistoryIcon, UsersIcon, ClockIcon, PencilIcon, TrashIcon, QrCodeIcon, IdentificationIcon, CheckCircleIcon, ShareIcon, XIcon, ArrowDownTrayIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const Visitors: React.FC = () => {
@@ -29,6 +29,7 @@ const Visitors: React.FC = () => {
     // Pass sharing states
     const [isPassModalOpen, setIsPassModalOpen] = useState(false);
     const [selectedPassVisitor, setSelectedPassVisitor] = useState<Visitor | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     // Form state
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,10 +47,7 @@ const Visitors: React.FC = () => {
     // Delete Confirmation state
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
-    // Gate Control logic: Restricted to Security and Platform Owners (SuperAdmin)
     const isGateStaff = user?.role === UserRole.Security || user?.role === UserRole.SecurityAdmin || user?.role === UserRole.SuperAdmin;
-    
-    // Management Logic: Property Admin and Residents manage their own guests
     const canInvite = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
 
     const fetchVisitors = async () => {
@@ -64,36 +62,123 @@ const Visitors: React.FC = () => {
 
     useEffect(() => { fetchVisitors(); }, [user]);
 
+    /**
+     * Programmatic Visitor Pass Generator
+     * Draws a high-quality pass on a canvas and triggers a download.
+     */
+    const downloadPassImage = async (visitor: Visitor) => {
+        if (isDownloading) return;
+        setIsDownloading(true);
+        
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            // HD Resolution for sharing
+            canvas.width = 800;
+            canvas.height = 1200;
+
+            // 1. Background & Styling
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Brand Header Area
+            ctx.fillStyle = '#0d9488'; // Brand Teal
+            ctx.fillRect(0, 0, canvas.width, 180);
+
+            // 2. Load QR Code Image
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${visitor.entryToken || visitor.id}`;
+            const qrImg = new Image();
+            qrImg.crossOrigin = "anonymous"; // CRITICAL: Avoid tainted canvas
+            
+            await new Promise((resolve, reject) => {
+                qrImg.onload = resolve;
+                qrImg.onerror = reject;
+                qrImg.src = qrUrl;
+            });
+
+            // 3. Draw Brand Text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 64px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Elevate', canvas.width / 2, 100);
+            
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 140);
+
+            // 4. Draw Visitor Name & Token
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 54px sans-serif';
+            ctx.fillText(visitor.name.toUpperCase(), canvas.width / 2, 280);
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText('GATE ENTRY TOKEN', canvas.width / 2, 330);
+
+            ctx.fillStyle = '#0d9488';
+            ctx.font = 'black 110px monospace';
+            ctx.fillText(visitor.entryToken || 'INV-EXT', canvas.width / 2, 450);
+
+            // 5. Draw QR Code
+            const qrSize = 450;
+            const qrX = (canvas.width - qrSize) / 2;
+            const qrY = 520;
+            
+            // Draw a subtle border for the QR
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+            // 6. Draw Footer Info (Host & Unit)
+            ctx.fillStyle = '#1e293b';
+            ctx.font = 'bold 32px sans-serif';
+            ctx.fillText(`Invited by ${visitor.residentName}`, canvas.width / 2, 1050);
+            
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText(`Unit: ${visitor.flatNumber} • ${user?.communityName || 'Property'}`, canvas.width / 2, 1100);
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'italic 18px sans-serif';
+            ctx.fillText('Authorized for one-time entry on date of arrival.', canvas.width / 2, 1150);
+
+            // 7. Trigger Download
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `Elevate_Pass_${visitor.name.replace(/\s+/g, '_')}.png`;
+            link.href = dataUrl;
+            link.click();
+
+        } catch (err) {
+            console.error("Pass Generation Error:", err);
+            alert("Could not generate image. Please try again or take a screenshot.");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
     const handleVerifySubmit = async (code: string) => {
         if (!user || isVerifying || !code) return;
         setIsVerifying(true);
         try {
-            // Hyper-Cleaning: Extract raw token from URLs or JSON blobs
             let cleanCode = String(code).trim();
-            
-            // 1. Detect if it's a URL
             if (cleanCode.includes('://') || cleanCode.includes('/')) {
                 const segments = cleanCode.split(/[/?#]/).filter(s => s.length > 0);
-                if (segments.length > 0) {
-                    cleanCode = segments[segments.length - 1];
-                }
+                if (segments.length > 0) cleanCode = segments[segments.length - 1];
             }
-
-            // 2. Detect if it's a JSON string
             if (cleanCode.startsWith('{')) {
                 try {
                     const parsed = JSON.parse(cleanCode);
                     cleanCode = parsed.token || parsed.id || cleanCode;
-                } catch (e) { /* not JSON */ }
+                } catch (e) { }
             }
-
-            // Remove any hidden control characters or spaces
             cleanCode = cleanCode.replace(/[^\w-]/gi, '').trim();
 
             const upperCode = cleanCode.toUpperCase();
             const lowerCode = cleanCode.toLowerCase();
             
-            // Find visitor in local manifest
             const targetVisitor = visitors.find(v => 
                 (v.entryToken && v.entryToken.toUpperCase() === upperCode) || 
                 v.id === lowerCode ||
@@ -102,41 +187,23 @@ const Visitors: React.FC = () => {
             
             if (!targetVisitor) {
                 setFeedback({ 
-                    isOpen: true, 
-                    type: 'error', 
-                    title: 'Pass Not Found', 
-                    message: `The scanned code (${cleanCode.substring(0, 8)}...) is not recognized in today's manifest.` 
+                    isOpen: true, type: 'error', title: 'Pass Not Found', 
+                    message: `The scanned code (${cleanCode.substring(0, 8)}...) is not recognized.` 
                 });
                 setIsVerifying(false);
                 return;
             }
 
-            // Call the Edge Function
             await verifyVisitorEntry(targetVisitor.id, cleanCode, user);
-            
             setVerifiedVisitor(targetVisitor);
             setVerificationMode('selection');
             setIsVerifyModalOpen(false);
             setManualCode('');
             await fetchVisitors();
-            
-            setFeedback({ 
-                isOpen: true, 
-                type: 'success', 
-                title: 'Check-in Successful', 
-                message: `${targetVisitor.name} has been authorized to enter Unit ${targetVisitor.flatNumber}.` 
-            });
+            setFeedback({ isOpen: true, type: 'success', title: 'Check-in Successful', message: `${targetVisitor.name} has been authorized.` });
         } catch (error: any) {
-            console.error("Verification Error Stack:", error);
-            setFeedback({ 
-                isOpen: true, 
-                type: 'error', 
-                title: 'Security Rejection', 
-                message: error.message || 'Server rejected the scanned code. Verify credentials manually.' 
-            });
-        } finally {
-            setIsVerifying(false);
-        }
+            setFeedback({ isOpen: true, type: 'error', title: 'Security Rejection', message: error.message || 'Verification failed.' });
+        } finally { setIsVerifying(false); }
     };
 
     const handleFormSubmit = async (e: React.FormEvent) => {
@@ -145,12 +212,7 @@ const Visitors: React.FC = () => {
         setIsSubmitting(true);
         try {
             const dateISO = new Date(expectedAt).toISOString();
-            const payload = { 
-                name, visitorType, vehicleNumber, 
-                expectedAt: dateISO,
-                purpose: visitorType === VisitorType.Guest ? 'Visitation' : 'Service'
-            };
-
+            const payload = { name, visitorType, vehicleNumber, expectedAt: dateISO, purpose: visitorType === VisitorType.Guest ? 'Visitation' : 'Service' };
             if (editingId) {
                 await updateVisitor(editingId, payload);
             } else {
@@ -158,24 +220,14 @@ const Visitors: React.FC = () => {
                 setSelectedPassVisitor(newVisitor);
                 setIsPassModalOpen(true);
             }
-
             setIsModalOpen(false);
             resetForm();
             await fetchVisitors();
-        } catch (error) { 
-            console.error("Operation failed:", error);
-            alert("Visitor registry update failed.");
-        } finally { 
-            setIsSubmitting(false); 
-        }
+        } catch (error) { console.error(error); } finally { setIsSubmitting(false); }
     };
 
     const resetForm = () => {
-        setName('');
-        setVisitorType(VisitorType.Guest);
-        setVehicleNumber('');
-        setExpectedAt('');
-        setEditingId(null);
+        setName(''); setVisitorType(VisitorType.Guest); setVehicleNumber(''); setExpectedAt(''); setEditingId(null);
     };
 
     const handleEdit = (visitor: Visitor) => {
@@ -200,12 +252,7 @@ const Visitors: React.FC = () => {
             await deleteVisitor(confirmDelete.id);
             setConfirmDelete({ isOpen: false, id: null });
             await fetchVisitors();
-        } catch (error) {
-            console.error("Delete failed:", error);
-            alert("Failed to remove visitor record.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        } catch (error) { console.error(error); } finally { setIsSubmitting(false); }
     };
 
     return (
@@ -215,7 +262,7 @@ const Visitors: React.FC = () => {
                     <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
                     <div>
                         <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Security Registry</span>
-                        <h2 className="text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight">Visitors</h2>
+                        <h2 className="text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight leading-tight">Visitors</h2>
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -226,7 +273,6 @@ const Visitors: React.FC = () => {
                 </div>
             </div>
 
-            {/* GATE CONTROL CENTER: Restricted to Security Staff & SuperAdmin */}
             {isGateStaff && (
                 <Card className="p-6 bg-brand-600 dark:bg-[#0f1115] border-none rounded-3xl shadow-xl overflow-hidden relative">
                     <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
@@ -242,32 +288,14 @@ const Visitors: React.FC = () => {
                                 <p className="text-[10px] font-bold text-white/70 uppercase tracking-[0.2em]">Authorized Access Only</p>
                             </div>
                         </div>
-                        
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => { setVerificationMode('qr'); setIsVerifyModalOpen(true); }}
-                                className="flex items-center gap-4 p-5 bg-white rounded-2xl hover:bg-slate-50 transition-all shadow-lg group"
-                            >
-                                <div className="w-12 h-12 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <QrCodeIcon className="w-7 h-7" />
-                                </div>
-                                <div className="text-left">
-                                    <p className="font-brand font-extrabold text-slate-900 leading-none">Scan QR Pass</p>
-                                    <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Rapid Entry Verify</p>
-                                </div>
+                            <button onClick={() => { setVerificationMode('qr'); setIsVerifyModalOpen(true); }} className="flex items-center gap-4 p-5 bg-white rounded-2xl hover:bg-slate-50 transition-all shadow-lg group">
+                                <div className="w-12 h-12 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><QrCodeIcon className="w-7 h-7" /></div>
+                                <div className="text-left"><p className="font-brand font-extrabold text-slate-900 leading-none">Scan QR Pass</p><p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">Rapid Entry Verify</p></div>
                             </button>
-                            
-                            <button 
-                                onClick={() => { setVerificationMode('manual'); setIsVerifyModalOpen(true); }}
-                                className="flex items-center gap-4 p-5 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition-all group"
-                            >
-                                <div className="w-12 h-12 bg-white/10 text-white rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <IdentificationIcon className="w-7 h-7" />
-                                </div>
-                                <div className="text-left">
-                                    <p className="font-brand font-extrabold text-white leading-none">Enter Pass Code</p>
-                                    <p className="text-[10px] font-bold text-white/50 mt-1 uppercase">Manual Token Input</p>
-                                </div>
+                            <button onClick={() => { setVerificationMode('manual'); setIsVerifyModalOpen(true); }} className="flex items-center gap-4 p-5 bg-white/10 border border-white/20 rounded-2xl hover:bg-white/20 transition-all group">
+                                <div className="w-12 h-12 bg-white/10 text-white rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><IdentificationIcon className="w-7 h-7" /></div>
+                                <div className="text-left"><p className="font-brand font-extrabold text-white leading-none">Enter Pass Code</p><p className="text-[10px] font-bold text-white/50 mt-1 uppercase">Manual Token Input</p></div>
                             </button>
                         </div>
                     </div>
@@ -275,9 +303,7 @@ const Visitors: React.FC = () => {
             )}
 
             <div className="space-y-3">
-                <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">
-                    {isGateStaff ? "Today's Manifest" : "My Invitations"}
-                </h3>
+                <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">{isGateStaff ? "Today's Manifest" : "My Invitations"}</h3>
                 {loading ? (
                     Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-slate-100 dark:bg-white/5 rounded-xl animate-pulse" />)
                 ) : visitors.length === 0 ? (
@@ -291,32 +317,19 @@ const Visitors: React.FC = () => {
                             <div className="w-full sm:w-auto flex-1 text-left">
                                 <div className="flex items-center gap-2 mb-1">
                                     <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{visitor.name}</h3>
-                                    <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md ${visitor.status === 'Checked In' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}>
-                                        {visitor.status}
-                                    </span>
+                                    <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md ${visitor.status === 'Checked In' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}>{visitor.status}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <p className="text-sm text-slate-500 font-medium">Loc: <span className="text-slate-800 dark:text-zinc-300 font-bold">{visitor.flatNumber}</span></p>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{visitor.visitorType}</p>
-                                    {visitor.vehicleNumber && (
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-brand-600 bg-brand-500/5 px-2 rounded">Reg: {visitor.vehicleNumber}</p>
-                                    )}
+                                    {visitor.vehicleNumber && <p className="text-[10px] font-black uppercase tracking-widest text-brand-600 bg-brand-500/5 px-2 rounded">Reg: {visitor.vehicleNumber}</p>}
                                 </div>
                             </div>
                             <div className="w-full sm:w-auto flex items-center gap-6 border-t sm:border-t-0 pt-3 sm:pt-0">
-                                <div className="text-left sm:text-right">
-                                    <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Time</p>
-                                    <p className="text-sm font-brand font-extrabold text-brand-600">
-                                        {new Date(visitor.expectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                </div>
-                                
+                                <div className="text-left sm:text-right"><p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Time</p><p className="text-sm font-brand font-extrabold text-brand-600">{new Date(visitor.expectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div>
                                 <div className="flex gap-1">
                                     {visitor.status === 'Expected' && (
-                                        <button 
-                                            onClick={() => { setSelectedPassVisitor(visitor); setIsPassModalOpen(true); }}
-                                            className="p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors rounded-lg flex items-center gap-1.5 px-3"
-                                        >
+                                        <button onClick={() => { setSelectedPassVisitor(visitor); setIsPassModalOpen(true); }} className="p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors rounded-lg flex items-center gap-1.5 px-3">
                                             <ShareIcon className="w-4 h-4" />
                                             <span className="text-[9px] font-black uppercase tracking-widest">Share Pass</span>
                                         </button>
@@ -335,38 +348,24 @@ const Visitors: React.FC = () => {
             </div>
 
             {/* PASS SHARING MODAL */}
-            <Modal
-                isOpen={isPassModalOpen}
-                onClose={() => { setIsPassModalOpen(false); setSelectedPassVisitor(null); }}
-                title="Visitor Access Pass"
-                subtitle="SECURE GATE PROTOCOL"
-                size="md"
-            >
+            <Modal isOpen={isPassModalOpen} onClose={() => { setIsPassModalOpen(false); setSelectedPassVisitor(null); }} title="Visitor Access Pass" subtitle="SECURE GATE PROTOCOL" size="md">
                 {selectedPassVisitor && (
                     <div className="space-y-8 py-2">
                         <div className="bg-slate-50 dark:bg-white/5 p-8 rounded-[2.5rem] border border-slate-100 dark:border-white/5 flex flex-col items-center text-center">
                             <div className="w-16 h-1 bg-brand-500 rounded-full mb-6 opacity-30" />
-                            
                             <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Gate Access Token</h4>
                             <p className="text-4xl font-brand font-black tracking-[0.4em] text-brand-600 mb-8">{selectedPassVisitor.entryToken || 'INV-EXT'}</p>
-                            
                             <div className="bg-white p-6 rounded-3xl shadow-xl shadow-brand-500/10 mb-8">
-                                <img 
-                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${selectedPassVisitor.entryToken || selectedPassVisitor.id}`} 
-                                    alt="Access QR Code"
-                                    className="w-40 h-40"
-                                />
+                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${selectedPassVisitor.entryToken || selectedPassVisitor.id}`} alt="Access QR Code" className="w-40 h-40" />
                             </div>
-
                             <div className="space-y-1">
                                 <p className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{selectedPassVisitor.name}</p>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Guest of <span className="text-brand-600">{selectedPassVisitor.residentName}</span> • Unit {selectedPassVisitor.flatNumber}</p>
                             </div>
                         </div>
-
                         <div className="flex flex-col gap-3">
-                            <Button size="lg" className="w-full" onClick={() => window.print()} leftIcon={<CheckCircleIcon />}>
-                                Download Pass Image
+                            <Button size="lg" className="w-full" disabled={isDownloading} onClick={() => downloadPassImage(selectedPassVisitor)} leftIcon={isDownloading ? <ClockIcon /> : <ArrowDownTrayIcon />}>
+                                {isDownloading ? 'Generating...' : 'Download Pass Image'}
                             </Button>
                             <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Share this code with your guest for rapid entry</p>
                         </div>
@@ -375,55 +374,21 @@ const Visitors: React.FC = () => {
             </Modal>
 
             {/* VERIFICATION MODAL */}
-            <Modal 
-                isOpen={isVerifyModalOpen} 
-                onClose={() => { setIsVerifyModalOpen(false); setVerificationMode('selection'); }} 
-                title="Verify Access" 
-                subtitle="GATE PROTOCOL"
-                size={verificationMode === 'qr' ? 'lg' : 'md'}
-            >
+            <Modal isOpen={isVerifyModalOpen} onClose={() => { setIsVerifyModalOpen(false); setVerificationMode('selection'); }} title="Verify Access" subtitle="GATE PROTOCOL" size={verificationMode === 'qr' ? 'lg' : 'md'}>
                 {verificationMode === 'qr' ? (
                     <div className="space-y-4">
                         <QRScanner onScan={(data) => handleVerifySubmit(data)} onClose={() => setVerificationMode('selection')} />
-                        <div className="text-center">
-                            <p className="text-xs text-slate-400 font-medium">Scanning for Secure Entry Pass...</p>
-                        </div>
+                        <div className="text-center"><p className="text-xs text-slate-400 font-medium">Scanning for Secure Entry Pass...</p></div>
                     </div>
                 ) : (
                     <div className="space-y-6">
                         <div className="bg-slate-50 dark:bg-white/5 p-8 rounded-[2rem] border border-slate-100 dark:border-white/5 text-center">
                             <label className="block text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">Manual Entry Token</label>
-                            <input 
-                                type="text" 
-                                value={manualCode} 
-                                onChange={e => setManualCode(e.target.value.toUpperCase())}
-                                placeholder="E.G. AB12XY"
-                                maxLength={6}
-                                className="block w-full text-center text-4xl font-brand font-black tracking-[0.5em] text-brand-600 bg-transparent border-none focus:ring-0 placeholder:opacity-10"
-                            />
-                            <div className="mt-6 flex justify-center">
-                                <div className="h-1 w-12 bg-brand-500/20 rounded-full" />
-                            </div>
+                            <input type="text" value={manualCode} onChange={e => setManualCode(e.target.value.toUpperCase())} placeholder="E.G. AB12XY" maxLength={6} className="block w-full text-center text-4xl font-brand font-black tracking-[0.5em] text-brand-600 bg-transparent border-none focus:ring-0 placeholder:opacity-10" />
                         </div>
-                        
                         <div className="flex flex-col gap-3">
-                            <Button 
-                                size="lg" 
-                                onClick={() => handleVerifySubmit(manualCode)}
-                                disabled={manualCode.length < 4 || isVerifying}
-                                className="w-full shadow-xl shadow-brand-500/10"
-                                leftIcon={isVerifying ? <ClockIcon /> : <CheckCircleIcon />}
-                            >
-                                {isVerifying ? 'Verifying...' : 'Authorize Entry'}
-                            </Button>
-                            <Button 
-                                variant="ghost" 
-                                size="md" 
-                                onClick={() => setVerificationMode('selection')}
-                                className="w-full"
-                            >
-                                Back to Selection
-                            </Button>
+                            <Button size="lg" onClick={() => handleVerifySubmit(manualCode)} disabled={manualCode.length < 4 || isVerifying} className="w-full shadow-xl shadow-brand-500/10" leftIcon={isVerifying ? <ClockIcon /> : <CheckCircleIcon />}>{isVerifying ? 'Verifying...' : 'Authorize Entry'}</Button>
+                            <Button variant="ghost" size="md" onClick={() => setVerificationMode('selection')} className="w-full">Back to Selection</Button>
                         </div>
                     </div>
                 )}
@@ -431,61 +396,20 @@ const Visitors: React.FC = () => {
 
             <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType="Visitor" title="Gate Audit" />
             
-            <Modal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                title={editingId ? "Update Guest Info" : "Authorize Guest"} 
-                subtitle="Security Manifest" 
-                size="md"
-            >
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Update Guest Info" : "Authorize Guest"} subtitle="Security Manifest" size="md">
                 <form className="space-y-4" onSubmit={handleFormSubmit}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Guest Name</label>
-                            <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Full Name" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/>
-                        </div>
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Visitor Type</label>
-                            <select value={visitorType} onChange={e => setVisitorType(e.target.value as VisitorType)} className="block w-full px-4 py-2.5 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900">
-                                {Object.values(VisitorType).map(type => <option key={type} value={type}>{type}</option>)}
-                            </select>
-                        </div>
+                        <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Guest Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Full Name" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/></div>
+                        <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Visitor Type</label><select value={visitorType} onChange={e => setVisitorType(e.target.value as VisitorType)} className="block w-full px-4 py-2.5 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900">{Object.values(VisitorType).map(type => <option key={type} value={type}>{type}</option>)}</select></div>
                     </div>
-                    <div>
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Vehicle Number</label>
-                        <input type="text" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="e.g. KA 01 EB 1234" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold uppercase"/>
-                    </div>
-                    <div>
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Expected Arrival</label>
-                        <input type="datetime-local" value={expectedAt} onChange={e => setExpectedAt(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
-                    </div>
-                    <div className="flex justify-end pt-2 gap-3">
-                        <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting} size="lg" className="px-8">
-                            {isSubmitting ? 'Syncing...' : (editingId ? 'Update Invite' : 'Create Invite')}
-                        </Button>
-                    </div>
+                    <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Vehicle Number</label><input type="text" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="e.g. KA 01 EB 1234" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold uppercase"/></div>
+                    <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Expected Arrival</label><input type="datetime-local" value={expectedAt} onChange={e => setExpectedAt(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/></div>
+                    <div className="flex justify-end pt-2 gap-3"><Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button type="submit" disabled={isSubmitting} size="lg" className="px-8">{isSubmitting ? 'Syncing...' : (editingId ? 'Update Invite' : 'Create Invite')}</Button></div>
                 </form>
             </Modal>
 
-            <ConfirmationModal
-                isOpen={confirmDelete.isOpen}
-                onClose={() => setConfirmDelete({ isOpen: false, id: null })}
-                onConfirm={handleDelete}
-                title="Cancel Invitation"
-                message="Are you sure you want to remove this visitor from the active manifest? This action will invalidate their access for today."
-                isDestructive
-                isLoading={isSubmitting}
-                confirmLabel="Yes, Remove"
-            />
-
-            <FeedbackModal 
-                isOpen={feedback.isOpen} 
-                onClose={() => setFeedback({ ...feedback, isOpen: false })} 
-                title={feedback.title} 
-                message={feedback.message} 
-                type={feedback.type} 
-            />
+            <ConfirmationModal isOpen={confirmDelete.isOpen} onClose={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="Cancel Invitation" message="Are you sure you want to remove this visitor?" isDestructive isLoading={isSubmitting} confirmLabel="Yes, Remove" />
+            <FeedbackModal isOpen={feedback.isOpen} onClose={() => setFeedback({ ...feedback, isOpen: false })} title={feedback.title} message={feedback.message} type={feedback.type} />
         </div>
     );
 };
