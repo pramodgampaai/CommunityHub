@@ -354,10 +354,6 @@ const BulkOperations: React.FC = () => {
                 </div>
             )}
 
-            <div className="flex flex-col items-center pt-8 opacity-30 pb-4">
-                <p className="text-[8px] font-mono font-black uppercase tracking-[0.6em]">System Operations Engine v2.1</p>
-            </div>
-
             <FeedbackModal isOpen={feedback.isOpen} onClose={() => setFeedback({ ...feedback, isOpen: false })} title={feedback.title} message={feedback.message} type={feedback.type} />
         </div>
     );

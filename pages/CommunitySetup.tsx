@@ -311,7 +311,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     </div>
                                     
                                     {blocks.map((block, index) => (
-                                        <div key={index} className="flex gap-4 items-end bg-white dark:bg-zinc-900/60 p-5 rounded-2xl border border-slate-50 dark:border-white/5 shadow-sm">
+                                        <div className="flex gap-4 items-end bg-white dark:bg-zinc-900/60 p-5 rounded-2xl border border-slate-50 dark:border-white/5 shadow-sm">
                                             <div className="flex-1">
                                                 <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Block Name</label>
                                                 <input 
@@ -542,10 +542,6 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                     </form>
                 )}
             </Card>
-            
-            <div className="text-center opacity-40">
-                <p className="text-[8px] font-mono font-black uppercase tracking-[0.6em]">Environment Provisioning v2.0</p>
-            </div>
 
             <FeedbackModal 
                 isOpen={feedback.isOpen} 

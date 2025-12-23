@@ -201,7 +201,6 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
               </div>
           </div>
       </div>
-      <div className="flex flex-col items-center pt-4 pb-2 opacity-30"><p className="text-[8px] font-mono font-black uppercase tracking-[0.6em]">Elevate Cloud v2.5 Stable</p></div>
     </div>
   );
 };
