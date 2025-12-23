@@ -115,8 +115,12 @@ function App() {
         } else if (user.role === UserRole.HelpdeskAdmin) {
             const allowed = ['Notices', 'Help Desk', 'Directory'];
             if (!allowed.includes(activePage)) setActivePage('Help Desk');
-        } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
+        } else if (user.role === UserRole.SecurityAdmin) {
             const allowed = ['Notices', 'Visitors', 'Directory'];
+            if (!allowed.includes(activePage)) setActivePage('Visitors');
+        } else if (user.role === UserRole.Security) {
+            // Security Staff explicitly blocked from Directory
+            const allowed = ['Notices', 'Visitors'];
             if (!allowed.includes(activePage)) setActivePage('Visitors');
         } else if (user.role !== UserRole.SuperAdmin && activePage === 'Billing') {
             setActivePage('Dashboard');
@@ -202,8 +206,11 @@ function App() {
       allowedPages = ['Notices', 'Help Desk'];
   } else if (user.role === UserRole.HelpdeskAdmin) {
       allowedPages = ['Notices', 'Help Desk', 'Directory'];
-  } else if (user.role === UserRole.SecurityAdmin || user.role === UserRole.Security) {
+  } else if (user.role === UserRole.SecurityAdmin) {
       allowedPages = ['Notices', 'Visitors', 'Directory'];
+  } else if (user.role === UserRole.Security) {
+      // Security Staff strictly blocked from Directory
+      allowedPages = ['Notices', 'Visitors'];
   }
 
   // If the user is on a restricted page, don't render content, just wait for useEffect to redirect

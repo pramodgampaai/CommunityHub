@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getResidents, createCommunityUser, getCommunity } from '../services/api';
 import type { User, Community, Block } from '../types';
 import { UserRole } from '../types';
@@ -67,9 +67,17 @@ const Directory: React.FC = () => {
                     { value: UserRole.SecurityAdmin, label: 'Security Admin' }
                 ];
             case UserRole.HelpdeskAdmin:
-                return [{ value: UserRole.HelpdeskAgent, label: 'Helpdesk Staff (Agent)' }];
+                // Helpdesk Admin sees and creates Helpdesk Agents
+                return [
+                    { value: UserRole.HelpdeskAdmin, label: 'Helpdesk Admin' },
+                    { value: UserRole.HelpdeskAgent, label: 'Helpdesk Staff (Agent)' }
+                ];
             case UserRole.SecurityAdmin:
-                return [{ value: UserRole.Security, label: 'Security Staff (Guard)' }];
+                // Security Admin sees and creates Security Guards
+                return [
+                    { value: UserRole.SecurityAdmin, label: 'Security Admin' },
+                    { value: UserRole.Security, label: 'Security Staff (Guard)' }
+                ];
             default: return [];
         }
     };
@@ -94,6 +102,53 @@ const Directory: React.FC = () => {
     };
 
     useEffect(() => { fetchUsers(); }, [user]);
+
+    /**
+     * Role-Based Visibility Filtering Logic (Strict Partitioning)
+     * Ensures users only see relevant peers and supervisors within the same community.
+     */
+    const filteredUsers = useMemo(() => {
+        if (!user) return [];
+        
+        return users.filter(u => {
+            // 1. Search Query Match
+            const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                (u.flatNumber && u.flatNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+            
+            if (!matchesSearch) return false;
+
+            // 2. Role-Based Access Rules (Strict Partitioning)
+            const myRole = user.role;
+            const targetRole = u.role;
+
+            switch (myRole) {
+                case UserRole.SuperAdmin:
+                    return true; // SuperAdmin sees everyone
+
+                case UserRole.Admin:
+                    // Admin: Access to Admin, Resident, Helpdesk Admin, Security Admin
+                    return [UserRole.Admin, UserRole.Resident, UserRole.HelpdeskAdmin, UserRole.SecurityAdmin].includes(targetRole);
+
+                case UserRole.Resident:
+                    // Resident: Access to Resident, Admin
+                    return [UserRole.Resident, UserRole.Admin].includes(targetRole);
+
+                case UserRole.HelpdeskAdmin:
+                    // Helpdesk Admin: Access to Helpdesk Admin, Helpdesk Staff
+                    return [UserRole.HelpdeskAdmin, UserRole.HelpdeskAgent].includes(targetRole);
+
+                case UserRole.SecurityAdmin:
+                    // Security Admin: Access to Security Admin, Security Staff
+                    return [UserRole.SecurityAdmin, UserRole.Security].includes(targetRole);
+
+                default:
+                    // Others (Security Staff, Helpdesk Staff) shouldn't even be on this page, 
+                    // but if they are, they see nothing.
+                    return false;
+            }
+        });
+    }, [users, searchQuery, user]);
 
     const handleCreateUser = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -163,12 +218,6 @@ const Directory: React.FC = () => {
         return block ? Array.from({ length: block.floorCount }, (_, i) => i + 1) : [];
     };
 
-    const filteredUsers = users.filter(u => 
-        u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (u.flatNumber && u.flatNumber.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
-
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
@@ -192,7 +241,7 @@ const Directory: React.FC = () => {
                 </div>
                 <input
                     type="text"
-                    placeholder="Search members..."
+                    placeholder="Search visible members..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="block w-full pl-12 pr-4 py-2.5 rounded-xl input-field text-sm font-bold shadow-sm"
@@ -202,9 +251,9 @@ const Directory: React.FC = () => {
             {loading ? (
                 <div className="flex justify-center p-20"><Spinner /></div>
             ) : filteredUsers.length === 0 ? (
-                <div className="p-16 text-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-2xl">
+                <div className="p-16 text-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
                     <UserGroupIcon className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                    <p className="font-bold uppercase tracking-widest text-[9px]">No records found</p>
+                    <p className="font-bold uppercase tracking-widest text-[9px]">No records accessible</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

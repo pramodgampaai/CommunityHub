@@ -30,7 +30,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     if (user?.role === UserRole.SuperAdmin) return ['Dashboard', 'Billing'].includes(item.name);
     if (user?.role === UserRole.HelpdeskAgent) return ['Notices', 'Help Desk'].includes(item.name);
     if (user?.role === UserRole.HelpdeskAdmin) return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
-    if (user?.role === UserRole.SecurityAdmin || user?.role === UserRole.Security) return ['Notices', 'Visitors', 'Directory'].includes(item.name);
+    
+    // Explicit split for Security roles
+    if (user?.role === UserRole.SecurityAdmin) return ['Notices', 'Visitors', 'Directory'].includes(item.name);
+    if (user?.role === UserRole.Security) return ['Notices', 'Visitors'].includes(item.name);
+    
     if (user?.role === UserRole.Admin) return item.name !== 'Billing';
     return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations';
   });
