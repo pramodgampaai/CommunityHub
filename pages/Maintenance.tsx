@@ -6,8 +6,9 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import AuditLogModal from '../components/AuditLogModal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { useAuth } from '../hooks/useAuth';
-import { HistoryIcon, CurrencyRupeeIcon, ClockIcon, CheckCircleIcon, ArrowDownTrayIcon } from '../components/icons';
+import { HistoryIcon, CurrencyRupeeIcon, ClockIcon, CheckCircleIcon, ArrowDownTrayIcon, AlertTriangleIcon } from '../components/icons';
 
 const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
     const { user } = useAuth();
@@ -18,6 +19,11 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
     const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState<MaintenanceRecord | null>(null);
     
+    // Feedback State
+    const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+        isOpen: false, type: 'success', title: '', message: ''
+    });
+
     // Form States
     const [upiId, setUpiId] = useState('');
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -51,8 +57,20 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
             await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, paymentDate);
             setIsPaymentModalOpen(false); 
             await fetchRecords();
+            setFeedback({
+                isOpen: true,
+                type: 'success',
+                title: 'Payment Submitted',
+                message: 'Your payment proof has been logged. A peer administrator will verify the transaction shortly.'
+            });
         } catch (err) { 
             console.error("Payment submission failed:", err); 
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Submission Failed',
+                message: 'We could not log your payment. Please check your internet connection and try again.'
+            });
         } finally { 
             setIsSubmitting(false); 
         }
@@ -60,11 +78,35 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
 
     const handleVerify = async (record: MaintenanceRecord) => {
         if (!isAdmin) return;
+        
+        // Logical Guard: Prevent self-verification
+        if (record.userId === user?.id) {
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Action Restricted',
+                message: 'System Integrity Rule: You cannot verify your own maintenance payments. Please request a peer administrator to perform this verification.'
+            });
+            return;
+        }
+
         try { 
             await verifyMaintenancePayment(record.id); 
             await fetchRecords(); 
+            setFeedback({
+                isOpen: true,
+                type: 'success',
+                title: 'Payment Verified',
+                message: `The payment for ${record.userName} has been successfully reconciled and marked as Paid.`
+            });
         } catch (err) { 
             console.error("Verification failed:", err); 
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Verification Failed',
+                message: 'An error occurred while updating the ledger. Please try again.'
+            });
         }
     };
 
@@ -108,46 +150,62 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
                             <p className="font-bold uppercase tracking-widest text-[9px]">No billing records found</p>
                         </div>
                     ) : (
-                        records.map(record => (
-                            <Card key={record.id} className="p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-5 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 shadow-sm">
-                                <div className="flex-1 w-full text-left">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${getStatusStyles(record.status)}`}>{record.status}</span>
-                                        {isAdmin && record.userName && (
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase">Resident: <span className="text-slate-900 dark:text-slate-100">{record.userName}</span></span>
-                                        )}
+                        records.map(record => {
+                            const isMyOwnRecord = record.userId === user?.id;
+                            
+                            return (
+                                <Card key={record.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-5 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 shadow-sm ${isMyOwnRecord ? 'border-l-4 border-l-brand-500' : ''}`}>
+                                    <div className="flex-1 w-full text-left">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${getStatusStyles(record.status)}`}>{record.status}</span>
+                                            {isMyOwnRecord ? (
+                                                <span className="text-[8px] font-black uppercase tracking-widest bg-brand-500/10 text-brand-600 px-2 py-0.5 rounded">My Unit</span>
+                                            ) : isAdmin && record.userName && (
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase">Resident: <span className="text-slate-900 dark:text-slate-100">{record.userName}</span></span>
+                                            )}
+                                        </div>
+                                        <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50 leading-none">
+                                            {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+                                        </h3>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-brand-600 mt-2">Unit ID: <span className="text-slate-500 dark:text-slate-400">{record.flatNumber || 'N/A'}</span></p>
                                     </div>
-                                    <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50 leading-none">
-                                        {new Date(record.periodDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
-                                    </h3>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-600 mt-2">Unit ID: <span className="text-slate-500 dark:text-slate-400">{record.flatNumber || 'N/A'}</span></p>
-                                </div>
 
-                                <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0">
-                                    <div className="text-right">
-                                        <p className="text-[9px] font-black uppercase tracking-tighter text-slate-400 mb-0.5">Amount Due</p>
-                                        <p className="text-2xl font-brand font-extrabold text-slate-900 dark:text-slate-50">₹{record.amount.toLocaleString()}</p>
+                                    <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0">
+                                        <div className="text-right">
+                                            <p className="text-[9px] font-black uppercase tracking-tighter text-slate-400 mb-0.5">Amount Due</p>
+                                            <p className="text-2xl font-brand font-extrabold text-slate-900 dark:text-slate-50">₹{record.amount.toLocaleString()}</p>
+                                        </div>
+                                        
+                                        <div className="flex gap-2">
+                                            {/* Action: Pay (Visible to the record owner if Pending) */}
+                                            {record.status === MaintenanceStatus.Pending && isMyOwnRecord && (
+                                                <Button size="md" onClick={() => { setSelectedRecord(record); setReceiptUrl(''); setIsPaymentModalOpen(true); }} leftIcon={<CurrencyRupeeIcon />}>Pay Now</Button>
+                                            )}
+
+                                            {/* Action: Verify (Visible to Admin if Submitted, BUT NOT for their own record) */}
+                                            {record.status === MaintenanceStatus.Submitted && isAdmin && !isMyOwnRecord && (
+                                                <Button size="md" onClick={() => handleVerify(record)} className="bg-emerald-600 hover:bg-emerald-700 text-white" leftIcon={<CheckCircleIcon />}>Verify</Button>
+                                            )}
+
+                                            {/* Action: Restricted Notification (Admin viewing their own submitted record) */}
+                                            {record.status === MaintenanceStatus.Submitted && isAdmin && isMyOwnRecord && (
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[8px] font-black uppercase text-amber-600 mb-1">Awaiting Peer Review</span>
+                                                    <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-600" title="Self-verification restricted">
+                                                        <AlertTriangleIcon className="w-4 h-4" />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Action: View Receipt (Visible if Submitted/Paid and URL exists) */}
+                                            {(record.status === MaintenanceStatus.Submitted || record.status === MaintenanceStatus.Paid) && record.paymentReceiptUrl && (
+                                                <Button variant="outlined" size="md" onClick={() => { setSelectedRecord(record); setIsReceiptModalOpen(true); }} leftIcon={<ArrowDownTrayIcon />}>Proof</Button>
+                                            )}
+                                        </div>
                                     </div>
-                                    
-                                    <div className="flex gap-2">
-                                        {/* Action: Pay (Visible to the record owner if Pending) */}
-                                        {record.status === MaintenanceStatus.Pending && record.userId === user?.id && (
-                                            <Button size="md" onClick={() => { setSelectedRecord(record); setReceiptUrl(''); setIsPaymentModalOpen(true); }} leftIcon={<CurrencyRupeeIcon />}>Pay Now</Button>
-                                        )}
-
-                                        {/* Action: Verify (Visible to Admin if Submitted) */}
-                                        {record.status === MaintenanceStatus.Submitted && isAdmin && (
-                                            <Button size="md" onClick={() => handleVerify(record)} className="bg-emerald-600 hover:bg-emerald-700 text-white" leftIcon={<CheckCircleIcon />}>Verify</Button>
-                                        )}
-
-                                        {/* Action: View Receipt (Visible if Submitted/Paid and URL exists) */}
-                                        {(record.status === MaintenanceStatus.Submitted || record.status === MaintenanceStatus.Paid) && record.paymentReceiptUrl && (
-                                            <Button variant="outlined" size="md" onClick={() => { setSelectedRecord(record); setIsReceiptModalOpen(true); }} leftIcon={<ArrowDownTrayIcon />}>Proof</Button>
-                                        )}
-                                    </div>
-                                </div>
-                            </Card>
-                        ))
+                                </Card>
+                            );
+                        })
                     )
                 )}
             </div>
@@ -214,6 +272,14 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
                     </div>
                 )}
             </Modal>
+
+            <FeedbackModal 
+                isOpen={feedback.isOpen} 
+                onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+                title={feedback.title} 
+                message={feedback.message} 
+                type={feedback.type} 
+            />
 
             <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType="MaintenanceRecord" title="Billing Ledger" />
         </div>

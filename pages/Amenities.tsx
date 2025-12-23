@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { PlusIcon, HistoryIcon, PencilIcon, TrashIcon, CheckCircleIcon, ClockIcon, AlertTriangleIcon, CalendarIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
@@ -16,6 +17,11 @@ const Amenities: React.FC = () => {
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Feedback State
+  const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+    isOpen: false, type: 'success', title: '', message: ''
+  });
+
   // Modal States
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -61,7 +67,12 @@ const Amenities: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
         if (file.size > 1024 * 1024) {
-            alert("Image too large. Please select a file under 1MB.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'File Too Large',
+                message: "The selected image exceeds the 1MB limit. Please optimize the image or choose a smaller file."
+            });
             return;
         }
         const reader = new FileReader();
@@ -76,7 +87,12 @@ const Amenities: React.FC = () => {
       e.preventDefault();
       if (!user) return;
       if (!imageUrl) {
-          alert("Please select an image for the amenity.");
+          setFeedback({
+              isOpen: true,
+              type: 'info',
+              title: 'Asset Requirements',
+              message: "A visual representation (image) is required for all community amenities."
+          });
           return;
       }
       setIsSubmitting(true);
@@ -96,7 +112,21 @@ const Amenities: React.FC = () => {
           setIsCreateModalOpen(false);
           resetForm();
           await fetchData();
-      } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
+          
+          setFeedback({
+              isOpen: true,
+              type: 'success',
+              title: editingId ? 'Amenity Updated' : 'Amenity Registered',
+              message: `"${name}" has been successfully ${editingId ? 'updated in' : 'added to'} the community asset registry.`
+          });
+      } catch (err: any) { 
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Registry Error',
+              message: err.message || "Failed to save amenity details. Please try again."
+          });
+      } finally { setIsSubmitting(false); }
   };
 
   const handleEditClick = (amenity: Amenity) => {
@@ -116,9 +146,19 @@ const Amenities: React.FC = () => {
           await deleteAmenity(confirmDelete.id);
           setConfirmDelete({ isOpen: false, id: null });
           await fetchData();
-      } catch (error) {
-          console.error("Delete failed:", error);
-          alert("Failed to remove amenity.");
+          setFeedback({
+              isOpen: true,
+              type: 'success',
+              title: 'Asset Removed',
+              message: 'The amenity and all associated booking logs have been permanently deleted.'
+          });
+      } catch (error: any) {
+          setFeedback({
+              isOpen: true,
+              type: 'error',
+              title: 'Deletion Failed',
+              message: error.message || "We encountered an issue removing this amenity. Please contact system support."
+          });
       } finally {
           setIsSubmitting(false);
       }
@@ -169,7 +209,14 @@ const Amenities: React.FC = () => {
               endTime: end.toISOString(),
           }, user);
           setIsBookingModalOpen(false);
-          alert("Confirmed!");
+          
+          setFeedback({
+              isOpen: true,
+              type: 'success',
+              title: 'Reservation Confirmed',
+              message: `Your booking for ${selectedAmenity.name} has been successfully registered in the ledger.`
+          });
+          
           resetBookingForm();
           await fetchData();
       } catch (err: any) { 
@@ -197,21 +244,15 @@ const Amenities: React.FC = () => {
 
   const isAdmin = user?.role === UserRole.Admin;
 
-  // Filter bookings for the selected amenity in the modal strictly for the chosen/current day
   const activeAmenityBookings = selectedAmenity 
     ? allBookings
         .filter(b => {
             const isSameAmenity = b.amenityId === selectedAmenity.id;
             if (!isSameAmenity) return false;
-
-            // Target date is either what user selected or Today
             const targetDate = startTime ? new Date(startTime) : new Date();
             const targetDateStr = targetDate.toDateString();
-            
             const bookingStartDateStr = new Date(b.startTime).toDateString();
             const bookingEndDateStr = new Date(b.endTime).toDateString();
-            
-            // Show if it overlaps with the specific calendar day
             return bookingStartDateStr === targetDateStr || bookingEndDateStr === targetDateStr;
         })
         .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
@@ -220,10 +261,8 @@ const Amenities: React.FC = () => {
   const formatTimeRange = (startStr: string, endStr: string) => {
       const s = new Date(startStr);
       const e = new Date(endStr);
-      
       const timeS = s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const timeE = e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      
       return `${timeS} - ${timeE}`;
   };
 
@@ -359,7 +398,6 @@ const Amenities: React.FC = () => {
 
       <Modal isOpen={isBookingModalOpen} onClose={() => { setIsBookingModalOpen(false); setBookingError(null); }} title="Reserve" subtitle={selectedAmenity?.name.toUpperCase()} size="md">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Form Section */}
               <form className="space-y-5" onSubmit={handleBooking}>
                   {bookingError && (
                       <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 rounded-2xl flex items-start gap-3 text-rose-600 dark:text-rose-400">
@@ -388,7 +426,6 @@ const Amenities: React.FC = () => {
                   <Button type="submit" disabled={isSubmitting} className="w-full shadow-lg shadow-brand-500/10" size="lg">Confirm Slot</Button>
               </form>
 
-              {/* Occupancy Section */}
               <div className="bg-slate-50 dark:bg-zinc-900/40 p-5 rounded-3xl border border-slate-100 dark:border-white/5 h-fit max-h-[400px] overflow-y-auto no-scrollbar">
                   <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
@@ -437,6 +474,14 @@ const Amenities: React.FC = () => {
       />
 
       <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType={['Amenity', 'Booking']} title="Booking Log" />
+      
+      <FeedbackModal 
+        isOpen={feedback.isOpen} 
+        onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+        title={feedback.title} 
+        message={feedback.message} 
+        type={feedback.type} 
+      />
     </div>
   );
 };

@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Spinner from '../components/ui/Spinner';
 import Modal from '../components/ui/Modal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { useAuth } from '../hooks/useAuth';
 import { MagnifyingGlassIcon, PlusIcon, UserGroupIcon, ChevronDownIcon, CheckCircleIcon, ArrowRightIcon, HomeIcon } from '../components/icons';
 
@@ -16,6 +17,11 @@ const Directory: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     
+    // Feedback State
+    const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+        isOpen: false, type: 'success', title: '', message: ''
+    });
+
     // Create User Modal State
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'identity' | 'assignment'>('identity');
@@ -116,9 +122,20 @@ const Directory: React.FC = () => {
             setIsAddModalOpen(false);
             resetForm();
             await fetchUsers();
-            alert("Member onboarded successfully.");
+            
+            setFeedback({
+                isOpen: true,
+                type: 'success',
+                title: 'Member Onboarded',
+                message: `${name} has been successfully registered and assigned access to the community portal.`
+            });
         } catch (error: any) {
-            alert(error.message || "Failed to create user.");
+            setFeedback({
+                isOpen: true,
+                type: 'error',
+                title: 'Onboarding Failed',
+                message: error.message || "We encountered an issue while creating the member profile. Please verify the email identity."
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -310,6 +327,14 @@ const Directory: React.FC = () => {
                     </form>
                 </div>
             </Modal>
+
+            <FeedbackModal 
+                isOpen={feedback.isOpen} 
+                onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+                title={feedback.title} 
+                message={feedback.message} 
+                type={feedback.type} 
+            />
         </div>
     );
 };
