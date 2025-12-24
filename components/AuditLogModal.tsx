@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { getAuditLogs } from '../services/api';
 import type { AuditLog, AuditAction } from '../types';
+import { UserRole } from '../types';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { MagnifyingGlassIcon, FunnelIcon, ClipboardDocumentListIcon, ClockIcon } from './icons';
@@ -40,10 +40,26 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, entityTy
         try {
             setLoading(true);
             const data = await getAuditLogs(user.communityId, user.id, user.role);
-            // Client-side filter by entity type(s)
+            
+            // Client-side Filter Implementation based on Role-Based Access Rules
             const entities = Array.isArray(entityType) ? entityType : [entityType];
-            const relevantLogs = data.filter(log => entities.includes(log.entity));
-            setLogs(relevantLogs);
+            
+            const filteredByRole = data.filter(log => {
+                // 1. Basic entity match for the current module
+                if (!entities.includes(log.entity)) return false;
+
+                // 2. Platform Admins see everything for their community
+                if (user.role === UserRole.Admin || user.role === UserRole.SuperAdmin) return true;
+
+                // 3. Module Admins (Helpdesk/Security) see all related logs
+                if (user.role === UserRole.HelpdeskAdmin && log.entity === 'Complaint') return true;
+                if (user.role === UserRole.SecurityAdmin && log.entity === 'Visitor') return true;
+
+                // 4. Defaults: Residents and standard Staff see only their own actions
+                return log.actorId === user.id;
+            });
+
+            setLogs(filteredByRole);
         } catch (error) {
             console.error("Failed to fetch audit logs", error);
         } finally {
@@ -55,7 +71,7 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, entityTy
         fetchLogs();
     }, [isOpen, user]);
 
-    // Internal Filtering
+    // Internal UI Filtering (Search/Action type)
     const filteredLogs = logs.filter(log => {
         if (filterAction !== 'All' && log.action !== filterAction) return false;
         if (searchQuery) {
@@ -117,7 +133,7 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, entityTy
                 <div className="space-y-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-4 border-b border-[var(--border-light)] dark:border-[var(--border-dark)]">
                         <div>
-                            <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedLog.details.description}</h3>
+                            <h3 className="text-lg font-bold text-[var(--text-light)] dark:text-[var(--text-dark)]">{selectedLog.details.description || 'Action Recorded'}</h3>
                             <div className="flex items-center gap-2 mt-1 text-sm text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
                                 <ClockIcon className="w-4 h-4" />
                                 <span>{new Date(selectedLog.createdAt).toLocaleString()}</span>
@@ -210,31 +226,31 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, entityTy
                     ) : filteredLogs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 text-[var(--text-secondary-light)]">
                             <ClipboardDocumentListIcon className="w-10 h-10 mb-2 opacity-20" />
-                            <p>No records found.</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest">No accessible records</p>
                         </div>
                     ) : (
                         <table className="w-full text-left text-sm">
-                            <thead className="bg-black/5 dark:bg-white/5 sticky top-0 backdrop-blur-sm">
+                            <thead className="bg-black/5 dark:bg-white/5 sticky top-0 backdrop-blur-sm z-20">
                                 <tr>
-                                    <th className="p-3 font-semibold text-[var(--text-secondary-light)]">Time</th>
-                                    <th className="p-3 font-semibold text-[var(--text-secondary-light)]">User</th>
-                                    <th className="p-3 font-semibold text-[var(--text-secondary-light)]">Action</th>
-                                    <th className="p-3 font-semibold text-[var(--text-secondary-light)]">Description</th>
+                                    <th className="p-3 font-black text-[9px] uppercase tracking-widest text-slate-400">Time</th>
+                                    <th className="p-3 font-black text-[9px] uppercase tracking-widest text-slate-400">User</th>
+                                    <th className="p-3 font-black text-[9px] uppercase tracking-widest text-slate-400">Action</th>
+                                    <th className="p-3 font-black text-[9px] uppercase tracking-widest text-slate-400">Description</th>
                                     <th className="p-3 text-right"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--border-light)] dark:divide-[var(--border-dark)]">
                                 {filteredLogs.map(log => (
                                     <tr key={log.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={() => setSelectedLog(log)}>
-                                        <td className="p-3 whitespace-nowrap text-[var(--text-secondary-light)]">
+                                        <td className="p-3 whitespace-nowrap text-slate-500 font-medium">
                                             {new Date(log.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                                         </td>
-                                        <td className="p-3 whitespace-nowrap font-medium">
+                                        <td className="p-3 whitespace-nowrap font-bold text-slate-800 dark:text-slate-200">
                                             {log.actorName}
                                         </td>
                                         <td className="p-3"><ActionBadge action={log.action} /></td>
-                                        <td className="p-3 text-[var(--text-secondary-light)] truncate max-w-xs">{log.details.description}</td>
-                                        <td className="p-3 text-right text-[var(--accent)] font-medium">View</td>
+                                        <td className="p-3 text-slate-500 dark:text-slate-400 truncate max-w-xs">{log.details.description || 'Record update'}</td>
+                                        <td className="p-3 text-right text-[var(--accent)] font-black uppercase text-[9px]">View</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -242,7 +258,7 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, entityTy
                     )}
                 </div>
                 <div className="flex justify-end pt-2">
-                    <Button variant="outlined" onClick={onClose}>Close</Button>
+                    <Button variant="outlined" onClick={onClose}>Close Registry</Button>
                 </div>
             </div>
         </Modal>

@@ -77,7 +77,7 @@ const NoticeBoard: React.FC = () => {
           };
 
           if (editingId) {
-              await updateNotice(editingId, payload);
+              await updateNotice(editingId, payload, user);
           } else {
               await createNotice({ ...payload, author: user.name }, user);
           }
@@ -123,7 +123,7 @@ const NoticeBoard: React.FC = () => {
           isDestructive: true,
           confirmLabel: 'Delete',
           action: async () => {
-              await deleteNotice(id);
+              await deleteNotice(id, user || undefined);
               if (user?.communityId) await fetchNotices(user.communityId);
           }
       });

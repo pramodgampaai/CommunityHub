@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getMaintenanceRecords, submitMaintenancePayment, verifyMaintenancePayment } from '../services/api';
 import type { MaintenanceRecord } from '../types';
 import { MaintenanceStatus, UserRole } from '../types';
@@ -49,12 +49,28 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
 
     useEffect(() => { fetchRecords(); }, [user, isAdmin]);
 
+    /**
+     * Prioritized Sorting Logic:
+     * 1. Records with 'Submitted' status (Pending Verification) come first.
+     * 2. Then records by Date (Descending).
+     */
+    const sortedRecords = useMemo(() => {
+        return [...records].sort((a, b) => {
+            // Prioritize status 'Submitted'
+            if (a.status === MaintenanceStatus.Submitted && b.status !== MaintenanceStatus.Submitted) return -1;
+            if (a.status !== MaintenanceStatus.Submitted && b.status === MaintenanceStatus.Submitted) return 1;
+            
+            // Otherwise sort by period date descending
+            return new Date(b.periodDate).getTime() - new Date(a.periodDate).getTime();
+        });
+    }, [records]);
+
     const handlePaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedRecord || !user) return;
         setIsSubmitting(true);
         try {
-            await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, paymentDate);
+            await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, paymentDate, user);
             setIsPaymentModalOpen(false); 
             await fetchRecords();
             setFeedback({
@@ -77,7 +93,7 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
     };
 
     const handleVerify = async (record: MaintenanceRecord) => {
-        if (!isAdmin) return;
+        if (!isAdmin || !user) return;
         
         // Logical Guard: Prevent self-verification
         if (record.userId === user?.id) {
@@ -91,7 +107,7 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
         }
 
         try { 
-            await verifyMaintenancePayment(record.id); 
+            await verifyMaintenancePayment(record.id, user); 
             await fetchRecords(); 
             setFeedback({
                 isOpen: true,
@@ -119,11 +135,16 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
         }
     };
 
+    const getStatusLabel = (status: MaintenanceStatus) => {
+        if (status === MaintenanceStatus.Submitted) return 'Pending Verification';
+        return status;
+    };
+
     const getStatusStyles = (status: MaintenanceStatus) => {
         switch (status) {
             case MaintenanceStatus.Paid: return 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20';
-            case MaintenanceStatus.Submitted: return 'bg-blue-50 text-blue-600 dark:bg-blue-900/20';
-            default: return 'bg-amber-50 text-amber-600 dark:bg-amber-900/20';
+            case MaintenanceStatus.Submitted: return 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 animate-pulse';
+            default: return 'bg-slate-100 text-slate-500 dark:bg-white/5';
         }
     };
 
@@ -144,20 +165,20 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
                 {loading ? (
                     Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse" />)
                 ) : (
-                    records.length === 0 ? (
+                    sortedRecords.length === 0 ? (
                         <div className="p-16 text-center text-slate-400 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
                             <CurrencyRupeeIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
                             <p className="font-bold uppercase tracking-widest text-[9px]">No billing records found</p>
                         </div>
                     ) : (
-                        records.map(record => {
+                        sortedRecords.map(record => {
                             const isMyOwnRecord = record.userId === user?.id;
                             
                             return (
-                                <Card key={record.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-5 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 shadow-sm ${isMyOwnRecord ? 'border-l-4 border-l-brand-500' : ''}`}>
+                                <Card key={record.id} className={`p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-5 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 shadow-sm ${record.status === MaintenanceStatus.Submitted ? 'ring-2 ring-amber-500/20 bg-amber-50/10' : ''} ${isMyOwnRecord ? 'border-l-4 border-l-brand-500' : ''}`}>
                                     <div className="flex-1 w-full text-left">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${getStatusStyles(record.status)}`}>{record.status}</span>
+                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${getStatusStyles(record.status)}`}>{getStatusLabel(record.status)}</span>
                                             {isMyOwnRecord ? (
                                                 <span className="text-[8px] font-black uppercase tracking-widest bg-brand-500/10 text-brand-600 px-2 py-0.5 rounded">My Unit</span>
                                             ) : isAdmin && record.userName && (
@@ -184,7 +205,7 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
 
                                             {/* Action: Verify (Visible to Admin if Submitted, BUT NOT for their own record) */}
                                             {record.status === MaintenanceStatus.Submitted && isAdmin && !isMyOwnRecord && (
-                                                <Button size="md" onClick={() => handleVerify(record)} className="bg-emerald-600 hover:bg-emerald-700 text-white" leftIcon={<CheckCircleIcon />}>Verify</Button>
+                                                <Button size="md" onClick={() => handleVerify(record)} className="bg-emerald-600 hover:bg-emerald-700 text-white" leftIcon={<CheckCircleIcon />}>Authorize</Button>
                                             )}
 
                                             {/* Action: Restricted Notification (Admin viewing their own submitted record) */}
@@ -199,7 +220,7 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
 
                                             {/* Action: View Receipt (Visible if Submitted/Paid and URL exists) */}
                                             {(record.status === MaintenanceStatus.Submitted || record.status === MaintenanceStatus.Paid) && record.paymentReceiptUrl && (
-                                                <Button variant="outlined" size="md" onClick={() => { setSelectedRecord(record); setIsReceiptModalOpen(true); }} leftIcon={<ArrowDownTrayIcon />}>Proof</Button>
+                                                <Button variant="outlined" size="md" onClick={() => { setSelectedRecord(record); setIsReceiptModalOpen(true); }} leftIcon={<ArrowDownTrayIcon />}>View Proof</Button>
                                             )}
                                         </div>
                                     </div>

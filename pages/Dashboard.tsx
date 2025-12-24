@@ -6,7 +6,7 @@ import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole, ExpenseSta
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
 import { useAuth } from '../hooks/useAuth';
-import { CurrencyRupeeIcon, UsersIcon, ShieldCheckIcon, PlusIcon, ArrowRightIcon, BellIcon } from '../components/icons';
+import { CurrencyRupeeIcon, UsersIcon, ShieldCheckIcon, PlusIcon, ArrowRightIcon, BellIcon, CheckCircleIcon } from '../components/icons';
 import { Page } from '../types';
 import Button from '../components/ui/Button';
 
@@ -35,7 +35,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
   const [notices, setNotices] = useState<Notice[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [maintenanceStats, setMaintenanceStats] = useState({ lifetimeCollected: 0, myDues: 0 });
+  const [maintenanceStats, setMaintenanceStats] = useState({ lifetimeCollected: 0, myDues: 0, pendingVerifications: 0 });
   const [expenseStats, setExpenseStats] = useState({ totalExpenses: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,12 +61,15 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
         setComplaints(results[1]);
         setVisitors(results[2]);
         const records: MaintenanceRecord[] = results[3];
-        let lifetime = 0, myDues = 0;
+        let lifetime = 0, myDues = 0, pendingVerifications = 0;
         records.forEach(r => {
             if (r.status === MaintenanceStatus.Paid) lifetime += Number(r.amount);
-            else if (r.userId === user.id) myDues += Number(r.amount);
+            else if (r.userId === user.id && r.status === MaintenanceStatus.Pending) myDues += Number(r.amount);
+            
+            // Count records awaiting admin verification
+            if (r.status === MaintenanceStatus.Submitted) pendingVerifications++;
         });
-        setMaintenanceStats({ lifetimeCollected: lifetime, myDues });
+        setMaintenanceStats({ lifetimeCollected: lifetime, myDues, pendingVerifications });
         if (isAdmin && results[4]) {
             const expenses: Expense[] = results[4];
             const total = expenses.filter(e => e.status === ExpenseStatus.Approved).reduce((sum, e) => sum + e.amount, 0);
@@ -116,7 +119,14 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
               <div className="flex-1 p-5 text-white dark:text-slate-50">
                   <p className="text-[8px] font-mono font-black uppercase tracking-[0.2em] opacity-70 mb-1">{isAdmin ? 'Net Treasury' : 'Current Due'}</p>
                   <h4 className="text-4xl font-brand font-extrabold tracking-tight">₹{animatedTreasury.toLocaleString()}</h4>
-                  <button onClick={() => navigateToPage('Maintenance')} className="mt-3 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">Analyze Ledger <ArrowRightIcon className="w-3.5 h-3.5" /></button>
+                  <div className="flex items-center justify-between mt-3">
+                    <button onClick={() => navigateToPage('Maintenance')} className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">Analyze Ledger <ArrowRightIcon className="w-3.5 h-3.5" /></button>
+                    {isAdmin && maintenanceStats.pendingVerifications > 0 && (
+                        <span className="flex items-center gap-1 bg-amber-500 text-white px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider animate-pulse">
+                            {maintenanceStats.pendingVerifications} Pending Verification
+                        </span>
+                    )}
+                  </div>
               </div>
               <div className="flex-1 p-5 text-white dark:text-slate-50 bg-black/10 dark:bg-white/[0.02]">
                   <p className="text-[8px] font-mono font-black uppercase tracking-[0.2em] opacity-70 mb-1">Pipeline Status</p>

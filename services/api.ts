@@ -303,9 +303,12 @@ export const createNotice = async (data: Partial<Notice>, user: User) => {
         }
     });
     if (error) throw error;
+
+    // Audit logs for edge functions usually handled in function, but we ensure consistency here if needed
 };
 
-export const updateNotice = async (id: string, data: Partial<Notice>) => {
+export const updateNotice = async (id: string, data: Partial<Notice>, user?: User) => {
+    const { data: oldNotice } = await supabase.from('notices').select('*').eq('id', id).single();
     const payload: any = {};
     if (data.title) payload.title = data.title;
     if (data.content) payload.content = data.content;
@@ -315,11 +318,34 @@ export const updateNotice = async (id: string, data: Partial<Notice>) => {
 
     const { error } = await supabase.from('notices').update(payload).eq('id', id);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'UPDATE',
+            entity: 'Notice',
+            entity_id: id,
+            details: { description: `Notice updated: ${data.title || oldNotice?.title}`, old: oldNotice, new: payload }
+        });
+    }
 };
 
-export const deleteNotice = async (id: string) => {
+export const deleteNotice = async (id: string, user?: User) => {
+    const { data: oldNotice } = await supabase.from('notices').select('*').eq('id', id).single();
     const { error } = await supabase.from('notices').delete().eq('id', id);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'DELETE',
+            entity: 'Notice',
+            entity_id: id,
+            details: { description: `Notice removed: ${oldNotice?.title}`, old: oldNotice }
+        });
+    }
 };
 
 // --- Complaints ---
@@ -461,6 +487,15 @@ export const createVisitor = async (data: Partial<Visitor>, user: User) => {
     }).select().single();
 
     if (error) throw error;
+
+    await supabase.from('audit_logs').insert({
+        community_id: user.communityId,
+        actor_id: user.id,
+        action: 'CREATE',
+        entity: 'Visitor',
+        entity_id: newVisitor.id,
+        details: { description: `Visitor pre-authorized: ${data.name}`, new: newVisitor }
+    });
     
     return {
         ...newVisitor,
@@ -475,7 +510,8 @@ export const createVisitor = async (data: Partial<Visitor>, user: User) => {
     } as Visitor;
 };
 
-export const updateVisitor = async (id: string, data: Partial<Visitor>) => {
+export const updateVisitor = async (id: string, data: Partial<Visitor>, user?: User) => {
+    const { data: oldVisitor } = await supabase.from('visitors').select('*').eq('id', id).single();
     const payload: any = {
         name: data.name,
         visitor_type: data.visitorType,
@@ -486,11 +522,34 @@ export const updateVisitor = async (id: string, data: Partial<Visitor>) => {
 
     const { error } = await supabase.from('visitors').update(payload).eq('id', id);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'UPDATE',
+            entity: 'Visitor',
+            entity_id: id,
+            details: { description: `Visitor details modified: ${data.name || oldVisitor?.name}`, old: oldVisitor, new: payload }
+        });
+    }
 };
 
-export const deleteVisitor = async (id: string) => {
+export const deleteVisitor = async (id: string, user?: User) => {
+    const { data: oldVisitor } = await supabase.from('visitors').select('*').eq('id', id).single();
     const { error } = await supabase.from('visitors').delete().eq('id', id);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'DELETE',
+            entity: 'Visitor',
+            entity_id: id,
+            details: { description: `Visitor invitation cancelled: ${oldVisitor?.name}`, old: oldVisitor }
+        });
+    }
 };
 
 export const updateVisitorStatus = async (id: string, status: VisitorStatus) => {
@@ -510,6 +569,15 @@ export const checkOutVisitor = async (id: string, user: User) => {
         status: 'Checked Out'
     }).eq('id', id);
     if (error) throw error;
+
+    await supabase.from('audit_logs').insert({
+        community_id: user.communityId,
+        actor_id: user.id,
+        action: 'UPDATE',
+        entity: 'Visitor',
+        entity_id: id,
+        details: { description: `Visitor checked out at gate.` }
+    });
 };
 
 // --- Amenities & Bookings ---
@@ -587,7 +655,7 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
 };
 
 export const createBooking = async (data: Partial<Booking>, user: User) => {
-    const { error } = await supabase.from('bookings').insert({
+    const { data: newBooking, error } = await supabase.from('bookings').insert({
         amenity_id: data.amenityId,
         user_id: user.id,
         resident_name: user.name,
@@ -595,13 +663,35 @@ export const createBooking = async (data: Partial<Booking>, user: User) => {
         start_time: data.startTime,
         end_time: data.endTime,
         community_id: user.communityId
-    });
+    }).select().single();
+
     if (error) throw error;
+
+    await supabase.from('audit_logs').insert({
+        community_id: user.communityId,
+        actor_id: user.id,
+        action: 'CREATE',
+        entity: 'Booking',
+        entity_id: newBooking.id,
+        details: { description: `Facility reserved: ${newBooking.amenity_id}`, new: newBooking }
+    });
 };
 
-export const deleteBooking = async (id: string) => {
+export const deleteBooking = async (id: string, user?: User) => {
+    const { data: oldBooking } = await supabase.from('bookings').select('*').eq('id', id).single();
     const { error } = await supabase.from('bookings').delete().eq('id', id);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'DELETE',
+            entity: 'Booking',
+            entity_id: id,
+            details: { description: `Facility reservation cancelled.`, old: oldBooking }
+        });
+    }
 };
 
 // --- Maintenance ---
@@ -636,7 +726,7 @@ export const getMaintenanceRecords = async (communityId: string, userId?: string
     }));
 };
 
-export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, date: string) => {
+export const submitMaintenancePayment = async (recordId: string, receiptUrl: string, upiId: string, date: string, user?: User) => {
     const { error } = await supabase.from('maintenance_records').update({
         status: 'Submitted',
         payment_receipt_url: receiptUrl,
@@ -644,13 +734,35 @@ export const submitMaintenancePayment = async (recordId: string, receiptUrl: str
         transaction_date: date
     }).eq('id', recordId);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'UPDATE',
+            entity: 'MaintenanceRecord',
+            entity_id: recordId,
+            details: { description: `Payment proof submitted for verification. UPI: ${upiId}` }
+        });
+    }
 };
 
-export const verifyMaintenancePayment = async (recordId: string) => {
+export const verifyMaintenancePayment = async (recordId: string, user?: User) => {
     const { error } = await supabase.from('maintenance_records').update({
         status: 'Paid'
     }).eq('id', recordId);
     if (error) throw error;
+
+    if (user) {
+        await supabase.from('audit_logs').insert({
+            community_id: user.communityId,
+            actor_id: user.id,
+            action: 'UPDATE',
+            entity: 'MaintenanceRecord',
+            entity_id: recordId,
+            details: { description: `Payment verified and reconciled in ledger.` }
+        });
+    }
 };
 
 export const getMaintenanceHistory = async (communityId: string): Promise<MaintenanceConfiguration[]> => {
@@ -710,7 +822,7 @@ export const getExpenses = async (communityId: string): Promise<Expense[]> => {
 };
 
 export const createExpense = async (data: Partial<Expense>, user: User) => {
-    const { error } = await supabase.from('expenses').insert({
+    const { data: newExpense, error } = await supabase.from('expenses').insert({
         title: data.title,
         amount: data.amount,
         category: data.category,
@@ -720,28 +832,71 @@ export const createExpense = async (data: Partial<Expense>, user: User) => {
         submitted_by: user.id,
         community_id: user.communityId,
         status: 'Pending'
-    });
+    }).select().single();
+
     if (error) throw error;
+
+    // Manual Audit Log for Expense Creation
+    await supabase.from('audit_logs').insert({
+        community_id: user.communityId,
+        actor_id: user.id,
+        action: 'CREATE',
+        entity: 'Expense',
+        entity_id: newExpense.id,
+        details: { description: `Expense logged: ${data.title}`, new: newExpense }
+    });
 };
 
 export const approveExpense = async (id: string, userId: string) => {
-    const { error } = await supabase.from('expenses').update({
+    const { data: oldExpense } = await supabase.from('expenses').select('*').eq('id', id).single();
+
+    const { data: updated, error } = await supabase.from('expenses').update({
         status: 'Approved',
         approved_by: userId
-    }).eq('id', id);
+    }).eq('id', id).select().single();
+
     if (error) throw error;
+
+    // Manual Audit Log for Approval
+    await supabase.from('audit_logs').insert({
+        community_id: updated.community_id,
+        actor_id: userId,
+        action: 'UPDATE',
+        entity: 'Expense',
+        entity_id: id,
+        details: { 
+            description: `Expense authorized: ${updated.title}`, 
+            old: { status: oldExpense?.status }, 
+            new: { status: updated.status } 
+        }
+    });
 };
 
 export const rejectExpense = async (id: string, userId: string, reason: string) => {
-    const { data: current } = await supabase.from('expenses').select('description').eq('id', id).single();
-    const newDescription = `${current?.description || ''} \n[REJECTION REASON]: ${reason}`;
+    const { data: oldExpense } = await supabase.from('expenses').select('*').eq('id', id).single();
+    const newDescription = `${oldExpense?.description || ''} \n[REJECTION REASON]: ${reason}`;
 
-    const { error } = await supabase.from('expenses').update({
+    const { data: updated, error } = await supabase.from('expenses').update({
         status: 'Rejected',
         approved_by: userId,
         description: newDescription
-    }).eq('id', id);
+    }).eq('id', id).select().single();
+
     if (error) throw error;
+
+    // Manual Audit Log for Rejection
+    await supabase.from('audit_logs').insert({
+        community_id: updated.community_id,
+        actor_id: userId,
+        action: 'UPDATE',
+        entity: 'Expense',
+        entity_id: id,
+        details: { 
+            description: `Expense declined: ${updated.title}. Reason: ${reason}`, 
+            old: { status: oldExpense?.status, description: oldExpense?.description }, 
+            new: { status: updated.status, description: updated.description } 
+        }
+    });
 };
 
 export const getMonthlyLedger = async (communityId: string, month: number, year: number): Promise<MonthlyLedger> => {

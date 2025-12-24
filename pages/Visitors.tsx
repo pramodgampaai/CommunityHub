@@ -62,10 +62,6 @@ const Visitors: React.FC = () => {
 
     useEffect(() => { fetchVisitors(); }, [user]);
 
-    /**
-     * Programmatic Visitor Pass Generator
-     * Draws a high-quality pass on a canvas and triggers a download.
-     */
     const downloadPassImage = async (visitor: Visitor) => {
         if (isDownloading) return;
         setIsDownloading(true);
@@ -75,39 +71,29 @@ const Visitors: React.FC = () => {
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
-            // HD Resolution for sharing
             canvas.width = 800;
             canvas.height = 1200;
-
-            // 1. Background & Styling
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Brand Header Area
-            ctx.fillStyle = '#0d9488'; // Brand Teal
+            ctx.fillStyle = '#0d9488'; 
             ctx.fillRect(0, 0, canvas.width, 180);
 
-            // 2. Load QR Code Image
             const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${visitor.entryToken || visitor.id}`;
             const qrImg = new Image();
-            qrImg.crossOrigin = "anonymous"; // CRITICAL: Avoid tainted canvas
-            
+            qrImg.crossOrigin = "anonymous";
             await new Promise((resolve, reject) => {
                 qrImg.onload = resolve;
                 qrImg.onerror = reject;
                 qrImg.src = qrUrl;
             });
 
-            // 3. Draw Brand Text
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 64px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('Elevate', canvas.width / 2, 100);
-            
             ctx.font = 'bold 20px sans-serif';
             ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 140);
 
-            // 4. Draw Visitor Name & Token
             ctx.fillStyle = '#1e293b';
             ctx.font = 'bold 54px sans-serif';
             ctx.fillText(visitor.name.toUpperCase(), canvas.width / 2, 280);
@@ -120,40 +106,29 @@ const Visitors: React.FC = () => {
             ctx.font = 'black 110px monospace';
             ctx.fillText(visitor.entryToken || 'INV-EXT', canvas.width / 2, 450);
 
-            // 5. Draw QR Code
             const qrSize = 450;
             const qrX = (canvas.width - qrSize) / 2;
             const qrY = 520;
-            
-            // Draw a subtle border for the QR
             ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 2;
             ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
             ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-            // 6. Draw Footer Info (Host & Unit)
             ctx.fillStyle = '#1e293b';
             ctx.font = 'bold 32px sans-serif';
             ctx.fillText(`Invited by ${visitor.residentName}`, canvas.width / 2, 1050);
-            
             ctx.fillStyle = '#64748b';
             ctx.font = 'bold 24px sans-serif';
             ctx.fillText(`Unit: ${visitor.flatNumber} • ${user?.communityName || 'Property'}`, canvas.width / 2, 1100);
 
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = 'italic 18px sans-serif';
-            ctx.fillText('Authorized for one-time entry on date of arrival.', canvas.width / 2, 1150);
-
-            // 7. Trigger Download
             const dataUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.download = `Elevate_Pass_${visitor.name.replace(/\s+/g, '_')}.png`;
             link.href = dataUrl;
             link.click();
-
         } catch (err) {
             console.error("Pass Generation Error:", err);
-            alert("Could not generate image. Please try again or take a screenshot.");
+            alert("Could not generate image.");
         } finally {
             setIsDownloading(false);
         }
@@ -168,21 +143,11 @@ const Visitors: React.FC = () => {
                 const segments = cleanCode.split(/[/?#]/).filter(s => s.length > 0);
                 if (segments.length > 0) cleanCode = segments[segments.length - 1];
             }
-            if (cleanCode.startsWith('{')) {
-                try {
-                    const parsed = JSON.parse(cleanCode);
-                    cleanCode = parsed.token || parsed.id || cleanCode;
-                } catch (e) { }
-            }
             cleanCode = cleanCode.replace(/[^\w-]/gi, '').trim();
 
-            const upperCode = cleanCode.toUpperCase();
-            const lowerCode = cleanCode.toLowerCase();
-            
             const targetVisitor = visitors.find(v => 
-                (v.entryToken && v.entryToken.toUpperCase() === upperCode) || 
-                v.id === lowerCode ||
-                v.id === cleanCode
+                (v.entryToken && v.entryToken.toUpperCase() === cleanCode.toUpperCase()) || 
+                v.id === cleanCode.toLowerCase()
             );
             
             if (!targetVisitor) {
@@ -214,7 +179,7 @@ const Visitors: React.FC = () => {
             const dateISO = new Date(expectedAt).toISOString();
             const payload = { name, visitorType, vehicleNumber, expectedAt: dateISO, purpose: visitorType === VisitorType.Guest ? 'Visitation' : 'Service' };
             if (editingId) {
-                await updateVisitor(editingId, payload);
+                await updateVisitor(editingId, payload, user);
             } else {
                 const newVisitor = await createVisitor(payload, user);
                 setSelectedPassVisitor(newVisitor);
@@ -246,10 +211,10 @@ const Visitors: React.FC = () => {
     };
 
     const handleDelete = async () => {
-        if (!confirmDelete.id) return;
+        if (!confirmDelete.id || !user) return;
         setIsSubmitting(true);
         try {
-            await deleteVisitor(confirmDelete.id);
+            await deleteVisitor(confirmDelete.id, user);
             setConfirmDelete({ isOpen: false, id: null });
             await fetchVisitors();
         } catch (error) { console.error(error); } finally { setIsSubmitting(false); }
@@ -322,7 +287,6 @@ const Visitors: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <p className="text-sm text-slate-500 font-medium">Loc: <span className="text-slate-800 dark:text-zinc-300 font-bold">{visitor.flatNumber}</span></p>
                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{visitor.visitorType}</p>
-                                    {visitor.vehicleNumber && <p className="text-[10px] font-black uppercase tracking-widest text-brand-600 bg-brand-500/5 px-2 rounded">Reg: {visitor.vehicleNumber}</p>}
                                 </div>
                             </div>
                             <div className="w-full sm:w-auto flex items-center gap-6 border-t sm:border-t-0 pt-3 sm:pt-0">
@@ -346,53 +310,6 @@ const Visitors: React.FC = () => {
                     ))
                 )}
             </div>
-
-            {/* PASS SHARING MODAL */}
-            <Modal isOpen={isPassModalOpen} onClose={() => { setIsPassModalOpen(false); setSelectedPassVisitor(null); }} title="Visitor Access Pass" subtitle="SECURE GATE PROTOCOL" size="md">
-                {selectedPassVisitor && (
-                    <div className="space-y-8 py-2">
-                        <div className="bg-slate-50 dark:bg-white/5 p-8 rounded-[2.5rem] border border-slate-100 dark:border-white/5 flex flex-col items-center text-center">
-                            <div className="w-16 h-1 bg-brand-500 rounded-full mb-6 opacity-30" />
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-2">Gate Access Token</h4>
-                            <p className="text-4xl font-brand font-black tracking-[0.4em] text-brand-600 mb-8">{selectedPassVisitor.entryToken || 'INV-EXT'}</p>
-                            <div className="bg-white p-6 rounded-3xl shadow-xl shadow-brand-500/10 mb-8">
-                                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${selectedPassVisitor.entryToken || selectedPassVisitor.id}`} alt="Access QR Code" className="w-40 h-40" />
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{selectedPassVisitor.name}</p>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Guest of <span className="text-brand-600">{selectedPassVisitor.residentName}</span> • Unit {selectedPassVisitor.flatNumber}</p>
-                            </div>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <Button size="lg" className="w-full" disabled={isDownloading} onClick={() => downloadPassImage(selectedPassVisitor)} leftIcon={isDownloading ? <ClockIcon /> : <ArrowDownTrayIcon />}>
-                                {isDownloading ? 'Generating...' : 'Download Pass Image'}
-                            </Button>
-                            <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Share this code with your guest for rapid entry</p>
-                        </div>
-                    </div>
-                )}
-            </Modal>
-
-            {/* VERIFICATION MODAL */}
-            <Modal isOpen={isVerifyModalOpen} onClose={() => { setIsVerifyModalOpen(false); setVerificationMode('selection'); }} title="Verify Access" subtitle="GATE PROTOCOL" size={verificationMode === 'qr' ? 'lg' : 'md'}>
-                {verificationMode === 'qr' ? (
-                    <div className="space-y-4">
-                        <QRScanner onScan={(data) => handleVerifySubmit(data)} onClose={() => setVerificationMode('selection')} />
-                        <div className="text-center"><p className="text-xs text-slate-400 font-medium">Scanning for Secure Entry Pass...</p></div>
-                    </div>
-                ) : (
-                    <div className="space-y-6">
-                        <div className="bg-slate-50 dark:bg-white/5 p-8 rounded-[2rem] border border-slate-100 dark:border-white/5 text-center">
-                            <label className="block text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">Manual Entry Token</label>
-                            <input type="text" value={manualCode} onChange={e => setManualCode(e.target.value.toUpperCase())} placeholder="E.G. AB12XY" maxLength={6} className="block w-full text-center text-4xl font-brand font-black tracking-[0.5em] text-brand-600 bg-transparent border-none focus:ring-0 placeholder:opacity-10" />
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <Button size="lg" onClick={() => handleVerifySubmit(manualCode)} disabled={manualCode.length < 4 || isVerifying} className="w-full shadow-xl shadow-brand-500/10" leftIcon={isVerifying ? <ClockIcon /> : <CheckCircleIcon />}>{isVerifying ? 'Verifying...' : 'Authorize Entry'}</Button>
-                            <Button variant="ghost" size="md" onClick={() => setVerificationMode('selection')} className="w-full">Back to Selection</Button>
-                        </div>
-                    </div>
-                )}
-            </Modal>
 
             <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType="Visitor" title="Gate Audit" />
             
