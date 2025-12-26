@@ -15,12 +15,12 @@ export const generateInvoice = (stat: CommunityStat) => {
     // --- Header ---
     doc.setFontSize(22);
     doc.setTextColor(20, 184, 166); // Brand Teal
-    doc.text("Elevate", 14, 20);
+    doc.text("Nilayam", 14, 20);
     
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text("Community Management Platform", 14, 25);
-    doc.text("billing@elevate.com", 14, 30);
+    doc.text("billing@nilayam.com", 14, 30);
 
     // --- Invoice Details (Top Right) ---
     doc.setFontSize(26);
@@ -99,11 +99,11 @@ export const generateInvoice = (stat: CommunityStat) => {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100);
-    doc.text("Thank you for choosing Elevate.", 14, 280);
+    doc.text("Thank you for choosing Nilayam.", 14, 280);
     doc.text("This is a system generated invoice.", 14, 285);
 
     // Save
-    doc.save(`Elevate_Invoice_${stat.name.replace(/\s+/g, '_')}_${dateStr}.pdf`);
+    doc.save(`Nilayam_Invoice_${stat.name.replace(/\s+/g, '_')}_${dateStr}.pdf`);
 };
 
 export const generateAnnualReport = (data: FinancialHistory) => {
@@ -113,7 +113,7 @@ export const generateAnnualReport = (data: FinancialHistory) => {
     // Header
     doc.setFontSize(24);
     doc.setTextColor(20, 184, 166);
-    doc.text("Elevate Annual Financial Report", 14, 20);
+    doc.text("Nilayam Annual Financial Report", 14, 20);
     
     doc.setFontSize(14);
     doc.setTextColor(100);
@@ -156,7 +156,7 @@ export const generateAnnualReport = (data: FinancialHistory) => {
         headStyles: { fillColor: [55, 65, 81] } // Gray 700
     });
 
-    doc.save(`Elevate_Annual_Report_${data.year}.pdf`);
+    doc.save(`Nilayam_Annual_Report_${data.year}.pdf`);
 };
 
 export const generateLedgerReport = (data: MonthlyLedger, month: string, year: number, communityName: string) => {
@@ -178,7 +178,7 @@ export const generateLedgerReport = (data: MonthlyLedger, month: string, year: n
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(26);
     doc.setFont("helvetica", "bold");
-    doc.text("Elevate", 14, 25);
+    doc.text("Nilayam", 14, 25);
     
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -316,7 +316,7 @@ export const generateLedgerReport = (data: MonthlyLedger, month: string, year: n
     
     doc.setFontSize(9);
     doc.setTextColor(156, 163, 175); // Gray 400
-    doc.text("System Generated Report • Elevate Community Manager", 105, pageHeight - 12, { align: 'center' });
+    doc.text("System Generated Report • Nilayam Community Manager", 105, pageHeight - 12, { align: 'center' });
 
     doc.save(`Ledger_${monthName}_${year}.pdf`);
 }

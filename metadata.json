@@ -1,6 +1,6 @@
 {
-  "name": "Elevate",
-  "description": "Elevate - Community Living, Elevated. A modern community management application providing a central platform for residents to manage visitors, view notices, and raise help desk requests.",
+  "name": "Nilayam",
+  "description": "Nilayam - Your Abode, Managed. A modern community management application providing a central platform for residents to manage visitors, view notices, and raise help desk requests.",
   "requestFramePermissions": [
     "camera"
   ]

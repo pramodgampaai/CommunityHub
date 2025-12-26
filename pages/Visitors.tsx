@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getVisitors, createVisitor, updateVisitor, deleteVisitor, verifyVisitorEntry } from '../services/api';
 import type { Visitor } from '../types';
@@ -90,7 +91,7 @@ const Visitors: React.FC = () => {
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 64px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Elevate', canvas.width / 2, 100);
+            ctx.fillText('Nilayam', canvas.width / 2, 100);
             ctx.font = 'bold 20px sans-serif';
             ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 140);
 
@@ -123,7 +124,7 @@ const Visitors: React.FC = () => {
 
             const dataUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
-            link.download = `Elevate_Pass_${visitor.name.replace(/\s+/g, '_')}.png`;
+            link.download = `Nilayam_Pass_${visitor.name.replace(/\s+/g, '_')}.png`;
             link.href = dataUrl;
             link.click();
         } catch (err) {

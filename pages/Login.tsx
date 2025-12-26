@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
@@ -84,8 +85,8 @@ const LoginPage: React.FC = () => {
                 <Logo className="w-20 h-20 text-brand-600" />
             </div>
             {/* Brand Title */}
-            <h1 className="text-5xl font-brand font-extrabold text-brand-600 tracking-tight">Elevate</h1>
-            <p className="font-mono text-[10px] font-bold text-slate-400 dark:text-zinc-500 mt-2 uppercase tracking-[0.4em]">Modern Living Access</p>
+            <h1 className="text-5xl font-brand font-extrabold text-brand-600 tracking-tight">Nilayam</h1>
+            <p className="font-mono text-[10px] font-bold text-slate-400 dark:text-zinc-500 mt-2 uppercase tracking-[0.4em]">Your Abode, Managed.</p>
             
             {view === 'login' ? (
                 <p className="mt-10 text-lg font-medium text-slate-500 dark:text-zinc-400">Welcome back. Please authenticate.</p>
@@ -105,7 +106,7 @@ const LoginPage: React.FC = () => {
                         autoComplete="email"
                         required
                         className="input-field block w-full px-6 py-4 rounded-2xl text-base"
-                        placeholder="e.g. resident@elevate.com"
+                        placeholder="e.g. resident@nilayam.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                     />

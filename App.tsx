@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
@@ -27,7 +28,7 @@ function App() {
   
   // Initialize activePage from localStorage if available to persist across refreshes
   const [activePage, setActivePage] = useState<Page>(() => {
-      const savedPage = localStorage.getItem('elevate_last_page');
+      const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
   });
   
@@ -36,7 +37,7 @@ function App() {
   // Persist the active page to localStorage whenever it changes
   useEffect(() => {
       if (activePage) {
-          localStorage.setItem('elevate_last_page', activePage);
+          localStorage.setItem('nilayam_last_page', activePage);
       }
   }, [activePage]);
   

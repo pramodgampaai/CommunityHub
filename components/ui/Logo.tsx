@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface LogoProps {
@@ -12,7 +13,7 @@ const Logo: React.FC<LogoProps> = ({ className, color = "currentColor" }) => {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-label="Elevate Logo"
+      aria-label="Nilayam Logo"
     >
       {/* Design: 'The Connected Townships' - Refined Human-Centric Style */}
       
@@ -48,7 +49,7 @@ const Logo: React.FC<LogoProps> = ({ className, color = "currentColor" }) => {
       {/* RIGHT: Villa / Home (Soft Pitch) */}
       <path
         d="M66 68 V 52 L 78 40 L 90 52 V 68 H 66Z"
-        fill={color}
+        fill={color} 
         fillOpacity="0.75"
       />
       <rect x="75" y="58" width="6" height="10" rx="1" fill="white" fillOpacity="0.5" />
