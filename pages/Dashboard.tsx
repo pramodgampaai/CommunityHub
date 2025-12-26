@@ -103,7 +103,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
               <div className="w-1 h-10 bg-brand-500 rounded-full mt-0.5" />
               <div>
                   <span className="text-[8px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Community Pulse</span>
-                  <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-tight">Hello, {user?.name.split(' ')[0]}.</h2>
+                  <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-tight">Hello, {user?.name.split(' ')[0]}.</h1>
                   <p className="text-sm text-[var(--text-secondary-light)] dark:text-zinc-400 font-medium">
                     Managed operations for <span className="font-bold text-brand-600 dark:text-brand-400">{user?.communityName}</span>.
                   </p>
@@ -141,11 +141,11 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
           </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           <div className="lg:col-span-7 space-y-3">
               <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">Announcements</h3>
               {latestNotice ? (
-                  <Card className="p-5 group rounded-2xl border border-slate-100 dark:border-white/5 h-full bg-white dark:bg-zinc-900/40">
+                  <Card className="p-5 group rounded-2xl border border-slate-100 dark:border-white/5 bg-white dark:bg-zinc-900/40">
                       <div className="flex items-center gap-2 mb-3">
                            <span className="bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md">{latestNotice.type}</span>
                            <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{new Date(latestNotice.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>

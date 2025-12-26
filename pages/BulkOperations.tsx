@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getCommunity, bulkCreateCommunityUsers } from '../services/api';
 import type { Community, Block } from '../types';
@@ -218,136 +219,112 @@ const BulkOperations: React.FC = () => {
         } finally { setIsSubmitting(false); }
     };
 
-    if (loading) return <div className="h-96 flex items-center justify-center"><Spinner /></div>;
+    // Fix: FC must return ReactNode or null, not void.
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <Spinner />
+        </div>
+    );
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-                <div className="flex items-start gap-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+                <div className="flex items-start gap-2.5">
                     <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
                     <div>
-                        <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Admin Management</span>
-                        <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-tight">Bulk Operations</h2>
+                        <span className="text-[8px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Admin Tools</span>
+                        <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">Bulk Operations</h1>
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="p-6 border-none bg-white dark:bg-zinc-900/40 animated-card flex flex-col h-full">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-brand-50 dark:bg-brand-500/10 rounded-xl text-brand-600">
-                            <ArrowDownTrayIcon className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-brand font-extrabold text-slate-900 dark:text-slate-50 leading-tight">1. Get Dynamic Template</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Custom layout logic</p>
-                        </div>
-                    </div>
-                    <p className="text-sm text-slate-500 dark:text-zinc-400 mb-8 flex-grow leading-relaxed">
-                        Download a smart Excel file pre-configured for your **{community?.communityType}**. Includes dropdown menus for Towers/Roads.
-                    </p>
-                    <Button onClick={downloadTemplate} size="lg" className="w-full" leftIcon={<ArrowDownTrayIcon />}>
-                        Download Excel Template
-                    </Button>
-                </Card>
-
-                <Card className="p-6 border-none bg-white dark:bg-zinc-900/40 animated-card flex flex-col h-full">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-brand-50 dark:bg-brand-500/10 rounded-xl text-brand-600">
-                            <CloudArrowUpIcon className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-brand font-extrabold text-slate-900 dark:text-slate-50 leading-tight">2. Upload & Commit</h3>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Bulk Resident Import</p>
-                        </div>
-                    </div>
-                    <p className="text-sm text-slate-500 dark:text-zinc-400 mb-8 flex-grow leading-relaxed">
-                        Upload your completed spreadsheet to preview the data before finalizing the onboarding.
-                    </p>
-                    <div className="relative">
-                        <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                        <Button variant="outlined" size="lg" className="w-full pointer-events-none" leftIcon={<CloudArrowUpIcon />}>
-                            Select File to Upload
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="p-6 space-y-6">
+                    <div>
+                        <h3 className="text-lg font-bold mb-2">1. Download Template</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                            Get the standardized Excel template pre-configured with your community's block and floor structure.
+                        </p>
+                        <Button onClick={downloadTemplate} leftIcon={<ArrowDownTrayIcon />} variant="outlined" className="w-full">
+                            Download XLSX Template
                         </Button>
                     </div>
-                </Card>
-            </div>
 
-            {uploadError && (
-                <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 rounded-2xl flex items-center gap-3 text-rose-600 dark:text-rose-400 animate-fadeIn">
-                    <AlertTriangleIcon className="w-5 h-5 flex-shrink-0" />
-                    <p className="text-xs font-bold uppercase tracking-wide">{uploadError}</p>
-                </div>
-            )}
-
-            {previewData.length > 0 && (
-                <div className="space-y-4 animate-fadeIn">
-                    <div className="flex items-center justify-between px-1">
-                        <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em]">Manifest Preview ({previewData.length} entries)</h3>
-                        <button onClick={() => setPreviewData([])} className="text-[10px] font-bold text-rose-500 uppercase hover:underline flex items-center gap-1">
-                            <TrashIcon className="w-3.5 h-3.5" /> Clear All
-                        </button>
+                    <div className="pt-6 border-t border-slate-100 dark:border-white/5">
+                        <h3 className="text-lg font-bold mb-2">2. Upload Resident Data</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                            Upload the completed template to preview and process the bulk onboarding.
+                        </p>
+                        <div className="relative group">
+                            <input 
+                                type="file" 
+                                accept=".xlsx, .xls, .csv" 
+                                onChange={handleFileUpload}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                            <div className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-8 text-center group-hover:border-brand-500 transition-colors">
+                                <CloudArrowUpIcon className="w-10 h-10 mx-auto mb-2 text-slate-400 group-hover:text-brand-500" />
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Select Excel File</p>
+                            </div>
+                        </div>
+                        {uploadError && (
+                            <div className="mt-4 p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 rounded-xl text-xs font-bold flex items-center gap-2">
+                                <AlertTriangleIcon className="w-4 h-4" /> {uploadError}
+                            </div>
+                        )}
                     </div>
-                    
-                    <Card className="p-0 border border-slate-100 dark:border-white/5 bg-white dark:bg-zinc-900/40 overflow-hidden shadow-premium">
-                        {/* DESKTOP TABLE VIEW */}
-                        <div className="hidden md:block overflow-x-auto max-h-[500px] no-scrollbar">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-slate-50 dark:bg-white/5 sticky top-0 z-10">
-                                    <tr>
-                                        {Object.keys(previewData[0]).map(h => (
-                                            <th key={h} className="p-4 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap border-b border-slate-100 dark:border-white/5">{h}</th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                                    {previewData.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                                            {Object.values(row).map((val: any, vIdx) => (
-                                                <td key={vIdx} className="p-4 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{val}</td>
-                                            ))}
+                </Card>
+
+                <Card className="p-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold">Preview & Process</h3>
+                        {previewData.length > 0 && (
+                            <button onClick={() => setPreviewData([])} className="text-rose-500 hover:text-rose-600">
+                                <TrashIcon className="w-5 h-5" />
+                            </button>
+                        )}
+                    </div>
+
+                    {previewData.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center opacity-30 py-12">
+                            <HistoryIcon className="w-12 h-12 mb-2" />
+                            <p className="text-[10px] font-black uppercase tracking-widest">Waiting for upload...</p>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col">
+                            <div className="flex-1 overflow-auto max-h-[400px] mb-6 rounded-xl border border-slate-100 dark:border-white/5">
+                                <table className="w-full text-left text-[10px]">
+                                    <thead className="bg-slate-50 dark:bg-white/5 sticky top-0">
+                                        <tr>
+                                            <th className="p-2 font-black uppercase tracking-widest text-slate-400">Name</th>
+                                            <th className="p-2 font-black uppercase tracking-widest text-slate-400">Email</th>
+                                            <th className="p-2 font-black uppercase tracking-widest text-slate-400">Unit</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 dark:divide-white/5">
+                                        {previewData.map((row, i) => (
+                                            <tr key={i}>
+                                                <td className="p-2 font-bold">{row['Full Name'] || row['Name']}</td>
+                                                <td className="p-2 text-slate-500">{row['Email ID'] || row['Email']}</td>
+                                                <td className="p-2 text-brand-600 font-bold">
+                                                    {row['Block/Tower Name'] || row['Road Name'] || ''}-{row['Flat Number'] || row['Villa Number']}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="p-4 bg-brand-50 dark:bg-brand-900/20 rounded-2xl mb-4 border border-brand-100 dark:border-brand-900/30">
+                                <p className="text-xs font-bold text-brand-800 dark:text-brand-300">Ready to process {previewData.length} records.</p>
+                                <p className="text-[10px] text-brand-600 dark:text-brand-400 mt-1">This will create user accounts and initial maintenance ledgers.</p>
+                            </div>
+                            <Button onClick={processBulkCreate} disabled={isSubmitting} size="lg" className="w-full" leftIcon={<CheckCircleIcon />}>
+                                {isSubmitting ? 'Onboarding Residents...' : 'Confirm Bulk Onboarding'}
+                            </Button>
                         </div>
-
-                        {/* MOBILE CARD VIEW */}
-                        <div className="md:hidden divide-y divide-slate-100 dark:divide-white/5 max-h-[500px] overflow-y-auto no-scrollbar">
-                            {previewData.map((row, idx) => (
-                                <div key={idx} className="p-5 space-y-3 bg-white dark:bg-transparent">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-500/10 text-brand-600 flex items-center justify-center font-brand font-black text-sm">
-                                            {idx + 1}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{row['Full Name'] || row['Name']}</p>
-                                            <p className="text-[10px] font-medium text-slate-400 truncate">{row['Email ID'] || row['Email']}</p>
-                                        </div>
-                                    </div>
-                                    {/* Fix: Explicitly map entries to avoid ReactNode error */}
-                                    <div className="grid grid-cols-2 gap-3 pt-2">
-                                        {Object.entries(row)
-                                            .filter(([k]) => !['Full Name', 'Name', 'Email ID', 'Email', 'Password'].includes(k))
-                                            .map(([key, val]) => (
-                                                <div key={key}>
-                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{key}</p>
-                                                    <p className="text-[10px] font-bold text-slate-700 dark:text-zinc-300 truncate">{String(val)}</p>
-                                                </div>
-                                            ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </Card>
-
-                    <div className="flex justify-end pt-2">
-                        <Button onClick={processBulkCreate} disabled={isSubmitting} size="lg" className="w-full sm:w-auto shadow-xl shadow-brand-500/10" leftIcon={<CheckCircleIcon />}>
-                            {isSubmitting ? 'Onboarding Residents...' : `Authorize ${previewData.length} New Members`}
-                        </Button>
-                    </div>
-                </div>
-            )}
+                    )}
+                </Card>
+            </div>
 
             <FeedbackModal 
                 isOpen={feedback.isOpen} 
@@ -360,4 +337,5 @@ const BulkOperations: React.FC = () => {
     );
 };
 
+// Fix: Add default export to resolve "Module has no default export" error in App.tsx
 export default BulkOperations;

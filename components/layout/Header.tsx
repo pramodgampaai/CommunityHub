@@ -46,7 +46,7 @@ const Header: React.FC<HeaderProps> = ({ theme, toggleTheme }) => {
             <div className="flex items-center gap-3 flex-shrink-0">
                 <Logo className="w-10 h-10 text-brand-600" />
                 <div className="flex flex-col">
-                    <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-none">Nilayam</h1>
+                    <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-none">Nilayam</h2>
                     <span className="hidden sm:block text-[10px] font-bold text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)] uppercase tracking-[0.2em] mt-1 opacity-70">
                         {user?.communityName || 'Management'}
                     </span>

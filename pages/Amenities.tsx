@@ -281,7 +281,7 @@ const Amenities: React.FC = () => {
             <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
             <div>
                 <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Assets</span>
-                <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">Amenities</h2>
+                <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">Amenities</h1>
             </div>
         </div>
         <div className="flex gap-2">
