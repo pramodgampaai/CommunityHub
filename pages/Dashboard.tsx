@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses } from '../services/api';
@@ -102,7 +103,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
               <div className="w-1 h-10 bg-brand-500 rounded-full mt-0.5" />
               <div>
                   <span className="text-[8px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Community Pulse</span>
-                  <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight leading-tight">Hello, {user?.name.split(' ')[0]}.</h2>
+                  <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-tight">Hello, {user?.name.split(' ')[0]}.</h2>
                   <p className="text-sm text-[var(--text-secondary-light)] dark:text-zinc-400 font-medium">
                     Managed operations for <span className="font-bold text-brand-600 dark:text-brand-400">{user?.communityName}</span>.
                   </p>

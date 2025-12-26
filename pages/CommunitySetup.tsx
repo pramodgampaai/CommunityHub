@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { getCommunity, updateCommunity, assignAdminUnit } from '../services/api';
@@ -267,7 +268,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                     <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
                     <div>
                         <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Property Config</span>
-                        <h2 className="text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight">
+                        <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">
                             {step === 'landscape' ? "Environment Setup" : "My Residence"}
                         </h2>
                     </div>

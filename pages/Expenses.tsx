@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createExpense, getExpenses, approveExpense, rejectExpense, getMonthlyLedger } from '../services/api';
 import type { Expense } from '../types';
@@ -199,7 +200,7 @@ const Expenses: React.FC = () => {
                     <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
                     <div>
                         <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Finance & Ledger</span>
-                        <h2 className="text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight">{isResident ? 'Community Expenses' : 'Expenses'}</h2>
+                        <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">{isResident ? 'Community Expenses' : 'Expenses'}</h2>
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -383,7 +384,7 @@ const Expenses: React.FC = () => {
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Documentation Proof</p>
                             {selectedExpense.receiptUrl ? (
                                 <div className="rounded-3xl overflow-hidden border-2 border-slate-100 dark:border-white/5 bg-black/5 group relative">
-                                    <img src={selectedExpense.receiptUrl} alt="Expense Proof" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
+                                    <img src={selectedExpense.receiptUrl} alt="Expense Proof" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
                                     <a href={selectedExpense.receiptUrl} target="_blank" rel="noreferrer" className="absolute top-4 right-4 p-2 bg-white/90 dark:bg-zinc-900/90 rounded-xl text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
                                         <ArrowDownTrayIcon className="w-5 h-5" />
                                     </a>

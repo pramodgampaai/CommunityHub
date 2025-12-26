@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createComplaint, getComplaints, updateComplaintStatus, getResidents, assignComplaint, getComplaintActivity } from '../services/api';
 import type { Complaint, User, AuditLog } from '../types';
@@ -166,7 +167,7 @@ const HelpDesk: React.FC = () => {
             <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
             <div>
                 <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Support Workflow</span>
-                <h2 className="text-3xl font-brand font-extrabold text-brand-600 dark:text-slate-50 tracking-tight leading-tight">Help Desk</h2>
+                <h2 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-tight">Help Desk</h2>
             </div>
         </div>
         <div className="flex gap-2">
