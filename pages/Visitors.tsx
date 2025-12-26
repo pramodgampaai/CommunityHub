@@ -10,7 +10,7 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
 import FeedbackModal from '../components/ui/FeedbackModal';
 import QRScanner from '../components/ui/QRScanner';
-import { PlusIcon, HistoryIcon, UsersIcon, ClockIcon, PencilIcon, TrashIcon, QrCodeIcon, IdentificationIcon, CheckCircleIcon, ShareIcon, XIcon, ArrowDownTrayIcon } from '../components/icons';
+import { PlusIcon, HistoryIcon, UsersIcon, ClockIcon, PencilIcon, TrashIcon, QrCodeIcon, IdentificationIcon, CheckCircleIcon, ShareIcon, XIcon, ArrowDownTrayIcon, ChevronDownIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const Visitors: React.FC = () => {
@@ -133,6 +133,20 @@ const Visitors: React.FC = () => {
         } finally {
             setIsDownloading(false);
         }
+    };
+
+    const handleWhatsAppShare = (visitor: Visitor) => {
+        const arrival = new Date(visitor.expectedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+        const text = `Hi ${visitor.name}! I've pre-authorized your visit to ${user?.communityName || 'my community'}. 
+
+📍 Unit: ${visitor.flatNumber}
+⏰ Arrival: ${arrival}
+🔑 Entry Code: ${visitor.entryToken}
+
+Please show this code or the QR pass at the gate for smooth entry. See you!`;
+        
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
     };
 
     const handleVerifySubmit = async (code: string) => {
@@ -315,15 +329,111 @@ const Visitors: React.FC = () => {
             <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType="Visitor" title="Gate Audit" />
             
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Update Guest Info" : "Authorize Guest"} subtitle="Security Manifest" size="md">
-                <form className="space-y-4" onSubmit={handleFormSubmit}>
+                <form className="space-y-5" onSubmit={handleFormSubmit}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Guest Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Full Name" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/></div>
-                        <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Visitor Type</label><select value={visitorType} onChange={e => setVisitorType(e.target.value as VisitorType)} className="block w-full px-4 py-2.5 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900">{Object.values(VisitorType).map(type => <option key={type} value={type}>{type}</option>)}</select></div>
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Guest Name</label>
+                          <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Full Name" className="rounded-xl input-field text-base font-bold"/>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Visitor Type</label>
+                          <div className="relative">
+                            <select value={visitorType} onChange={e => setVisitorType(e.target.value as VisitorType)} className="rounded-xl input-field text-base font-bold appearance-none bg-white dark:bg-zinc-900">
+                              {Object.values(VisitorType).map(type => <option key={type} value={type}>{type}</option>)}
+                            </select>
+                            <ChevronDownIcon className="absolute right-3 top-4.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                          </div>
+                        </div>
                     </div>
-                    <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Vehicle Number</label><input type="text" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="e.g. KA 01 EB 1234" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold uppercase"/></div>
-                    <div><label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Expected Arrival</label><input type="datetime-local" value={expectedAt} onChange={e => setExpectedAt(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/></div>
-                    <div className="flex justify-end pt-2 gap-3"><Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)}>Cancel</Button><Button type="submit" disabled={isSubmitting} size="lg" className="px-8">{isSubmitting ? 'Syncing...' : (editingId ? 'Update Invite' : 'Create Invite')}</Button></div>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Vehicle Number</label>
+                      <input type="text" value={vehicleNumber} onChange={e => setVehicleNumber(e.target.value)} placeholder="e.g. KA 01 EB 1234" className="rounded-xl input-field text-base font-bold uppercase"/>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Expected Arrival</label>
+                      <input type="datetime-local" value={expectedAt} onChange={e => setExpectedAt(e.target.value)} required className="rounded-xl input-field text-base font-bold"/>
+                    </div>
+                    <div className="flex justify-end pt-2 gap-3">
+                      <Button type="button" variant="outlined" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                      <Button type="submit" disabled={isSubmitting} size="lg" className="px-8">{isSubmitting ? 'Syncing...' : (editingId ? 'Update Invite' : 'Create Invite')}</Button>
+                    </div>
                 </form>
+            </Modal>
+
+            {/* Missing Pass Preview Modal Implementation */}
+            <Modal 
+                isOpen={isPassModalOpen} 
+                onClose={() => setIsPassModalOpen(false)} 
+                title="Guest Access Pass" 
+                subtitle="INVITATION DISPATCH" 
+                size="md"
+            >
+                {selectedPassVisitor && (
+                    <div className="space-y-6">
+                        <div className="relative bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/5 rounded-[2rem] overflow-hidden shadow-2xl p-6 text-center">
+                            <div className="absolute top-0 left-0 w-full h-2 bg-brand-600" />
+                            
+                            <div className="flex flex-col items-center gap-4 py-4">
+                                <div className="flex flex-col items-center">
+                                    <h4 className="text-3xl font-brand font-extrabold text-brand-600 tracking-tight">Nilayam</h4>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-0.5">Community Access</p>
+                                </div>
+
+                                <div className="bg-slate-50 dark:bg-black/20 p-4 rounded-3xl border border-slate-100 dark:border-white/5 mt-2">
+                                    <img 
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${selectedPassVisitor.entryToken || selectedPassVisitor.id}`} 
+                                        alt="Access QR Code"
+                                        className="w-48 h-48 rounded-xl"
+                                    />
+                                    <p className="mt-3 font-mono font-black text-2xl text-brand-600 tracking-widest">{selectedPassVisitor.entryToken || 'INV-EXT'}</p>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <h5 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{selectedPassVisitor.name}</h5>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{selectedPassVisitor.visitorType}</p>
+                                </div>
+
+                                <div className="w-full grid grid-cols-2 gap-4 mt-4 pt-6 border-t border-slate-100 dark:border-white/5">
+                                    <div className="text-left">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Invited By</p>
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedPassVisitor.residentName}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Destination</p>
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedPassVisitor.flatNumber}</p>
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Arrival Date</p>
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{new Date(selectedPassVisitor.expectedAt).toLocaleDateString()}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Expected Time</p>
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{new Date(selectedPassVisitor.expectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <Button 
+                                variant="outlined" 
+                                className="w-full" 
+                                onClick={() => handleWhatsAppShare(selectedPassVisitor)}
+                                leftIcon={<ShareIcon />}
+                            >
+                                WhatsApp Share
+                            </Button>
+                            <Button 
+                                className="w-full" 
+                                onClick={() => downloadPassImage(selectedPassVisitor)}
+                                disabled={isDownloading}
+                                leftIcon={isDownloading ? <ClockIcon className="animate-spin" /> : <ArrowDownTrayIcon />}
+                            >
+                                {isDownloading ? 'Saving...' : 'Save as Image'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
 
             <ConfirmationModal isOpen={confirmDelete.isOpen} onClose={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="Cancel Invitation" message="Are you sure you want to remove this visitor?" isDestructive isLoading={isSubmitting} confirmLabel="Yes, Remove" />

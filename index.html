@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
     <title>Nilayam | Community Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -83,6 +83,21 @@
         color: var(--text-light);
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         font-weight: 600;
+        display: block;
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+      
+      /* Ensure consistent height for all input types including date/time on iOS */
+      input.input-field, select.input-field {
+        height: 3.25rem;
+        line-height: normal;
+      }
+
+      textarea.input-field {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
       }
       
       .dark .input-field {
@@ -100,6 +115,12 @@
       .tracking-tight-title { letter-spacing: -0.03em; }
       .tracking-wide-label { letter-spacing: 0.25em; }
 
+      /* Fix for datetime-local placeholder/text centering on Safari */
+      input[type="datetime-local"].input-field {
+        display: flex;
+        align-items: center;
+      }
+
       ::selection {
         background-color: rgba(20, 184, 166, 0.2);
         color: var(--accent);
@@ -108,7 +129,6 @@
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-      /* Animation keyframes for QR scanner line */
       @keyframes scan {
         0% { transform: translateY(0); opacity: 0; }
         50% { opacity: 1; }
@@ -137,9 +157,8 @@
 }
 </script>
   </head>
-  <body class="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] font-sans text-[var(--text-light)] dark:text-[var(--text-dark)]">
+  <body class="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] font-sans text-[var(--text-light)] dark:text-[var(--text-dark)] overflow-x-hidden">
     <div id="root"></div>
-    <!-- Modal portal root -->
     <div id="modal-root"></div>
     <script type="module" src="/index.js"></script>
   </body>
