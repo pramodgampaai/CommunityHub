@@ -80,18 +80,25 @@ const LoginPage: React.FC = () => {
 
       <div className="w-full max-w-md p-10 sm:p-14 space-y-10 bg-white dark:bg-[#121214] rounded-[3.5rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl relative z-10">
         <div className="flex flex-col items-center text-center">
-            {/* Logo Container - Clean look matching dashboard header */}
-            <div className="mb-6">
-                <Logo className="w-20 h-20 text-brand-600" />
+            {/* Logo Container */}
+            <div className="mb-6 relative">
+                <Logo className="w-20 h-20 text-brand-600 relative z-10" />
             </div>
+            
             {/* Brand Title */}
-            <h1 className="text-5xl font-brand font-extrabold text-brand-600 tracking-tight">Nilayam</h1>
-            <p className="font-mono text-[10px] font-bold text-slate-400 dark:text-zinc-500 mt-2 uppercase tracking-[0.4em]">Your Abode, Managed.</p>
+            <h1 className="text-6xl font-brand font-extrabold text-brand-600 tracking-tightest">Nilayam</h1>
+            
+            {/* Unified & Stylish Tagline */}
+            <div className="mt-3">
+                <p className="font-brand text-[10px] font-bold uppercase tracking-[0.4em] text-brand-600">
+                    Your Abode <span className="opacity-30 mx-1 font-light">|</span> Managed
+                </p>
+            </div>
             
             {view === 'login' ? (
-                <p className="mt-10 text-lg font-medium text-slate-500 dark:text-zinc-400">Welcome back. Please authenticate.</p>
+                <p className="mt-12 text-lg font-medium text-slate-500 dark:text-zinc-400">Welcome back. Please authenticate.</p>
             ) : (
-                <p className="mt-10 text-lg font-medium text-slate-500 dark:text-zinc-400">Initialize credential recovery.</p>
+                <p className="mt-12 text-lg font-medium text-slate-500 dark:text-zinc-400">Initialize credential recovery.</p>
             )}
         </div>
         
