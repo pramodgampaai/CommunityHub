@@ -30,7 +30,7 @@ const Visitors: React.FC = () => {
     // Pass sharing states
     const [isPassModalOpen, setIsPassModalOpen] = useState(false);
     const [selectedPassVisitor, setSelectedPassVisitor] = useState<Visitor | null>(null);
-    const [isDownloading, setIsDownloading] = useState(false);
+    const [isProcessingPass, setIsProcessingPass] = useState(false);
 
     // Form state
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,65 +63,73 @@ const Visitors: React.FC = () => {
 
     useEffect(() => { fetchVisitors(); }, [user]);
 
-    const downloadPassImage = async (visitor: Visitor) => {
-        if (isDownloading) return;
-        setIsDownloading(true);
+    // Helper: Create the Pass Canvas (Shared between download and share)
+    const createPassCanvas = async (visitor: Visitor): Promise<HTMLCanvasElement | null> => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+
+        canvas.width = 800;
+        canvas.height = 1200;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
+        // Header
+        ctx.fillStyle = '#0d9488'; 
+        ctx.fillRect(0, 0, canvas.width, 180);
+
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${visitor.entryToken || visitor.id}`;
+        const qrImg = new Image();
+        qrImg.crossOrigin = "anonymous";
+        await new Promise((resolve, reject) => {
+            qrImg.onload = resolve;
+            qrImg.onerror = reject;
+            qrImg.src = qrUrl;
+        });
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 64px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Nilayam', canvas.width / 2, 100);
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 140);
+
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 54px sans-serif';
+        ctx.fillText(visitor.name.toUpperCase(), canvas.width / 2, 280);
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText('GATE ENTRY TOKEN', canvas.width / 2, 330);
+
+        ctx.fillStyle = '#0d9488';
+        ctx.font = 'bold 110px monospace';
+        ctx.fillText(visitor.entryToken || 'INV-EXT', canvas.width / 2, 450);
+
+        const qrSize = 450;
+        const qrX = (canvas.width - qrSize) / 2;
+        const qrY = 520;
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 32px sans-serif';
+        ctx.fillText(`Invited by ${visitor.residentName}`, canvas.width / 2, 1050);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(`Unit: ${visitor.flatNumber} • ${user?.communityName || 'Property'}`, canvas.width / 2, 1100);
+
+        return canvas;
+    };
+
+    const downloadPassImage = async (visitor: Visitor) => {
+        if (isProcessingPass) return;
+        setIsProcessingPass(true);
         try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            canvas.width = 800;
-            canvas.height = 1200;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#0d9488'; 
-            ctx.fillRect(0, 0, canvas.width, 180);
-
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${visitor.entryToken || visitor.id}`;
-            const qrImg = new Image();
-            qrImg.crossOrigin = "anonymous";
-            await new Promise((resolve, reject) => {
-                qrImg.onload = resolve;
-                qrImg.onerror = reject;
-                qrImg.src = qrUrl;
-            });
-
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 64px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Nilayam', canvas.width / 2, 100);
-            ctx.font = 'bold 20px sans-serif';
-            ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 140);
-
-            ctx.fillStyle = '#1e293b';
-            ctx.font = 'bold 54px sans-serif';
-            ctx.fillText(visitor.name.toUpperCase(), canvas.width / 2, 280);
-
-            ctx.fillStyle = '#64748b';
-            ctx.font = 'bold 24px sans-serif';
-            ctx.fillText('GATE ENTRY TOKEN', canvas.width / 2, 330);
-
-            ctx.fillStyle = '#0d9488';
-            ctx.font = 'black 110px monospace';
-            ctx.fillText(visitor.entryToken || 'INV-EXT', canvas.width / 2, 450);
-
-            const qrSize = 450;
-            const qrX = (canvas.width - qrSize) / 2;
-            const qrY = 520;
-            ctx.strokeStyle = '#e2e8f0';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
-            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-            ctx.fillStyle = '#1e293b';
-            ctx.font = 'bold 32px sans-serif';
-            ctx.fillText(`Invited by ${visitor.residentName}`, canvas.width / 2, 1050);
-            ctx.fillStyle = '#64748b';
-            ctx.font = 'bold 24px sans-serif';
-            ctx.fillText(`Unit: ${visitor.flatNumber} • ${user?.communityName || 'Property'}`, canvas.width / 2, 1100);
-
+            const canvas = await createPassCanvas(visitor);
+            if (!canvas) return;
             const dataUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.download = `Nilayam_Pass_${visitor.name.replace(/\s+/g, '_')}.png`;
@@ -131,22 +139,52 @@ const Visitors: React.FC = () => {
             console.error("Pass Generation Error:", err);
             alert("Could not generate image.");
         } finally {
-            setIsDownloading(false);
+            setIsProcessingPass(false);
         }
     };
 
-    const handleWhatsAppShare = (visitor: Visitor) => {
-        const arrival = new Date(visitor.expectedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-        const text = `Hi ${visitor.name}! I've pre-authorized your visit to ${user?.communityName || 'my community'}. 
-
-📍 Unit: ${visitor.flatNumber}
-⏰ Arrival: ${arrival}
-🔑 Entry Code: ${visitor.entryToken}
-
-Please show this code or the QR pass at the gate for smooth entry. See you!`;
+    const handleSharePass = async (visitor: Visitor) => {
+        if (isProcessingPass) return;
+        setIsProcessingPass(true);
         
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, '_blank');
+        try {
+            const canvas = await createPassCanvas(visitor);
+            if (!canvas) return;
+
+            const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error("Canvas to Blob failed");
+
+            const file = new File([blob], `Nilayam_Pass_${visitor.name.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
+            
+            // Check if Web Share API supports files (iPhone Safari does)
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'Visitor Pass',
+                    text: `Pre-authorized visit for ${visitor.name} at Nilayam.`
+                });
+            } else {
+                // Fallback to text share if files aren't supported
+                const arrival = new Date(visitor.expectedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                const text = `Hi ${visitor.name}! I've pre-authorized your visit. 📍 Unit: ${visitor.flatNumber} • ⏰ Arrival: ${arrival} • 🔑 Entry Code: ${visitor.entryToken}`;
+                
+                if (navigator.share) {
+                    await navigator.share({ title: 'Visitor Pass', text: text });
+                } else {
+                    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    window.open(url, '_blank');
+                }
+            }
+        } catch (err) {
+            console.error("Share failed", err);
+            // Silent fail if user cancelled share, but provide fallback for desktop
+            const arrival = new Date(visitor.expectedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+            const text = `Hi ${visitor.name}! I've pre-authorized your visit. 📍 Unit: ${visitor.flatNumber} • ⏰ Arrival: ${arrival} • 🔑 Entry Code: ${visitor.entryToken}`;
+            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank');
+        } finally {
+            setIsProcessingPass(false);
+        }
     };
 
     const handleVerifySubmit = async (code: string) => {
@@ -360,7 +398,6 @@ Please show this code or the QR pass at the gate for smooth entry. See you!`;
                 </form>
             </Modal>
 
-            {/* Missing Pass Preview Modal Implementation */}
             <Modal 
                 isOpen={isPassModalOpen} 
                 onClose={() => setIsPassModalOpen(false)} 
@@ -416,20 +453,21 @@ Please show this code or the QR pass at the gate for smooth entry. See you!`;
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <Button 
-                                variant="outlined" 
-                                className="w-full" 
-                                onClick={() => handleWhatsAppShare(selectedPassVisitor)}
-                                leftIcon={<ShareIcon />}
+                                className="w-full shadow-lg shadow-brand-500/20" 
+                                onClick={() => handleSharePass(selectedPassVisitor)}
+                                disabled={isProcessingPass}
+                                leftIcon={isProcessingPass ? <ClockIcon className="animate-spin" /> : <ShareIcon />}
                             >
-                                WhatsApp Share
+                                {isProcessingPass ? 'Processing...' : 'Share with QR'}
                             </Button>
                             <Button 
+                                variant="outlined" 
                                 className="w-full" 
                                 onClick={() => downloadPassImage(selectedPassVisitor)}
-                                disabled={isDownloading}
-                                leftIcon={isDownloading ? <ClockIcon className="animate-spin" /> : <ArrowDownTrayIcon />}
+                                disabled={isProcessingPass}
+                                leftIcon={<ArrowDownTrayIcon />}
                             >
-                                {isDownloading ? 'Saving...' : 'Save as Image'}
+                                Save to Gallery
                             </Button>
                         </div>
                     </div>
