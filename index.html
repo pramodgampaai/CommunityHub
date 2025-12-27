@@ -87,6 +87,9 @@
         width: 100%;
         appearance: none;
         -webkit-appearance: none;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+        box-sizing: border-box;
       }
       
       /* Ensure consistent height for all input types including date/time on iOS */
@@ -96,8 +99,8 @@
       }
 
       textarea.input-field {
-        padding-top: 0.75rem;
-        padding-bottom: 0.75rem;
+        padding-top: 0.875rem;
+        padding-bottom: 0.875rem;
       }
       
       .dark .input-field {
@@ -119,6 +122,8 @@
       input[type="datetime-local"].input-field {
         display: flex;
         align-items: center;
+        padding-top: 0;
+        padding-bottom: 0;
       }
 
       ::selection {
