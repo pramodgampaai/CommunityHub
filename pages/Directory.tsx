@@ -314,7 +314,7 @@ const Directory: React.FC = () => {
                                         <select value={role} onChange={e => setRole(e.target.value as UserRole)} className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900">
                                             {allowedRoles.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                         </select>
-                                        <ChevronDownIcon className="absolute right-3 top-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                                     </div>
                                 </div>
                                 <div className="flex justify-end pt-4">

@@ -379,7 +379,7 @@ const Visitors: React.FC = () => {
                             <select value={visitorType} onChange={e => setVisitorType(e.target.value as VisitorType)} className="rounded-xl input-field text-base font-bold appearance-none bg-white dark:bg-zinc-900">
                               {Object.values(VisitorType).map(type => <option key={type} value={type}>{type}</option>)}
                             </select>
-                            <ChevronDownIcon className="absolute right-3 top-4.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                           </div>
                         </div>
                     </div>

@@ -303,7 +303,7 @@ const HelpDesk: React.FC = () => {
                                         <option key={agent.id} value={agent.id}>{agent.name} ({agent.flatNumber || 'No Post'})</option>
                                     ))}
                                 </select>
-                                <ChevronDownIcon className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                                <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                             </div>
                             <Button 
                                 size="md" 

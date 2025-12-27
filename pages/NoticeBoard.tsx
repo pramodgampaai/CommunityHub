@@ -248,7 +248,7 @@ const NoticeBoard: React.FC = () => {
                         <select value={noticeType} onChange={e => setNoticeType(e.target.value as NoticeType)} className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900">
                             {Object.values(NoticeType).map(type => <option key={type} value={type}>{type}</option>)}
                         </select>
-                        <ChevronDownIcon className="absolute right-3 top-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
                 </div>
                 <div>

@@ -8,7 +8,19 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   leftIcon?: React.ReactNode;
 }
 
-const Button: React.FC<ButtonProps> = ({ children, variant = 'filled', size = 'md', leftIcon, className = '', ...props }) => {
+// Destructure motion-conflicting props from the spread to avoid TypeScript errors with framer-motion
+const Button: React.FC<ButtonProps> = ({ 
+  children, 
+  variant = 'filled', 
+  size = 'md', 
+  leftIcon, 
+  className = '', 
+  onAnimationStart,
+  onDrag,
+  onDragStart,
+  onDragEnd,
+  ...props 
+}) => {
   const variantClasses = {
     filled: 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm border-none',
     outlined: 'bg-white dark:bg-transparent text-brand-600 border-[1.5px] border-brand-500/30 hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/10',

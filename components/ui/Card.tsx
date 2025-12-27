@@ -10,6 +10,7 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   layout?: boolean;
 }
 
+// Destructure motion-conflicting props from the spread to avoid TypeScript errors with framer-motion
 const Card: React.FC<CardProps> = ({ 
   children, 
   className = '', 
@@ -17,6 +18,10 @@ const Card: React.FC<CardProps> = ({
   noPadding = false, 
   delay = 0, 
   layout = false,
+  onAnimationStart,
+  onDrag,
+  onDragStart,
+  onDragEnd,
   ...props 
 }) => {
   return (
