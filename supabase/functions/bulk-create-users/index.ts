@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -55,7 +56,13 @@ serve(async (req: any) => {
 
             // 1. Create Auth User
             const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
-                email, password, email_confirm: true, user_metadata: { name }
+                email, password, email_confirm: true, 
+                user_metadata: { 
+                    name, 
+                    community_id, 
+                    role: 'Resident',
+                    flat_number: unit_data.flat_number
+                }
             });
 
             if (createError) throw createError;

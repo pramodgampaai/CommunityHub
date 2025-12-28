@@ -9,10 +9,9 @@ import FeedbackModal from '../components/ui/FeedbackModal';
 import { useAuth } from '../hooks/useAuth';
 import { ArrowDownTrayIcon, AlertTriangleIcon, CheckCircleIcon, HistoryIcon, CloudArrowUpIcon, TrashIcon } from '../components/icons';
 
-// Using ExcelJS for advanced features like native Data Validation (Dropdowns)
-import ExcelJS from 'https://esm.sh/exceljs@4.4.0';
-// Keep xlsx for simple parsing on upload
-import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
+// Using bare imports to leverage importmap
+import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 
 const BulkOperations: React.FC = () => {
     const { user } = useAuth();
@@ -219,7 +218,6 @@ const BulkOperations: React.FC = () => {
         } finally { setIsSubmitting(false); }
     };
 
-    // Fix: FC must return ReactNode or null, not void.
     if (loading) return (
         <div className="flex items-center justify-center h-64">
             <Spinner />
@@ -337,5 +335,4 @@ const BulkOperations: React.FC = () => {
     );
 };
 
-// Fix: Add default export to resolve "Module has no default export" error in App.tsx
 export default BulkOperations;

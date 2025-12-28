@@ -1,15 +1,27 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 /**
  * Supabase Configuration Logic
  * 
- * Prioritizes environment variables (Vercel/Production).
+ * Safe access to process.env for browser environments.
  * Falls back to hardcoded credentials for Preview/Local modes.
  */
 
-// These are replaced at build-time by esbuild --define
-const envUrl = process.env.VITE_SUPABASE_URL;
-const envKey = process.env.VITE_SUPABASE_KEY;
+const getEnvVar = (key: string): string | undefined => {
+  try {
+    // Standard Node/CRA/Vite environment check
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key];
+    }
+  } catch (e) {
+    // Ignore errors in environments where process is restricted
+  }
+  return undefined;
+};
+
+const envUrl = getEnvVar('VITE_SUPABASE_URL');
+const envKey = getEnvVar('VITE_SUPABASE_KEY');
 
 // Fallback credentials for preview mode
 const fallbackUrl = "";
@@ -36,6 +48,7 @@ export const isSupabaseConfigured = isValid(envUrl) || isValid(fallbackUrl);
 // Resolve final credentials
 const supabaseUrl = isValid(envUrl) ? envUrl! : fallbackUrl;
 export const supabaseKey = isValid(envKey) ? envKey! : fallbackKey;
+export const supabaseProjectUrl = supabaseUrl;
 
 // Initialize client with a safety fallback to a dummy URL to prevent crashes if both are invalid
 export const supabase = createClient(

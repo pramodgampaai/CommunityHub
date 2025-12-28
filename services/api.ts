@@ -1,11 +1,12 @@
-import { supabase, supabaseKey } from './supabase';
+
+import { supabase, supabaseKey, supabaseProjectUrl } from './supabase';
 import { 
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
     Amenity, Booking, MaintenanceRecord, Expense, AuditLog, 
     FinancialHistory, Unit, MaintenanceConfiguration, UserRole, 
     ComplaintStatus, VisitorStatus, ExpenseStatus, NoticeType,
     ComplaintCategory, VisitorType, ExpenseCategory, CommunityType,
-    CommunityContact, CommunityPricing, MaintenanceStatus
+    CommunityContact, CommunityPricing, MaintenanceStatus, TenantProfile
 } from '../types';
 
 export interface MonthlyLedger {
@@ -16,27 +17,66 @@ export interface MonthlyLedger {
     closingBalance: number;
 }
 
-// --- Helper for calling the manage-amenity Edge Function ---
-const callManageAmenity = async (body: any) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/manage-amenity', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey': supabaseKey
-        },
-        body: JSON.stringify(body)
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-        throw new Error(result.error || 'Failed to manage amenity');
+// --- Helper for calling Edge Functions securely ---
+const callEdgeFunction = async (functionName: string, body: any, token?: string) => {
+    let accessToken = token;
+    
+    if (!accessToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        accessToken = session?.access_token;
     }
-    return result;
+
+    if (!accessToken) {
+        throw new Error("Authentication required. Please re-authenticate.");
+    }
+
+    const baseUrl = supabaseProjectUrl.replace(/\/$/, '');
+    const url = `${baseUrl}/functions/v1/${functionName}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+                'apikey': supabaseKey
+            },
+            body: JSON.stringify(body)
+        });
+
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            const result = await response.json();
+            if (!response.ok) {
+                const msg = result.error || (typeof result === 'string' ? result : JSON.stringify(result));
+                throw new Error(msg || `Failed to execute ${functionName}`);
+            }
+            return result;
+        } else {
+            const text = await response.text();
+            if (!response.ok) {
+                throw new Error(text || `Server error (${response.status}) in ${functionName}`);
+            }
+            return text;
+        }
+    } catch (networkError: any) {
+        console.error(`Network error calling ${functionName}:`, networkError);
+        if (networkError.message === 'Failed to fetch') {
+            throw new Error(`Connection to ${functionName} interrupted. This may be a CORS issue or server crash.`);
+        }
+        throw networkError;
+    }
+};
+
+const callManageAmenity = async (body: any) => {
+    return callEdgeFunction('manage-amenity', body);
 };
 
 // --- Auth & Users ---
+
+export const getUserProfile = async (token?: string) => {
+    return callEdgeFunction('get-user-profile', {}, token);
+};
 
 export const requestPasswordReset = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -45,59 +85,33 @@ export const requestPasswordReset = async (email: string) => {
     if (error) throw error;
 };
 
+/**
+ * Updates the user's theme preference.
+ * Uses an Edge Function to bypass recursive RLS policies on the users table.
+ */
 export const updateTheme = async (userId: string, theme: 'light' | 'dark') => {
-    const { error } = await supabase.from('users').update({ theme }).eq('id', userId);
-    if (error) console.error("Failed to update theme", error);
+    return callEdgeFunction('update-user-theme', { theme });
 };
 
 export const updateUserPassword = async (password: string) => {
-    const { error } = await supabase.functions.invoke('update-user-password', {
-        body: { password }
-    });
-    if (error) throw error;
+    await callEdgeFunction('update-user-password', { password });
 };
 
 export const createAdminUser = async (data: any) => {
-    const { error } = await supabase.functions.invoke('create-admin-user', {
-        body: data
-    });
-    if (error) throw error;
+    await callEdgeFunction('create-admin-user', data);
 };
 
 export const createCommunityUser = async (data: any) => {
-    const { error } = await supabase.functions.invoke('create-community-user', {
-        body: data
-    });
-    if (error) throw error;
+    await callEdgeFunction('create-community-user', data);
 };
 
 export const bulkCreateCommunityUsers = async (users: any[], communityId: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    // Using the specific URL provided by the user
-    const response = await fetch('https://vnfmtbkhptkntaqzfdcx.supabase.co/functions/v1/bulk-create-users', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey': supabaseKey
-        },
-        body: JSON.stringify({ users, community_id: communityId })
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-        throw new Error(result.error || 'Bulk processing failed');
-    }
-    return result;
+    return callEdgeFunction('bulk-create-users', { users, community_id: communityId });
 };
 
 export const getResidents = async (communityId: string): Promise<User[]> => {
-    const { data, error } = await supabase
-        .from('users')
-        .select('*, units(*)')
-        .eq('community_id', communityId);
-    
-    if (error) throw error;
+    const response = await callEdgeFunction('get-directory', { community_id: communityId });
+    const data = response.data || [];
     
     return data.map((u: any) => {
         const units = u.units ? u.units.map((unit: any) => ({
@@ -107,7 +121,7 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             flatNumber: unit.flat_number,
             block: unit.block,
             floor: unit.floor,
-            flatSize: unit.flat_size,
+            flat_size: unit.flat_size,
             maintenance_start_date: unit.maintenance_start_date
         })) : [];
 
@@ -122,30 +136,46 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
             }
         }
 
+        let userRole = u.role as UserRole;
+        if (userRole === UserRole.Resident && u.profile_data?.is_tenant) {
+            userRole = UserRole.Tenant;
+        }
+
         return {
             id: u.id,
             name: u.name,
             email: u.email,
-            role: u.role as UserRole,
+            role: userRole,
             communityId: u.community_id,
             status: u.status,
             avatarUrl: u.avatar_url,
             flatNumber: displayFlatNumber,
             units: units,
-            theme: u.theme
+            theme: u.theme,
+            tenantDetails: u.profile_data
         };
     });
 };
 
 export const assignAdminUnit = async (unitData: any, user: User, community: Community) => {
-    const { error } = await supabase.functions.invoke('assign-unit', {
-        body: { 
-            unitData, 
-            communityId: community.id, 
-            userId: user.id 
-        }
+    await callEdgeFunction('assign-unit', { 
+        unitData, 
+        communityId: community.id, 
+        userId: user.id 
     });
-    if (error) throw error;
+};
+
+export const onboardTenant = async (tenantData: any, ownerUser: User) => {
+    return callEdgeFunction('onboard-tenant', { 
+        tenantData, 
+        ownerId: ownerUser.id, 
+        communityId: ownerUser.communityId,
+        flatNumber: ownerUser.flatNumber 
+    });
+};
+
+export const deleteTenant = async (tenantId: string) => {
+    return callEdgeFunction('delete-tenant', { tenantId });
 };
 
 // --- Community ---
@@ -176,10 +206,9 @@ export const getCommunity = async (id: string): Promise<Community> => {
 };
 
 export const getCommunityStats = async (): Promise<CommunityStat[]> => {
-    const { data, error } = await supabase.functions.invoke('get-community-stats');
-    if (error) throw error;
+    const result = await callEdgeFunction('get-community-stats', {});
     
-    const stats: CommunityStat[] = (data.data || []).map((item: any) => ({
+    const stats: CommunityStat[] = (result.data || []).map((item: any) => ({
         id: item.id,
         name: item.name,
         address: item.address,
@@ -213,7 +242,7 @@ export const createCommunity = async (data: any) => {
         maintenance_rate: data.maintenance_rate,
         fixed_maintenance_amount: data.fixed_maintenance_amount,
         contact_info: data.contacts,
-        subscription_type: data.subscriptionType,
+        subscription_type: data.subscription_type,
         subscription_start_date: data.subscriptionStartDate,
         pricing_config: data.pricePerUser,
         status: 'active'
@@ -241,42 +270,15 @@ export const updateCommunity = async (id: string, data: any) => {
 };
 
 export const deleteCommunity = async (id: string) => {
-    try {
-        const { data, error } = await supabase.functions.invoke('delete-community', {
-            body: { community_id: id }
-        });
-        
-        if (error) {
-            let detailedError = error.message;
-            try {
-                if (error instanceof Response) {
-                    const body = await error.json();
-                    detailedError = body.error || detailedError;
-                }
-            } catch(e) {}
-            throw new Error(detailedError);
-        }
-        
-        if (data && data.error) {
-            throw new Error(data.error);
-        }
-        
-        return data;
-    } catch (err: any) {
-        throw err;
-    }
+    return callEdgeFunction('delete-community', { community_id: id });
 };
 
 // --- Notices ---
 
 export const getNotices = async (communityId: string): Promise<Notice[]> => {
-    const { data, error } = await supabase
-        .from('notices')
-        .select('*')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false });
+    const response = await callEdgeFunction('get-notices', { community_id: communityId });
+    const data = response.data || [];
     
-    if (error) throw error;
     return data.map((n: any) => ({
         id: n.id,
         title: n.title,
@@ -291,20 +293,15 @@ export const getNotices = async (communityId: string): Promise<Notice[]> => {
 };
 
 export const createNotice = async (data: Partial<Notice>, user: User) => {
-    const { error } = await supabase.functions.invoke('create-notice', {
-        body: {
-            title: data.title,
-            content: data.content,
-            type: data.type,
-            author_name: user.name,
-            community_id: user.communityId,
-            valid_from: data.validFrom,
-            valid_until: data.validUntil
-        }
+    await callEdgeFunction('create-notice', {
+        title: data.title,
+        content: data.content,
+        type: data.type,
+        author_name: user.name,
+        community_id: user.communityId,
+        valid_from: data.validFrom,
+        valid_until: data.validUntil
     });
-    if (error) throw error;
-
-    // Audit logs for edge functions usually handled in function, but we ensure consistency here if needed
 };
 
 export const updateNotice = async (id: string, data: Partial<Notice>, user?: User) => {
@@ -351,13 +348,9 @@ export const deleteNotice = async (id: string, user?: User) => {
 // --- Complaints ---
 
 export const getComplaints = async (communityId: string, userId?: string, role?: UserRole): Promise<Complaint[]> => {
-    const { data, error } = await supabase.functions.invoke('get-complaints', {
-        body: { community_id: communityId }
-    });
+    const response = await callEdgeFunction('get-complaints', { community_id: communityId });
     
-    if (error) throw error;
-    
-    const raw = data.data || [];
+    const raw = response.data || [];
     return raw.map((c: any) => ({
         id: c.id,
         title: c.title,
@@ -375,51 +368,30 @@ export const getComplaints = async (communityId: string, userId?: string, role?:
 };
 
 export const getComplaintActivity = async (id: string): Promise<AuditLog[]> => {
-    const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*, users(name, role)')
-        .eq('entity', 'Complaint')
-        .eq('entity_id', id)
-        .order('created_at', { ascending: true });
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: profile } = await supabase.from('users').select('community_id').eq('id', session?.user.id).single();
     
-    if (error) throw error;
-    return data.map((l: any) => ({
-        id: l.id,
-        createdAt: l.created_at,
-        actorId: l.actor_id,
-        communityId: l.community_id,
-        actorName: l.users?.name || 'System',
-        actorRole: l.users?.role,
-        entity: l.entity,
-        entityId: l.entity_id,
-        action: l.action as any,
-        details: l.details
-    }));
+    if (!profile?.community_id) throw new Error("Could not identify community context");
+
+    return getAuditLogs(profile.community_id, session?.user.id || '', '', 'Complaint', id);
 };
 
 export const createComplaint = async (data: Partial<Complaint>, user: User, unitId?: string, flatNumber?: string) => {
-    const { error } = await supabase.functions.invoke('create-complaint', {
-        body: {
-            title: data.title,
-            description: data.description,
-            category: data.category,
-            community_id: user.communityId,
-            user_id: user.id,
-            resident_name: user.name,
-            flat_number: flatNumber || user.flatNumber,
-            unit_id: unitId
-        }
+    await callEdgeFunction('create-complaint', {
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        community_id: user.communityId,
+        user_id: user.id,
+        resident_name: user.name,
+        flat_number: flatNumber || user.flatNumber,
+        unit_id: unitId
     });
-    if (error) throw error;
 };
 
 export const updateComplaintStatus = async (id: string, status: ComplaintStatus) => {
-    const { data, error } = await supabase.functions.invoke('update-complaint', {
-        body: { id, status }
-    });
-    if (error) throw error;
-    
-    const c = data.data;
+    const response = await callEdgeFunction('update-complaint', { id, status });
+    const c = response.data;
     return {
         id: c.id,
         title: c.title,
@@ -437,21 +409,14 @@ export const updateComplaintStatus = async (id: string, status: ComplaintStatus)
 };
 
 export const assignComplaint = async (id: string, agentId: string) => {
-    const { error } = await supabase.functions.invoke('update-complaint', {
-        body: { id, assigned_to: agentId }
-    });
-    if (error) throw error;
+    await callEdgeFunction('update-complaint', { id, assigned_to: agentId });
 };
 
 // --- Visitors ---
 
 export const getVisitors = async (communityId: string, role?: UserRole): Promise<Visitor[]> => {
-    const { data, error } = await supabase.functions.invoke('get-visitors', {
-        body: { community_id: communityId }
-    });
-    if (error) throw error;
-    
-    const raw = data.data || [];
+    const response = await callEdgeFunction('get-visitors', { community_id: communityId });
+    const raw = response.data || [];
     return raw.map((v: any) => ({
         id: v.id,
         name: v.name,
@@ -558,10 +523,7 @@ export const updateVisitorStatus = async (id: string, status: VisitorStatus) => 
 };
 
 export const verifyVisitorEntry = async (visitorId: string, token: string, user: User) => {
-    const { error } = await supabase.functions.invoke('verify-visitor', {
-        body: { visitor_id: visitorId, entry_token: token }
-    });
-    if (error) throw error;
+    await callEdgeFunction('verify-visitor', { visitor_id: visitorId, entry_token: token });
 };
 
 export const checkOutVisitor = async (id: string, user: User) => {
@@ -583,8 +545,9 @@ export const checkOutVisitor = async (id: string, user: User) => {
 // --- Amenities & Bookings ---
 
 export const getAmenities = async (communityId: string): Promise<Amenity[]> => {
-    const { data, error } = await supabase.from('amenities').select('*').eq('community_id', communityId);
-    if (error) throw error;
+    const response = await callEdgeFunction('get-amenities', { community_id: communityId });
+    const data = response.data || [];
+    
     return data.map((a: any) => ({
         id: a.id,
         name: a.name,
@@ -635,13 +598,8 @@ export const deleteAmenity = async (id: string) => {
 };
 
 export const getBookings = async (communityId: string): Promise<Booking[]> => {
-    const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('community_id', communityId)
-        .gte('end_time', new Date().toISOString());
-    
-    if (error) throw error;
+    const response = await callEdgeFunction('get-bookings', { community_id: communityId });
+    const data = response.data || [];
     
     return data.map((b: any) => ({
         id: b.id,
@@ -655,7 +613,7 @@ export const getBookings = async (communityId: string): Promise<Booking[]> => {
 };
 
 export const createBooking = async (data: Partial<Booking>, user: User) => {
-    const { data: newBooking, error } = await supabase.from('bookings').insert({
+    const { data: newBooking, error = null } = await supabase.from('bookings').insert({
         amenity_id: data.amenityId,
         user_id: user.id,
         resident_name: user.name,
@@ -675,6 +633,16 @@ export const createBooking = async (data: Partial<Booking>, user: User) => {
         entity_id: newBooking.id,
         details: { description: `Facility reserved: ${newBooking.amenity_id}`, new: newBooking }
     });
+    
+    return {
+        id: newBooking.id,
+        amenityId: newBooking.amenity_id,
+        residentName: newBooking.resident_name,
+        flatNumber: newBooking.flat_number,
+        startTime: newBooking.start_time,
+        endTime: newBooking.end_time,
+        communityId: newBooking.community_id
+    } as Booking;
 };
 
 export const deleteBooking = async (id: string, user?: User) => {
@@ -697,18 +665,9 @@ export const deleteBooking = async (id: string, user?: User) => {
 // --- Maintenance ---
 
 export const getMaintenanceRecords = async (communityId: string, userId?: string): Promise<MaintenanceRecord[]> => {
-    let query = supabase
-        .from('maintenance_records')
-        .select('*, users(name), units(flat_number)')
-        .eq('community_id', communityId);
+    const response = await callEdgeFunction('get-maintenance-records', { community_id: communityId, user_id: userId });
     
-    if (userId) {
-        query = query.eq('user_id', userId);
-    }
-    
-    const { data, error } = await query.order('period_date', { ascending: false });
-    if (error) throw error;
-
+    const data = response.data || [];
     return data.map((r: any) => ({
         id: r.id,
         userId: r.user_id,
@@ -796,13 +755,9 @@ export const addMaintenanceConfiguration = async (data: any) => {
 // --- Expenses ---
 
 export const getExpenses = async (communityId: string): Promise<Expense[]> => {
-    const { data, error } = await supabase
-        .from('expenses')
-        .select('*, submitted_user:users!submitted_by(name), approved_user:users!approved_by(name)')
-        .eq('community_id', communityId)
-        .order('date', { ascending: false });
+    const response = await callEdgeFunction('get-expenses', { community_id: communityId });
     
-    if (error) throw error;
+    const data = response.data || [];
     return data.map((e: any) => ({
         id: e.id,
         title: e.title,
@@ -822,7 +777,7 @@ export const getExpenses = async (communityId: string): Promise<Expense[]> => {
 };
 
 export const createExpense = async (data: Partial<Expense>, user: User) => {
-    const { data: newExpense, error } = await supabase.from('expenses').insert({
+    const { data: newExpense, error = null } = await supabase.from('expenses').insert({
         title: data.title,
         amount: data.amount,
         category: data.category,
@@ -836,7 +791,6 @@ export const createExpense = async (data: Partial<Expense>, user: User) => {
 
     if (error) throw error;
 
-    // Manual Audit Log for Expense Creation
     await supabase.from('audit_logs').insert({
         community_id: user.communityId,
         actor_id: user.id,
@@ -857,7 +811,6 @@ export const approveExpense = async (id: string, userId: string) => {
 
     if (error) throw error;
 
-    // Manual Audit Log for Approval
     await supabase.from('audit_logs').insert({
         community_id: updated.community_id,
         actor_id: userId,
@@ -876,7 +829,7 @@ export const rejectExpense = async (id: string, userId: string, reason: string) 
     const { data: oldExpense } = await supabase.from('expenses').select('*').eq('id', id).single();
     const newDescription = `${oldExpense?.description || ''} \n[REJECTION REASON]: ${reason}`;
 
-    const { data: updated, error } = await supabase.from('expenses').update({
+    const { data: updated, error = null } = await supabase.from('expenses').update({
         status: 'Rejected',
         approved_by: userId,
         description: newDescription
@@ -884,7 +837,6 @@ export const rejectExpense = async (id: string, userId: string, reason: string) 
 
     if (error) throw error;
 
-    // Manual Audit Log for Rejection
     await supabase.from('audit_logs').insert({
         community_id: updated.community_id,
         actor_id: userId,
@@ -900,47 +852,35 @@ export const rejectExpense = async (id: string, userId: string, reason: string) 
 };
 
 export const getMonthlyLedger = async (communityId: string, month: number, year: number): Promise<MonthlyLedger> => {
-    const { data, error } = await supabase.functions.invoke('get-monthly-ledger', {
-        body: { community_id: communityId, month, year }
-    });
-    if (error) throw error;
-    return data;
+    const result = await callEdgeFunction('get-monthly-ledger', { community_id: communityId, month, year });
+    return result;
 };
 
 // --- Billing (SuperAdmin) ---
 
 export const recordCommunityPayment = async (data: any) => {
-    const { error } = await supabase.functions.invoke('record-payment', {
-        body: data
-    });
-    if (error) throw error;
+    await callEdgeFunction('record-payment', data);
 };
 
 export const getFinancialHistory = async (year: number): Promise<FinancialHistory> => {
-    const { data, error } = await supabase.functions.invoke('get-financial-history', {
-        body: { year }
-    });
-    if (error) throw error;
-    return data;
+    const result = await callEdgeFunction('get-financial-history', { year });
+    return result;
 };
 
 export const getFinancialYears = async (): Promise<number[]> => {
-    const { data, error } = await supabase.functions.invoke('get-financial-years');
-    if (error) throw error;
-    return data.years;
+    const result = await callEdgeFunction('get-financial-years', {});
+    return result.years;
 };
 
 // --- Audit ---
 
-export const getAuditLogs = async (communityId: string, userId: string, role: string): Promise<AuditLog[]> => {
-    let query = supabase
-        .from('audit_logs')
-        .select('*, users(name, role)')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false });
-        
-    const { data, error } = await query;
-    if (error) throw error;
+export const getAuditLogs = async (communityId: string, userId: string, role: string, entity?: string, entityId?: string): Promise<AuditLog[]> => {
+    const response = await callEdgeFunction('get-audit-logs', { 
+        community_id: communityId,
+        entity: entity,
+        entity_id: entityId
+    });
+    const data = response.data || [];
     
     return data.map((l: any) => ({
         id: l.id,

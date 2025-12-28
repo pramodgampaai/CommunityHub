@@ -21,37 +21,33 @@ serve(async (req: any) => {
     )
 
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Missing Auth');
+    if (!authHeader) throw new Error('Missing Auth Header');
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Invalid token');
+    if (userError || !user) throw new Error('Invalid authentication session');
 
     const body = await req.json().catch(() => ({}));
     const { community_id } = body;
     if (!community_id) throw new Error('Missing community_id');
 
-    // Database source of truth only
-    const { data: profile, error: pErr } = await supabaseClient.from('users').select('role, community_id').eq('id', user.id).maybeSingle();
-    if (pErr) throw pErr;
-    if (!profile) throw new Error('Profile not found in registry.');
+    // Strict DB Check
+    const { data: profile, error: pErr } = await supabaseClient.from('users').select('community_id, role').eq('id', user.id).maybeSingle();
+    if (pErr) throw new Error(`Profile Registry Check Failed: ${pErr.message}`);
+    if (!profile) throw new Error('Profile not found. Sync required.');
 
     const userRole = String(profile.role || '').toLowerCase();
     const userCommId = profile.community_id;
 
     if (userRole !== 'superadmin' && userCommId !== community_id) {
-        throw new Error('Access denied: Community isolation violation.');
+        throw new Error('Community Access Violation');
     }
 
-    let query = supabaseClient
-        .from('visitors')
+    const { data, error } = await supabaseClient
+        .from('bookings')
         .select('*')
-        .eq('community_id', community_id);
+        .eq('community_id', community_id)
+        .gte('end_time', new Date().toISOString());
 
-    if (['resident', 'tenant', 'admin'].includes(userRole)) {
-        query = query.eq('user_id', user.id);
-    }
-
-    const { data, error } = await query.order('expected_at', { ascending: false });
-    if (error) throw error;
+    if (error) throw new Error(`Booking Lookup Failed: ${error.message}`);
 
     return new Response(
       JSON.stringify({ data: data || [] }),
@@ -59,7 +55,7 @@ serve(async (req: any) => {
     )
 
   } catch (error: any) {
-    console.error("Visitor Fetch Exception:", error.message);
+    console.error("Booking Fetcher Error:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }

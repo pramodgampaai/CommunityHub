@@ -73,38 +73,39 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4 relative overflow-hidden">
-      {/* Background Architectural Grid Pattern */}
+      {/* Background Architectural Grid Pattern - Consistent on all screens */}
       <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none">
           <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(var(--text-light) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
       </div>
 
-      <div className="w-full max-w-md p-10 sm:p-14 space-y-10 bg-white dark:bg-[#121214] rounded-[3.5rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl relative z-10">
+      {/* Main Login Container - Centered Card */}
+      <div className="w-full max-w-md flex flex-col justify-center p-10 sm:p-14 space-y-10 bg-white dark:bg-[#121214] rounded-[3.5rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl relative z-10 animate-fadeIn">
         <div className="flex flex-col items-center text-center">
-            {/* Logo Container */}
+            {/* Logo */}
             <div className="mb-6 relative">
-                <Logo className="w-20 h-20 text-brand-600 relative z-10" />
+                <Logo className="w-14 h-14 text-brand-600 relative z-10" />
             </div>
             
             {/* Brand Title */}
-            <h1 className="text-6xl font-brand font-extrabold text-brand-600 tracking-tightest">Nilayam</h1>
+            <h1 className="text-3xl font-brand font-extrabold text-brand-600 tracking-tightest">Nilayam</h1>
             
-            {/* Unified & Stylish Tagline */}
-            <div className="mt-3">
-                <p className="font-brand text-[10px] font-bold uppercase tracking-[0.4em] text-brand-600">
+            {/* Tagline */}
+            <div className="mt-2.5">
+                <p className="font-brand text-[9px] font-bold uppercase tracking-[0.4em] text-brand-600">
                     Your Abode <span className="opacity-30 mx-1 font-light">|</span> Managed
                 </p>
             </div>
             
-            {view === 'login' ? (
-                <p className="mt-12 text-lg font-medium text-slate-500 dark:text-zinc-400">Welcome back. Please authenticate.</p>
-            ) : (
-                <p className="mt-12 text-lg font-medium text-slate-500 dark:text-zinc-400">Initialize credential recovery.</p>
-            )}
+            <div className="mt-8">
+                <p className="text-sm font-medium text-slate-500 dark:text-zinc-400">
+                    {view === 'login' ? 'Welcome back. Please authenticate.' : 'Initialize credential recovery.'}
+                </p>
+            </div>
         </div>
         
         {view === 'login' ? (
             <form className="mt-8 space-y-8" onSubmit={handleLoginSubmit}>
-            {error && <div className="p-5 text-sm text-red-600 font-bold bg-red-50 dark:bg-red-900/20 rounded-3xl border border-red-100 dark:border-red-800 text-center">{error}</div>}
+            {error && <div className="p-4 text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-100 dark:border-red-800 text-center">{error}</div>}
             <div className="space-y-6">
                 <div>
                     <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Email Identity</label>
@@ -113,7 +114,7 @@ const LoginPage: React.FC = () => {
                         autoComplete="email"
                         required
                         className="input-field block w-full px-6 py-4 rounded-2xl text-base"
-                        placeholder="e.g. resident@nilayam.com"
+                        placeholder="resident@nilayam.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                     />
@@ -130,11 +131,11 @@ const LoginPage: React.FC = () => {
                         onChange={(e) => setPassword(e.target.value)}
                     />
                 </div>
-                <div className="flex items-center justify-end px-2">
+                <div className="flex items-center justify-end px-2 pt-1">
                     <button
                         type="button"
                         onClick={() => toggleView('forgot_password')}
-                        className="font-mono text-[11px] font-bold text-brand-600 hover:text-brand-700 uppercase tracking-widest transition-colors"
+                        className="font-mono text-[10px] font-bold text-brand-600 hover:text-brand-700 uppercase tracking-widest transition-colors"
                     >
                         Recover Credentials
                     </button>
@@ -142,18 +143,18 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div className="pt-2">
-                <Button type="submit" size="lg" className="w-full shadow-xl" disabled={isLoading}>
+                <Button type="submit" size="lg" className="w-full shadow-xl rounded-2xl h-14" disabled={isLoading}>
                     {isLoading ? 'Verifying...' : 'Authenticate'}
                 </Button>
             </div>
             </form>
         ) : (
             <form className="mt-8 space-y-8" onSubmit={handleForgotSubmit}>
-                {error && <p className="text-red-500 text-sm text-center font-bold">{error}</p>}
+                {error && <p className="text-red-500 text-xs text-center font-bold">{error}</p>}
                 {resetSuccess ? (
-                    <div className="text-green-600 dark:text-green-400 text-center text-base font-bold bg-green-50 dark:bg-green-900/20 p-8 rounded-[2.5rem] border border-green-100 dark:border-green-900/30">
-                        <p>Recovery link dispatched.</p>
-                        <p className="mt-3 text-xs opacity-70 leading-relaxed font-medium">Please inspect your registered inbox for further instructions.</p>
+                    <div className="text-green-600 dark:text-green-400 text-center bg-green-50 dark:bg-green-900/10 p-8 rounded-[2.5rem] border border-green-100 dark:border-green-900/20">
+                        <p className="text-sm font-bold uppercase tracking-widest">Link Dispatched</p>
+                        <p className="mt-3 text-[11px] opacity-70 leading-relaxed font-medium">Please inspect your registered inbox for further instructions.</p>
                     </div>
                 ) : (
                     <>
@@ -172,7 +173,7 @@ const LoginPage: React.FC = () => {
                             </div>
                         </div>
                         <div className="pt-2">
-                            <Button type="submit" size="lg" className="w-full shadow-xl" disabled={isLoading}>
+                            <Button type="submit" size="lg" className="w-full shadow-xl rounded-2xl h-14" disabled={isLoading}>
                                 {isLoading ? 'Sending...' : 'Request Recovery'}
                             </Button>
                         </div>
@@ -182,13 +183,17 @@ const LoginPage: React.FC = () => {
                      <button
                         type="button"
                         onClick={() => toggleView('login')}
-                        className="font-mono text-[11px] font-bold text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-all"
+                        className="font-mono text-[10px] font-bold text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-all"
                     >
                         Back to Portal
                     </button>
                 </div>
             </form>
         )}
+
+        <div className="pt-8 text-center border-t border-slate-50 dark:border-white/5 opacity-30">
+            {/* Empty footer for padding/layout consistency */}
+        </div>
       </div>
     </div>
   );

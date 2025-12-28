@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon, Cog6ToothIcon, ClipboardDocumentListIcon } from '../icons';
 import type { Page } from '../../types';
@@ -34,6 +35,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     // Explicit split for Security roles
     if (user?.role === UserRole.SecurityAdmin) return ['Notices', 'Visitors', 'Directory'].includes(item.name);
     if (user?.role === UserRole.Security) return ['Notices', 'Visitors'].includes(item.name);
+    
+    // Tenant Role
+    if (user?.role === UserRole.Tenant) return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(item.name);
     
     if (user?.role === UserRole.Admin) return item.name !== 'Billing';
     return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations';

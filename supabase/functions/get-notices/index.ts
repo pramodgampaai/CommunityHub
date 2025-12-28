@@ -20,49 +20,50 @@ serve(async (req: any) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Missing Auth');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Invalid token');
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) throw new Error('Missing Authorization');
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (userError || !user) throw new Error('Invalid session');
 
     const body = await req.json().catch(() => ({}));
     const { community_id } = body;
-    if (!community_id) throw new Error('Missing community_id');
+    if (!community_id) throw new Error('Missing community_id parameter');
 
-    // Database source of truth only
-    const { data: profile, error: pErr } = await supabaseClient.from('users').select('role, community_id').eq('id', user.id).maybeSingle();
-    if (pErr) throw pErr;
-    if (!profile) throw new Error('Profile not found in registry.');
+    // Strict User Validation
+    const { data: profile, error: profileErr } = await supabaseClient
+        .from('users')
+        .select('community_id, role')
+        .eq('id', user.id)
+        .maybeSingle();
+    
+    if (profileErr) throw profileErr;
+    if (!profile) throw new Error('User record not found in database. Access denied.');
 
     const userRole = String(profile.role || '').toLowerCase();
     const userCommId = profile.community_id;
 
     if (userRole !== 'superadmin' && userCommId !== community_id) {
-        throw new Error('Access denied: Community isolation violation.');
+        throw new Error(`Unauthorized: You do not belong to community ${community_id}.`);
     }
 
-    let query = supabaseClient
-        .from('visitors')
+    const { data, error } = await supabaseClient
+        .from('notices')
         .select('*')
-        .eq('community_id', community_id);
+        .eq('community_id', community_id)
+        .order('created_at', { ascending: false });
 
-    if (['resident', 'tenant', 'admin'].includes(userRole)) {
-        query = query.eq('user_id', user.id);
-    }
-
-    const { data, error } = await query.order('expected_at', { ascending: false });
     if (error) throw error;
 
     return new Response(
-      JSON.stringify({ data: data || [] }),
+      JSON.stringify({ data }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    )
+    );
 
   } catch (error: any) {
-    console.error("Visitor Fetch Exception:", error.message);
+    console.error("Notice Fetch Exception:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    )
+    );
   }
 })

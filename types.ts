@@ -1,3 +1,4 @@
+
 export enum UserRole {
   SuperAdmin = 'SuperAdmin',
   Admin = 'Admin',
@@ -6,6 +7,7 @@ export enum UserRole {
   HelpdeskAdmin = 'HelpdeskAdmin', // Previously Helpdesk, Acts as Helpdesk Admin
   HelpdeskAgent = 'HelpdeskAgent', // Acts as Worker
   SecurityAdmin = 'SecurityAdmin', // Manages Security Guards
+  Tenant = 'Tenant', // New Role
 }
 
 export interface Block {
@@ -83,6 +85,22 @@ export interface Unit {
     maintenanceStartDate?: string;
 }
 
+export interface TenantProfile {
+    aadharNumber: string;
+    panNumber: string;
+    aadharUrl?: string; // Base64 or URL
+    panUrl?: string;    // Base64 or URL
+    workInfo: {
+        companyName: string;
+        designation: string;
+        officeAddress?: string;
+    };
+    maritalStatus: 'Single' | 'Married';
+    spouseName?: string;
+    kidsCount?: number;
+    kidsDetails?: string; // Simple text summary for now
+}
+
 export interface User {
   id: string;
   name: string;
@@ -97,6 +115,7 @@ export interface User {
   units?: Unit[]; // One-to-Many relationship
   maintenanceStartDate?: string; // Legacy field
   theme?: 'light' | 'dark';
+  tenantDetails?: TenantProfile; // Optional profile data for tenants
 }
 
 export enum NoticeType {
@@ -284,6 +303,7 @@ export interface AuditLog {
         new?: any;
         description?: string;
         amount?: number; // For fallback payments
+        data?: any;
     };
 }
 

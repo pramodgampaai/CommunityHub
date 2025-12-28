@@ -21,48 +21,53 @@ serve(async (req: any) => {
     )
 
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Missing Auth');
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Invalid token');
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader?.replace('Bearer ', '') || '')
+    if (userError || !user) throw new Error('Session invalid');
 
     const body = await req.json().catch(() => ({}));
-    const { community_id } = body;
+    const { community_id, user_id } = body;
     if (!community_id) throw new Error('Missing community_id');
 
-    // Database source of truth only
-    const { data: profile, error: pErr } = await supabaseClient.from('users').select('role, community_id').eq('id', user.id).maybeSingle();
-    if (pErr) throw pErr;
-    if (!profile) throw new Error('Profile not found in registry.');
+    // Strict DB Lookups Only
+    const { data: profile, error: pErr } = await supabaseClient.from('users').select('community_id, role').eq('id', user.id).maybeSingle();
+    if (pErr) throw new Error(`Auth Registry Verification Failed: ${pErr.message}`);
+    if (!profile) throw new Error('Profile missing from community registry.');
 
     const userRole = String(profile.role || '').toLowerCase();
     const userCommId = profile.community_id;
 
     if (userRole !== 'superadmin' && userCommId !== community_id) {
-        throw new Error('Access denied: Community isolation violation.');
+        throw new Error('Access Denied: Community scope violation.');
     }
 
     let query = supabaseClient
-        .from('visitors')
-        .select('*')
+        .from('maintenance_records')
+        .select('*, users(name), units(flat_number)')
         .eq('community_id', community_id);
 
-    if (['resident', 'tenant', 'admin'].includes(userRole)) {
+    const isLimitedRole = ['resident', 'tenant'].includes(userRole);
+
+    if (isLimitedRole) {
         query = query.eq('user_id', user.id);
+    } else if (user_id) {
+        query = query.eq('user_id', user_id);
     }
 
-    const { data, error } = await query.order('expected_at', { ascending: false });
-    if (error) throw error;
+    query = query.order('period_date', { ascending: false });
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Ledger Fetch Failure: ${error.message}`);
 
     return new Response(
-      JSON.stringify({ data: data || [] }),
+      JSON.stringify({ data }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    )
+    );
 
   } catch (error: any) {
-    console.error("Visitor Fetch Exception:", error.message);
+    console.error("Maintenance Ledger Crash:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    )
+    );
   }
 })

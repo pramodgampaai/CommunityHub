@@ -63,7 +63,7 @@ serve(async (req: any) => {
             email,
             password,
             email_confirm: true, 
-            user_metadata: { name }
+            user_metadata: { name, community_id, role: 'Admin' }
         })
 
         if (createError) throw createError;

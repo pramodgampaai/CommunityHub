@@ -97,7 +97,7 @@ function App() {
             }
         }
 
-        // 2. Resident Unit Setup Check
+        // 2. Resident Unit Setup Check (Tenants are exempt as they inherit units)
         if (user.role === UserRole.Resident && user.communityId) {
              if (activePage !== 'CommunitySetup') {
                  // Check if resident has units assigned
@@ -123,6 +123,10 @@ function App() {
             // Security Staff explicitly blocked from Directory
             const allowed = ['Notices', 'Visitors'];
             if (!allowed.includes(activePage)) setActivePage('Visitors');
+        } else if (user.role === UserRole.Tenant) {
+            // Tenant limited access
+            const allowed = ['Notices', 'Help Desk', 'Visitors', 'Amenities'];
+            if (!allowed.includes(activePage)) setActivePage('Notices');
         } else if (user.role !== UserRole.SuperAdmin && activePage === 'Billing') {
             setActivePage('Dashboard');
         } else if (user.role !== UserRole.Admin && activePage === 'BulkOperations') {
@@ -212,6 +216,8 @@ function App() {
   } else if (user.role === UserRole.Security) {
       // Security Staff strictly blocked from Directory
       allowedPages = ['Notices', 'Visitors'];
+  } else if (user.role === UserRole.Tenant) {
+      allowedPages = ['Notices', 'Help Desk', 'Visitors', 'Amenities'];
   }
 
   // If the user is on a restricted page, don't render content, just wait for useEffect to redirect
