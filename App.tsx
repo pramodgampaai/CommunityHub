@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/Login';
@@ -19,14 +19,14 @@ import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
 import { isSupabaseConfigured } from './services/supabase';
-import { getCommunity, updateTheme } from './services/api';
+import { updateTheme } from './services/api';
 
 export type Theme = 'light' | 'dark';
 
 function App() {
   const { user, loading, refreshUser } = useAuth();
   
-  // Initialize activePage from localStorage if available to persist across refreshes
+  // Initialize activePage from localStorage
   const [activePage, setActivePage] = useState<Page>(() => {
       const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
@@ -34,18 +34,16 @@ function App() {
   
   const [pageParams, setPageParams] = useState<any>(null);
   
-  // Persist the active page to localStorage whenever it changes
+  // Persist the active page
   useEffect(() => {
       if (activePage) {
           localStorage.setItem('nilayam_last_page', activePage);
       }
   }, [activePage]);
   
-  // Initialize theme with a default 'light'. 
-  // We'll update it based on system pref (if no user) or user pref (if user) in useEffects.
   const [theme, setTheme] = useState<Theme>('light');
 
-  // Initial Theme Setup: Check system preference if no user preference is available yet.
+  // Initial Theme Setup
   useEffect(() => {
     if (!user) {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -53,14 +51,9 @@ function App() {
         } else {
             setTheme('light');
         }
+    } else if (user.theme) {
+        setTheme(user.theme);
     }
-  }, []);
-
-  // Sync theme with user preference when user loads
-  useEffect(() => {
-      if (user?.theme) {
-          setTheme(user.theme);
-      }
   }, [user]);
 
   // Apply theme to DOM
@@ -70,72 +63,69 @@ function App() {
     root.classList.add(theme);
   }, [theme]);
 
-  // Enforce Role-Based Page Access and Community Setup Logic
-  useEffect(() => {
-    const checkAccess = async () => {
-        if (!user) return;
+  /**
+   * Synchronous Access Control Logic
+   * We calculate the "Real" page the user should be on based on their data.
+   * This prevents the "Double Load" by ensuring we never render a restricted page
+   * even for a single frame.
+   */
+  const resolvedPage = useMemo((): Page => {
+    if (!user) return activePage;
 
-        // 1. Admin Landscape & Unit Setup Check
-        if (user.role === UserRole.Admin && user.communityId) {
-            // Avoid infinite loop by only checking if not already on setup page
-            if (activePage !== 'CommunitySetup') {
-                try {
-                    // Check Landscape
-                    const community = await getCommunity(user.communityId);
-                    const hasBlocks = community.blocks && community.blocks.length > 0;
-                    
-                    // Check User Units (useAuth provides updated units on profile fetch)
-                    const hasUnits = user.units && user.units.length > 0;
+    // 1. Mandatory Setup Redirects (No more async check here)
+    // We check user.units directly which is populated by useAuth
+    const hasUnits = user.units && user.units.length > 0;
+    
+    // Admins and Residents MUST have units to use the app
+    if ((user.role === UserRole.Admin || user.role === UserRole.Resident) && !hasUnits) {
+        return 'CommunitySetup';
+    }
 
-                    if (!hasBlocks || !hasUnits) {
-                        setActivePage('CommunitySetup');
-                        return; // Stop further checks
-                    }
-                } catch (e) {
-                    console.error("Failed to check community setup status", e);
-                }
-            }
-        }
+    // 2. Role-Based Page Access
+    const role = user.role;
+    
+    if (role === UserRole.SuperAdmin) {
+        return ['Dashboard', 'Billing'].includes(activePage) ? activePage : 'Dashboard';
+    }
 
-        // 2. Resident Unit Setup Check (Tenants are exempt as they inherit units)
-        if (user.role === UserRole.Resident && user.communityId) {
-             if (activePage !== 'CommunitySetup') {
-                 // Check if resident has units assigned
-                 const hasUnits = user.units && user.units.length > 0;
-                 if (!hasUnits) {
-                     setActivePage('CommunitySetup');
-                     return;
-                 }
-             }
-        }
+    if (role === UserRole.HelpdeskAgent) {
+        return ['Notices', 'Help Desk'].includes(activePage) ? activePage : 'Help Desk';
+    }
 
-        // 3. Standard Role Redirects
-        if (user.role === UserRole.HelpdeskAgent) {
-            const allowed = ['Notices', 'Help Desk'];
-            if (!allowed.includes(activePage)) setActivePage('Help Desk');
-        } else if (user.role === UserRole.HelpdeskAdmin) {
-            const allowed = ['Notices', 'Help Desk', 'Directory'];
-            if (!allowed.includes(activePage)) setActivePage('Help Desk');
-        } else if (user.role === UserRole.SecurityAdmin) {
-            const allowed = ['Notices', 'Visitors', 'Directory'];
-            if (!allowed.includes(activePage)) setActivePage('Visitors');
-        } else if (user.role === UserRole.Security) {
-            // Security Staff explicitly blocked from Directory
-            const allowed = ['Notices', 'Visitors'];
-            if (!allowed.includes(activePage)) setActivePage('Visitors');
-        } else if (user.role === UserRole.Tenant) {
-            // Tenant limited access
-            const allowed = ['Notices', 'Help Desk', 'Visitors', 'Amenities'];
-            if (!allowed.includes(activePage)) setActivePage('Notices');
-        } else if (user.role !== UserRole.SuperAdmin && activePage === 'Billing') {
-            setActivePage('Dashboard');
-        } else if (user.role !== UserRole.Admin && activePage === 'BulkOperations') {
-            setActivePage('Dashboard');
-        }
-    };
+    if (role === UserRole.HelpdeskAdmin) {
+        return ['Notices', 'Help Desk', 'Directory'].includes(activePage) ? activePage : 'Help Desk';
+    }
 
-    checkAccess();
+    if (role === UserRole.SecurityAdmin) {
+        return ['Notices', 'Visitors', 'Directory'].includes(activePage) ? activePage : 'Visitors';
+    }
+
+    if (role === UserRole.Security) {
+        return ['Notices', 'Visitors'].includes(activePage) ? activePage : 'Visitors';
+    }
+
+    if (role === UserRole.Tenant) {
+        return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(activePage) ? activePage : 'Notices';
+    }
+
+    if (role === UserRole.Resident) {
+        const forbidden = ['Billing', 'BulkOperations', 'CommunitySetup'];
+        return forbidden.includes(activePage) ? 'Dashboard' : activePage;
+    }
+
+    if (role === UserRole.Admin) {
+        return activePage === 'Billing' ? 'Dashboard' : activePage;
+    }
+
+    return activePage;
   }, [user, activePage]);
+
+  // If the memoized logic determines we should be elsewhere, sync the state immediately
+  useEffect(() => {
+      if (user && resolvedPage !== activePage) {
+          setActivePage(resolvedPage);
+      }
+  }, [resolvedPage, activePage, user]);
 
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -144,7 +134,6 @@ function App() {
     if (user) {
         try {
             await updateTheme(user.id, newTheme);
-            // Refresh user to ensure context has latest theme if needed elsewhere
             await refreshUser();
         } catch (e) {
             console.error("Failed to save theme preference", e);
@@ -182,55 +171,7 @@ function App() {
     return <LoginPage />;
   }
 
-  // Role-based routing
-  if (user.role === UserRole.SuperAdmin) {
-      return (
-          <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-              {activePage === 'Billing' ? <Billing /> : <AdminPanel />}
-          </Layout>
-      );
-  }
-  
-  // If we are in setup mode, we force that page and hide navigation (via Layout logic)
-  if (activePage === 'CommunitySetup') {
-      return (
-          <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-              <CommunitySetup onComplete={() => setActivePage('Dashboard')} />
-          </Layout>
-      );
-  }
-
-  // Define allowed pages per role for rendering check
-  let allowedPages: Page[] = ['Dashboard', 'Notices', 'Help Desk', 'Visitors', 'Amenities', 'Directory', 'Maintenance', 'Expenses'];
-  
-  if (user.role === UserRole.Admin) {
-      allowedPages.push('BulkOperations');
-  }
-
-  if (user.role === UserRole.HelpdeskAgent) {
-      allowedPages = ['Notices', 'Help Desk'];
-  } else if (user.role === UserRole.HelpdeskAdmin) {
-      allowedPages = ['Notices', 'Help Desk', 'Directory'];
-  } else if (user.role === UserRole.SecurityAdmin) {
-      allowedPages = ['Notices', 'Visitors', 'Directory'];
-  } else if (user.role === UserRole.Security) {
-      // Security Staff strictly blocked from Directory
-      allowedPages = ['Notices', 'Visitors'];
-  } else if (user.role === UserRole.Tenant) {
-      allowedPages = ['Notices', 'Help Desk', 'Visitors', 'Amenities'];
-  }
-
-  // If the user is on a restricted page, don't render content, just wait for useEffect to redirect
-  if (!allowedPages.includes(activePage)) {
-      return (
-        <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-            <div className="flex items-center justify-center h-full">
-                <Spinner />
-            </div>
-        </Layout>
-      );
-  }
-
+  // Render Section
   return (
     <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
       {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
@@ -242,6 +183,8 @@ function App() {
       {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
       {activePage === 'Expenses' && <Expenses />}
       {activePage === 'BulkOperations' && <BulkOperations />}
+      {activePage === 'CommunitySetup' && <CommunitySetup onComplete={() => setActivePage('Dashboard')} />}
+      {activePage === 'Billing' && <Billing />}
     </Layout>
   );
 }

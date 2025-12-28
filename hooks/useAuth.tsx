@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           flatNumber: primaryUnit ? primaryUnit.flatNumber : userProfile.flat_number,
           role: resolvedRole as UserRole,
           communityId: userProfile.community_id,
-          communityName: userProfile.role === UserRole.SuperAdmin ? 'Platform Owner' : 'Community', 
+          communityName: userProfile.role === UserRole.SuperAdmin ? 'Platform Owner' : (userProfile.community_name || 'Community'), 
           status: userProfile.status || 'active',
           maintenanceStartDate: userProfile.maintenance_start_date,
           units: mappedUnits,
@@ -98,7 +98,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
                flatNumber: meta.flat_number || '',
                avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(meta.name || 'U')}&background=random`,
                status: 'active',
-               units: [], 
+               units: [], // Important for App.tsx setup check
                tenantDetails: meta as unknown as TenantProfile
            };
       }
@@ -189,7 +189,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     if (error) throw error;
 
     if (data.session) {
-        // Immediate UI feedback
         setLoading(true);
         const userProfile = await fetchProfile(data.session);
         setUser(userProfile);
