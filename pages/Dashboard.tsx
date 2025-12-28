@@ -1,33 +1,43 @@
 
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react';
 import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses } from '../services/api';
 import type { Notice, Complaint, Visitor, MaintenanceRecord, Expense } from '../types';
 import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole, ExpenseStatus } from '../types';
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
 import { useAuth } from '../hooks/useAuth';
-import { CurrencyRupeeIcon, UsersIcon, ShieldCheckIcon, PlusIcon, ArrowRightIcon, BellIcon, CheckCircleIcon } from '../components/icons';
+import { CurrencyRupeeIcon, UsersIcon, ShieldCheckIcon, PlusIcon, ArrowRightIcon, BellIcon } from '../components/icons';
 import { Page } from '../types';
 import Button from '../components/ui/Button';
 
+/**
+ * Robust count-up hook that handles interruptions and restarts gracefully.
+ */
 const useCountUp = (end: number, duration: number = 2) => {
     const [count, setCount] = useState(0);
+    const prevEndRef = useRef(end);
+
     useEffect(() => {
-        if (end === 0) { setCount(0); return; }
-        let start = 0;
-        const increment = end / (60 * duration);
-        const handle = setInterval(() => {
-            start += increment;
-            if (start >= end) {
-                setCount(end);
-                clearInterval(handle);
-            } else {
-                setCount(Math.floor(start));
+        if (end === count) return;
+        
+        let startTimestamp: number | null = null;
+        const startValue = count; // Continue from current value to avoid jarring jumps
+        
+        const step = (timestamp: number) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / (duration * 1000), 1);
+            const current = Math.floor(progress * (end - startValue) + startValue);
+            
+            setCount(current);
+            
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
             }
-        }, 1000 / 60);
-        return () => clearInterval(handle);
-    }, [end, duration]);
+        };
+
+        window.requestAnimationFrame(step);
+    }, [end]);
+
     return count;
 }
 
@@ -43,7 +53,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
 
   const isAdmin = user?.role === UserRole.Admin;
   const treasuryVal = maintenanceStats.lifetimeCollected - expenseStats.totalExpenses;
-  const animatedTreasury = useCountUp(isAdmin ? treasuryVal : maintenanceStats.myDues);
+  const animatedValue = useCountUp(isAdmin ? treasuryVal : maintenanceStats.myDues);
 
   useEffect(() => {
     if (!user?.communityId) return;
@@ -66,8 +76,6 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
         records.forEach(r => {
             if (r.status === MaintenanceStatus.Paid) lifetime += Number(r.amount);
             else if (r.userId === user.id && r.status === MaintenanceStatus.Pending) myDues += Number(r.amount);
-            
-            // Count records awaiting admin verification
             if (r.status === MaintenanceStatus.Submitted) pendingVerifications++;
         });
         setMaintenanceStats({ lifetimeCollected: lifetime, myDues, pendingVerifications });
@@ -119,7 +127,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
           <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-white/10 dark:divide-white/5">
               <div className="flex-1 p-5 text-white dark:text-slate-50">
                   <p className="text-[8px] font-mono font-black uppercase tracking-[0.2em] opacity-70 mb-1">{isAdmin ? 'Net Treasury' : 'Current Due'}</p>
-                  <h4 className="text-4xl font-brand font-extrabold tracking-tight">₹{animatedTreasury.toLocaleString()}</h4>
+                  <h4 className="text-4xl font-brand font-extrabold tracking-tight">₹{animatedValue.toLocaleString()}</h4>
                   <div className="flex items-center justify-between mt-3">
                     <button onClick={() => navigateToPage('Maintenance')} className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 opacity-70 hover:opacity-100 transition-opacity">Analyze Ledger <ArrowRightIcon className="w-3.5 h-3.5" /></button>
                     {isAdmin && maintenanceStats.pendingVerifications > 0 && (

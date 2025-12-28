@@ -18,6 +18,8 @@ import BulkOperations from './pages/BulkOperations';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
+// Fix: Import missing Card component
+import Card from './components/ui/Card';
 import { isSupabaseConfigured } from './services/supabase';
 import { updateTheme } from './services/api';
 
@@ -27,7 +29,8 @@ function App() {
   const { user, loading, refreshUser } = useAuth();
   const [isPending, startTransition] = useTransition();
   
-  const [requestedPage, setRequestedPage] = useState<Page>(() => {
+  // Single source of truth for the active page
+  const [activePage, setActivePage] = useState<Page>(() => {
       const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
   });
@@ -35,58 +38,71 @@ function App() {
   const [pageParams, setPageParams] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>('light');
 
-  const currentPage = useMemo((): Page => {
-    if (!user) return requestedPage;
+  // Helper to validate if a user can access a specific page
+  const getAuthorizedPage = useCallback((requested: Page, currentUser: any): Page => {
+    if (!currentUser) return requested;
 
-    const hasUnits = user.units && user.units.length > 0;
-    const isSetupRequiredRole = user.role === UserRole.Admin || user.role === UserRole.Resident;
+    const hasUnits = currentUser.units && currentUser.units.length > 0;
+    const isSetupRequiredRole = currentUser.role === UserRole.Admin || currentUser.role === UserRole.Resident;
     
     if (isSetupRequiredRole && !hasUnits) {
         return 'CommunitySetup';
     }
 
-    const role = user.role;
+    const role = currentUser.role;
     
     if (role === UserRole.SuperAdmin) {
-        return ['Dashboard', 'Billing'].includes(requestedPage) ? requestedPage : 'Dashboard';
+        return ['Dashboard', 'Billing'].includes(requested) ? requested : 'Dashboard';
     }
 
     if (role === UserRole.HelpdeskAgent) {
-        return ['Notices', 'Help Desk'].includes(requestedPage) ? requestedPage : 'Help Desk';
+        return ['Notices', 'Help Desk'].includes(requested) ? requested : 'Help Desk';
     }
 
     if (role === UserRole.HelpdeskAdmin) {
-        return ['Notices', 'Help Desk', 'Directory'].includes(requestedPage) ? requestedPage : 'Help Desk';
+        return ['Notices', 'Help Desk', 'Directory'].includes(requested) ? requested : 'Help Desk';
     }
 
     if (role === UserRole.SecurityAdmin) {
-        return ['Notices', 'Visitors', 'Directory'].includes(requestedPage) ? requestedPage : 'Visitors';
+        return ['Notices', 'Visitors', 'Directory'].includes(requested) ? requested : 'Visitors';
     }
 
     if (role === UserRole.Security) {
-        return ['Notices', 'Visitors'].includes(requestedPage) ? requestedPage : 'Visitors';
+        return ['Notices', 'Visitors'].includes(requested) ? requested : 'Visitors';
     }
 
     if (role === UserRole.Tenant) {
-        return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(requestedPage) ? requestedPage : 'Notices';
+        return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(requested) ? requested : 'Notices';
     }
 
     if (role === UserRole.Resident) {
         const forbidden = ['Billing', 'BulkOperations', 'CommunitySetup'];
-        return forbidden.includes(requestedPage) ? 'Dashboard' : requestedPage;
+        return forbidden.includes(requested) ? 'Dashboard' : requested;
     }
 
     if (role === UserRole.Admin) {
-        return requestedPage === 'Billing' ? 'Dashboard' : requestedPage;
+        return requested === 'Billing' ? 'Dashboard' : requested;
     }
 
-    return requestedPage;
-  }, [user, requestedPage]);
+    return requested;
+  }, []);
 
+  // Sync activePage with authorization rules whenever user state changes
   useEffect(() => {
-      localStorage.setItem('nilayam_last_page', currentPage);
-  }, [currentPage]);
+      if (user) {
+          const authorized = getAuthorizedPage(activePage, user);
+          if (authorized !== activePage) {
+              setActivePage(authorized);
+          }
+      }
+  }, [user, getAuthorizedPage]);
 
+  // Persist valid page
+  useEffect(() => {
+      localStorage.setItem('nilayam_last_page', activePage);
+  }, [activePage]);
+
+  // Theme logic
   useEffect(() => {
     if (!user) {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -108,47 +124,44 @@ function App() {
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme); 
-    
     if (user) {
         try {
             await updateTheme(user.id, newTheme);
             await refreshUser();
-        } catch (e) {
-            console.error("Failed to save theme preference", e);
-        }
+        } catch (e) { console.error(e); }
     }
   };
 
   const navigateToPage = useCallback((page: Page, params?: any) => {
       startTransition(() => {
+          const authorized = getAuthorizedPage(page, user);
           setPageParams(params || null);
-          setRequestedPage(page);
+          setActivePage(authorized);
       });
-  }, []);
+  }, [user, getAuthorizedPage]);
 
   const handleManualPageChange = useCallback((page: Page) => {
       startTransition(() => {
-          setPageParams(null); // Clear params on manual nav
-          setRequestedPage(page);
+          const authorized = getAuthorizedPage(page, user);
+          setPageParams(null);
+          setActivePage(authorized);
       });
-  }, []);
+  }, [user, getAuthorizedPage]);
 
   if (!isSupabaseConfigured) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4">
-        <div className="w-full max-w-2xl p-8 text-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-lg">
-          <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">Configuration Required</h1>
-          <p className="mt-4 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
-            Your Supabase URL and Key are needed to connect to the backend.
-          </p>
-        </div>
+      <div className="flex items-center justify-center h-[100dvh] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4 text-center">
+        <Card className="p-8 max-w-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Config Required</h1>
+          <p className="text-slate-500">Connect your Supabase instance to proceed.</p>
+        </Card>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
+      <div className="flex items-center justify-center h-[100dvh] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
         <Spinner />
       </div>
     );
@@ -158,25 +171,26 @@ function App() {
     return <LoginPage />;
   }
 
+  // Render Strategy: Direct switch without intermediate unmounting wrappers
   return (
     <Layout 
-        activePage={currentPage} 
+        activePage={activePage} 
         setActivePage={handleManualPageChange} 
         theme={theme} 
         toggleTheme={toggleTheme}
         isPending={isPending}
     >
-      {currentPage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
-      {currentPage === 'Notices' && <NoticeBoard />}
-      {currentPage === 'Help Desk' && <HelpDesk />}
-      {currentPage === 'Visitors' && <Visitors />}
-      {currentPage === 'Amenities' && <Amenities />}
-      {currentPage === 'Directory' && <Directory />}
-      {currentPage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
-      {currentPage === 'Expenses' && <Expenses />}
-      {currentPage === 'BulkOperations' && <BulkOperations />}
-      {currentPage === 'CommunitySetup' && <CommunitySetup onComplete={() => navigateToPage('Dashboard')} />}
-      {currentPage === 'Billing' && <Billing />}
+      {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
+      {activePage === 'Notices' && <NoticeBoard />}
+      {activePage === 'Help Desk' && <HelpDesk />}
+      {activePage === 'Visitors' && <Visitors />}
+      {activePage === 'Amenities' && <Amenities />}
+      {activePage === 'Directory' && <Directory />}
+      {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
+      {activePage === 'Expenses' && <Expenses />}
+      {activePage === 'BulkOperations' && <BulkOperations />}
+      {activePage === 'CommunitySetup' && <CommunitySetup onComplete={() => navigateToPage('Dashboard')} />}
+      {activePage === 'Billing' && <Billing />}
     </Layout>
   );
 }
