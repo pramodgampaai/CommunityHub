@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover" />
     <title>Nilayam | Community Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -58,11 +58,23 @@
         --border-dark: #26262b;
       }
 
+      html, body {
+        height: 100dvh;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
       body {
+        background-color: var(--bg-light);
         transition: background-color 0.4s ease;
         -webkit-font-smoothing: antialiased;
         letter-spacing: -0.01em;
+        touch-action: manipulation; /* Improves mobile responsiveness */
       }
+      
+      .dark body { background-color: var(--bg-dark); }
       
       .font-mono { font-family: 'Space Grotesk', monospace; }
 
@@ -92,17 +104,11 @@
         box-sizing: border-box;
       }
       
-      /* Ensure consistent height for all input types including date/time on iOS */
       input.input-field, select.input-field {
         height: 3.25rem;
         line-height: normal;
       }
 
-      textarea.input-field {
-        padding-top: 0.875rem;
-        padding-bottom: 0.875rem;
-      }
-      
       .dark .input-field {
         background-color: #1a1a1e;
         border: 1.5px solid #3f3f46;
@@ -113,22 +119,6 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
         outline: none;
-      }
-
-      .tracking-tight-title { letter-spacing: -0.03em; }
-      .tracking-wide-label { letter-spacing: 0.25em; }
-
-      /* Fix for datetime-local placeholder/text centering on Safari */
-      input[type="datetime-local"].input-field {
-        display: flex;
-        align-items: center;
-        padding-top: 0;
-        padding-bottom: 0;
-      }
-
-      ::selection {
-        background-color: rgba(20, 184, 166, 0.2);
-        color: var(--accent);
       }
 
       .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -144,6 +134,24 @@
         background: var(--accent);
         box-shadow: 0 0 8px var(--accent);
         animation: scan 2s linear infinite;
+      }
+
+      /* Navigation Progress Bar */
+      @keyframes progress {
+        0% { transform: translateX(-100%); }
+        50% { transform: translateX(-20%); }
+        100% { transform: translateX(0); }
+      }
+      .loading-progress {
+        height: 3px;
+        background: var(--accent);
+        width: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 9999;
+        transform-origin: left;
+        animation: progress 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
     </style>
     <script type="importmap">
@@ -164,7 +172,7 @@
 }
 </script>
   </head>
-  <body class="bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] font-sans text-[var(--text-light)] dark:text-[var(--text-dark)] overflow-x-hidden">
+  <body class="overflow-x-hidden">
     <div id="root"></div>
     <div id="modal-root"></div>
     <script type="module" src="/index.js"></script>

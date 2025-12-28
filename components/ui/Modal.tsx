@@ -46,11 +46,14 @@ const Modal: React.FC<ModalProps> = ({
       '2xl': 'max-w-2xl'
   };
 
+  // Fix: Cast motion.div to any to resolve property 'initial', 'animate', 'exit' missing errors in environments with broken lib types
+  const MotionDiv = motion.div as any;
+
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 overflow-hidden">
-          <motion.div 
+          <MotionDiv 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -59,13 +62,13 @@ const Modal: React.FC<ModalProps> = ({
             onClick={onClose} 
           />
           
-          <motion.div 
+          <MotionDiv 
             initial={{ opacity: 0, scale: 0.98, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 15 }}
             transition={{ type: "spring", damping: 25, stiffness: 350 }}
             className={`bg-white dark:bg-[var(--modal-bg-dark)] rounded-xl shadow-2xl w-full sm:${sizeClasses[size]} flex flex-col max-h-[90vh] relative z-10 border border-slate-100 dark:border-white/5 overflow-hidden`} 
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
           >
             <div className="flex justify-between items-start p-5 sm:p-6 pb-2 shrink-0">
               <div className="flex items-start gap-3">
@@ -99,7 +102,7 @@ const Modal: React.FC<ModalProps> = ({
                  {footer}
               </div>
             )}
-          </motion.div>
+          </MotionDiv>
         </div>
       )}
     </AnimatePresence>

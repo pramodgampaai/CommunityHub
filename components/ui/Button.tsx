@@ -46,8 +46,11 @@ const Button: React.FC<ButtonProps> = ({
       }) 
     : leftIcon;
 
+  // Fix: Cast motion.button to any to resolve property 'whileHover' and 'whileTap' missing errors in specific TS environments
+  const MotionButton = motion.button as any;
+
   return (
-    <motion.button 
+    <MotionButton 
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.98 }}
       className={`inline-flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shrink-0 select-none whitespace-nowrap overflow-hidden ${variantClasses[variant]} ${sizeClasses[size]} ${className}`} 
@@ -55,7 +58,7 @@ const Button: React.FC<ButtonProps> = ({
     >
       {renderedIcon}
       <span className="truncate leading-none">{children}</span>
-    </motion.button>
+    </MotionButton>
   );
 };
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useTransition, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/Login';
@@ -25,8 +25,8 @@ export type Theme = 'light' | 'dark';
 
 function App() {
   const { user, loading, refreshUser } = useAuth();
+  const [isPending, startTransition] = useTransition();
   
-  // requestedPage tracks what the user INTENDS to see
   const [requestedPage, setRequestedPage] = useState<Page>(() => {
       const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
@@ -35,21 +35,16 @@ function App() {
   const [pageParams, setPageParams] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>('light');
 
-  /**
-   * Synchronous Access Control Logic (Single Source of Truth)
-   * This determines the ACTUAL page to display in the current render cycle.
-   * By using this derived value directly in JSX, we avoid the double-render flicker.
-   */
   const currentPage = useMemo((): Page => {
     if (!user) return requestedPage;
 
-    // 1. Mandatory Setup Redirects
     const hasUnits = user.units && user.units.length > 0;
-    if ((user.role === UserRole.Admin || user.role === UserRole.Resident) && !hasUnits) {
+    const isSetupRequiredRole = user.role === UserRole.Admin || user.role === UserRole.Resident;
+    
+    if (isSetupRequiredRole && !hasUnits) {
         return 'CommunitySetup';
     }
 
-    // 2. Role-Based Page Access Enforcement
     const role = user.role;
     
     if (role === UserRole.SuperAdmin) {
@@ -88,12 +83,10 @@ function App() {
     return requestedPage;
   }, [user, requestedPage]);
 
-  // Persist the validated page
   useEffect(() => {
       localStorage.setItem('nilayam_last_page', currentPage);
   }, [currentPage]);
 
-  // Initial Theme Setup
   useEffect(() => {
     if (!user) {
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -106,7 +99,6 @@ function App() {
     }
   }, [user]);
 
-  // Apply theme class to HTML root
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
@@ -127,14 +119,23 @@ function App() {
     }
   };
 
-  const navigateToPage = (page: Page, params?: any) => {
-      setPageParams(params || null);
-      setRequestedPage(page);
-  };
+  const navigateToPage = useCallback((page: Page, params?: any) => {
+      startTransition(() => {
+          setPageParams(params || null);
+          setRequestedPage(page);
+      });
+  }, []);
+
+  const handleManualPageChange = useCallback((page: Page) => {
+      startTransition(() => {
+          setPageParams(null); // Clear params on manual nav
+          setRequestedPage(page);
+      });
+  }, []);
 
   if (!isSupabaseConfigured) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] p-4">
+      <div className="flex items-center justify-center h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4">
         <div className="w-full max-w-2xl p-8 text-center bg-[var(--card-bg-light)] dark:bg-[var(--card-bg-dark)] rounded-xl border border-[var(--border-light)] dark:border-[var(--border-dark)] shadow-lg">
           <h1 className="text-2xl font-bold text-red-600 dark:text-red-400">Configuration Required</h1>
           <p className="mt-4 text-[var(--text-secondary-light)] dark:text-[var(--text-secondary-dark)]">
@@ -157,9 +158,14 @@ function App() {
     return <LoginPage />;
   }
 
-  // We render based on currentPage (the validated version of requestedPage)
   return (
-    <Layout activePage={currentPage} setActivePage={setRequestedPage} theme={theme} toggleTheme={toggleTheme}>
+    <Layout 
+        activePage={currentPage} 
+        setActivePage={handleManualPageChange} 
+        theme={theme} 
+        toggleTheme={toggleTheme}
+        isPending={isPending}
+    >
       {currentPage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
       {currentPage === 'Notices' && <NoticeBoard />}
       {currentPage === 'Help Desk' && <HelpDesk />}
@@ -169,7 +175,7 @@ function App() {
       {currentPage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
       {currentPage === 'Expenses' && <Expenses />}
       {currentPage === 'BulkOperations' && <BulkOperations />}
-      {currentPage === 'CommunitySetup' && <CommunitySetup onComplete={() => setRequestedPage('Dashboard')} />}
+      {currentPage === 'CommunitySetup' && <CommunitySetup onComplete={() => navigateToPage('Dashboard')} />}
       {currentPage === 'Billing' && <Billing />}
     </Layout>
   );

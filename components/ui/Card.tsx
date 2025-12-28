@@ -24,8 +24,11 @@ const Card: React.FC<CardProps> = ({
   onDragEnd,
   ...props 
 }) => {
+  // Fix: Cast motion.div to any to resolve property 'layout' and motion-specific props missing errors
+  const MotionDiv = motion.div as any;
+
   return (
-    <motion.div
+    <MotionDiv
       layout={layout}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -43,7 +46,7 @@ const Card: React.FC<CardProps> = ({
       {...props}
     >
       {children}
-    </motion.div>
+    </MotionDiv>
   );
 };
 
