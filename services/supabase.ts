@@ -4,33 +4,22 @@ import { createClient } from '@supabase/supabase-js';
 /**
  * Supabase Configuration Logic
  * 
- * Safe access to process.env for browser environments.
- * Falls back to hardcoded credentials for Preview/Local modes.
+ * We use direct references to process.env variables so that the bundler (esbuild)
+ * can perform static text replacement during the build process.
  */
 
-const getEnvVar = (key: string): string | undefined => {
-  try {
-    // Standard Node/CRA/Vite environment check
-    if (typeof process !== 'undefined' && process.env && process.env[key]) {
-      return process.env[key];
-    }
-  } catch (e) {
-    // Ignore errors in environments where process is restricted
-  }
-  return undefined;
-};
+// These literals will be replaced by esbuild's --define flags during build
+const envUrl = process.env.VITE_SUPABASE_URL;
+const envKey = process.env.VITE_SUPABASE_KEY;
 
-const envUrl = getEnvVar('VITE_SUPABASE_URL');
-const envKey = getEnvVar('VITE_SUPABASE_KEY');
-
-// Fallback credentials for preview mode
+// Fallback credentials for local/preview mode if build-time variables are missing
 const fallbackUrl = "";
 const fallbackKey = "";
 
 /**
  * Validates if a string is a legitimate configuration value.
  */
-const isValid = (val: string | undefined): boolean => {
+const isValid = (val: any): boolean => {
   if (!val) return false;
   const v = String(val).trim();
   if (v === "" || v === "undefined" || v === "null") return false;
@@ -46,12 +35,9 @@ const isValid = (val: string | undefined): boolean => {
 export const isSupabaseConfigured = isValid(envUrl) || isValid(fallbackUrl);
 
 // Resolve final credentials
-const supabaseUrl = isValid(envUrl) ? envUrl! : fallbackUrl;
-export const supabaseKey = isValid(envKey) ? envKey! : fallbackKey;
+const supabaseUrl = isValid(envUrl) ? envUrl! : (isValid(fallbackUrl) ? fallbackUrl : 'https://placeholder.supabase.co');
+export const supabaseKey = isValid(envKey) ? envKey! : (isValid(fallbackKey) ? fallbackKey : 'placeholder-key');
 export const supabaseProjectUrl = supabaseUrl;
 
-// Initialize client with a safety fallback to a dummy URL to prevent crashes if both are invalid
-export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://placeholder.supabase.co',
-  isSupabaseConfigured ? supabaseKey : 'placeholder-key'
-);
+// Initialize client
+export const supabase = createClient(supabaseUrl, supabaseKey);
