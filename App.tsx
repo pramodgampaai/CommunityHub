@@ -26,22 +26,72 @@ export type Theme = 'light' | 'dark';
 function App() {
   const { user, loading, refreshUser } = useAuth();
   
-  // Initialize activePage from localStorage
-  const [activePage, setActivePage] = useState<Page>(() => {
+  // requestedPage tracks what the user INTENDS to see
+  const [requestedPage, setRequestedPage] = useState<Page>(() => {
       const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
   });
   
   const [pageParams, setPageParams] = useState<any>(null);
-  
-  // Persist the active page
-  useEffect(() => {
-      if (activePage) {
-          localStorage.setItem('nilayam_last_page', activePage);
-      }
-  }, [activePage]);
-  
   const [theme, setTheme] = useState<Theme>('light');
+
+  /**
+   * Synchronous Access Control Logic (Single Source of Truth)
+   * This determines the ACTUAL page to display in the current render cycle.
+   * By using this derived value directly in JSX, we avoid the double-render flicker.
+   */
+  const currentPage = useMemo((): Page => {
+    if (!user) return requestedPage;
+
+    // 1. Mandatory Setup Redirects
+    const hasUnits = user.units && user.units.length > 0;
+    if ((user.role === UserRole.Admin || user.role === UserRole.Resident) && !hasUnits) {
+        return 'CommunitySetup';
+    }
+
+    // 2. Role-Based Page Access Enforcement
+    const role = user.role;
+    
+    if (role === UserRole.SuperAdmin) {
+        return ['Dashboard', 'Billing'].includes(requestedPage) ? requestedPage : 'Dashboard';
+    }
+
+    if (role === UserRole.HelpdeskAgent) {
+        return ['Notices', 'Help Desk'].includes(requestedPage) ? requestedPage : 'Help Desk';
+    }
+
+    if (role === UserRole.HelpdeskAdmin) {
+        return ['Notices', 'Help Desk', 'Directory'].includes(requestedPage) ? requestedPage : 'Help Desk';
+    }
+
+    if (role === UserRole.SecurityAdmin) {
+        return ['Notices', 'Visitors', 'Directory'].includes(requestedPage) ? requestedPage : 'Visitors';
+    }
+
+    if (role === UserRole.Security) {
+        return ['Notices', 'Visitors'].includes(requestedPage) ? requestedPage : 'Visitors';
+    }
+
+    if (role === UserRole.Tenant) {
+        return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(requestedPage) ? requestedPage : 'Notices';
+    }
+
+    if (role === UserRole.Resident) {
+        const forbidden = ['Billing', 'BulkOperations', 'CommunitySetup'];
+        return forbidden.includes(requestedPage) ? 'Dashboard' : requestedPage;
+    }
+
+    if (role === UserRole.Admin) {
+        return requestedPage === 'Billing' ? 'Dashboard' : requestedPage;
+    }
+
+    return requestedPage;
+  }, [user, requestedPage]);
+
+  // Persist the validated page
+  useEffect(() => {
+      localStorage.setItem('nilayam_last_page', currentPage);
+  }, [currentPage]);
 
   // Initial Theme Setup
   useEffect(() => {
@@ -56,80 +106,16 @@ function App() {
     }
   }, [user]);
 
-  // Apply theme to DOM
+  // Apply theme class to HTML root
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
   }, [theme]);
 
-  /**
-   * Synchronous Access Control Logic
-   * We calculate the "Real" page the user should be on based on their data.
-   * This prevents the "Double Load" by ensuring we never render a restricted page
-   * even for a single frame.
-   */
-  const resolvedPage = useMemo((): Page => {
-    if (!user) return activePage;
-
-    // 1. Mandatory Setup Redirects (No more async check here)
-    // We check user.units directly which is populated by useAuth
-    const hasUnits = user.units && user.units.length > 0;
-    
-    // Admins and Residents MUST have units to use the app
-    if ((user.role === UserRole.Admin || user.role === UserRole.Resident) && !hasUnits) {
-        return 'CommunitySetup';
-    }
-
-    // 2. Role-Based Page Access
-    const role = user.role;
-    
-    if (role === UserRole.SuperAdmin) {
-        return ['Dashboard', 'Billing'].includes(activePage) ? activePage : 'Dashboard';
-    }
-
-    if (role === UserRole.HelpdeskAgent) {
-        return ['Notices', 'Help Desk'].includes(activePage) ? activePage : 'Help Desk';
-    }
-
-    if (role === UserRole.HelpdeskAdmin) {
-        return ['Notices', 'Help Desk', 'Directory'].includes(activePage) ? activePage : 'Help Desk';
-    }
-
-    if (role === UserRole.SecurityAdmin) {
-        return ['Notices', 'Visitors', 'Directory'].includes(activePage) ? activePage : 'Visitors';
-    }
-
-    if (role === UserRole.Security) {
-        return ['Notices', 'Visitors'].includes(activePage) ? activePage : 'Visitors';
-    }
-
-    if (role === UserRole.Tenant) {
-        return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(activePage) ? activePage : 'Notices';
-    }
-
-    if (role === UserRole.Resident) {
-        const forbidden = ['Billing', 'BulkOperations', 'CommunitySetup'];
-        return forbidden.includes(activePage) ? 'Dashboard' : activePage;
-    }
-
-    if (role === UserRole.Admin) {
-        return activePage === 'Billing' ? 'Dashboard' : activePage;
-    }
-
-    return activePage;
-  }, [user, activePage]);
-
-  // If the memoized logic determines we should be elsewhere, sync the state immediately
-  useEffect(() => {
-      if (user && resolvedPage !== activePage) {
-          setActivePage(resolvedPage);
-      }
-  }, [resolvedPage, activePage, user]);
-
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme); // Optimistic UI update
+    setTheme(newTheme); 
     
     if (user) {
         try {
@@ -143,7 +129,7 @@ function App() {
 
   const navigateToPage = (page: Page, params?: any) => {
       setPageParams(params || null);
-      setActivePage(page);
+      setRequestedPage(page);
   };
 
   if (!isSupabaseConfigured) {
@@ -171,20 +157,20 @@ function App() {
     return <LoginPage />;
   }
 
-  // Render Section
+  // We render based on currentPage (the validated version of requestedPage)
   return (
-    <Layout activePage={activePage} setActivePage={setActivePage} theme={theme} toggleTheme={toggleTheme}>
-      {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
-      {activePage === 'Notices' && <NoticeBoard />}
-      {activePage === 'Help Desk' && <HelpDesk />}
-      {activePage === 'Visitors' && <Visitors />}
-      {activePage === 'Amenities' && <Amenities />}
-      {activePage === 'Directory' && <Directory />}
-      {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
-      {activePage === 'Expenses' && <Expenses />}
-      {activePage === 'BulkOperations' && <BulkOperations />}
-      {activePage === 'CommunitySetup' && <CommunitySetup onComplete={() => setActivePage('Dashboard')} />}
-      {activePage === 'Billing' && <Billing />}
+    <Layout activePage={currentPage} setActivePage={setRequestedPage} theme={theme} toggleTheme={toggleTheme}>
+      {currentPage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
+      {currentPage === 'Notices' && <NoticeBoard />}
+      {currentPage === 'Help Desk' && <HelpDesk />}
+      {currentPage === 'Visitors' && <Visitors />}
+      {currentPage === 'Amenities' && <Amenities />}
+      {currentPage === 'Directory' && <Directory />}
+      {currentPage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
+      {currentPage === 'Expenses' && <Expenses />}
+      {currentPage === 'BulkOperations' && <BulkOperations />}
+      {currentPage === 'CommunitySetup' && <CommunitySetup onComplete={() => setRequestedPage('Dashboard')} />}
+      {currentPage === 'Billing' && <Billing />}
     </Layout>
   );
 }
