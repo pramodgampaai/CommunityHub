@@ -28,7 +28,11 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
 
   useEffect(() => {
     // HYDRATION GUARD: Don't fetch if the user profile isn't fully ready yet
-    if (!user?.communityId || isFetchingRef.current) return;
+    // SuperAdmins might not have a communityId, but they also shouldn't really land here
+    if (!user?.communityId || isFetchingRef.current) {
+        if (user?.role === UserRole.SuperAdmin) setLoading(false);
+        return;
+    }
     
     isFetchingRef.current = true;
     const controller = new AbortController();
@@ -120,7 +124,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
               <div>
                   <span className="text-[8px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Live Status</span>
                   <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight leading-tight">Welcome, {user?.name.split(' ')[0]}.</h1>
-                  <p className="text-sm text-slate-500 font-medium">Community: <span className="font-bold text-brand-600">{user?.communityName}</span></p>
+                  <p className="text-sm text-slate-500 font-medium">Community: <span className="font-bold text-brand-600">{user?.communityName || 'Global Access'}</span></p>
               </div>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">

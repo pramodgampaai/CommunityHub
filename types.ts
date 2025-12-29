@@ -81,7 +81,9 @@ export interface Unit {
     flatNumber: string;
     block?: string;
     floor?: number;
+    // Fix: Changed flat_size to flatSize to resolve property missing errors in components
     flatSize?: number;
+    // Fix: Changed maintenance_start_date to maintenanceStartDate to resolve property missing errors in components
     maintenanceStartDate?: string;
 }
 
@@ -307,4 +309,4 @@ export interface AuditLog {
     };
 }
 
-export type Page = 'Dashboard' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';
+export type Page = 'Dashboard' | 'AdminPanel' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';

@@ -167,10 +167,10 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     const response = await callEdgeFunction('get-directory', { community_id: communityId });
     const data = response?.data || [];
     return data.map((u: any) => {
-        const units = u.units ? u.units.map((unit: any) => ({
+        const units: Unit[] = u.units ? u.units.map((unit: any) => ({
             id: unit.id, userId: unit.user_id, communityId: unit.community_id,
             flatNumber: unit.flat_number, block: unit.block, floor: unit.floor,
-            flatSize: Number(unit.flat_size) || 0, maintenance_start_date: unit.maintenance_start_date
+            flatSize: Number(unit.flat_size) || 0, maintenanceStartDate: unit.maintenance_start_date
         })) : [];
         let displayFlatNumber = u.flat_number;
         if (units.length > 0) {
@@ -205,7 +205,30 @@ export const getCommunity = async (id: string): Promise<Community> => {
 
 export const getCommunityStats = async (): Promise<CommunityStat[]> => {
     const result = await callEdgeFunction('get-community-stats', {});
-    return result?.data || [];
+    const data = result?.data || [];
+    
+    // Fix: Map the raw database response to the CommunityStat interface
+    // ensuring pricePerUser, communityType, etc. are properly populated.
+    return data.map((stat: any) => ({
+        id: stat.id,
+        name: stat.name,
+        address: stat.address,
+        status: stat.status,
+        communityType: stat.community_type,
+        blocks: stat.blocks,
+        maintenanceRate: Number(stat.maintenance_rate) || 0,
+        fixedMaintenanceAmount: Number(stat.fixed_maintenance_amount) || 0,
+        contacts: stat.contact_info,
+        subscriptionType: stat.subscription_type,
+        subscriptionStartDate: stat.subscription_start_date,
+        pricePerUser: stat.pricing_config,
+        // Aggregated counts from the Edge Function
+        resident_count: Number(stat.resident_count) || 0,
+        admin_count: Number(stat.admin_count) || 0,
+        staff_count: Number(stat.staff_count) || 0,
+        current_month_paid: Number(stat.current_month_paid) || 0,
+        income_generated: Number(stat.income_generated) || 0
+    }));
 };
 
 export const createCommunity = (data: any) => supabase.from('communities').insert(data).select().single();

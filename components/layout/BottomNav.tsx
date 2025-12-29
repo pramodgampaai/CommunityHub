@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon, Cog6ToothIcon, ClipboardDocumentListIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon, Cog6ToothIcon, ClipboardDocumentListIcon, Squares2X2Icon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -12,6 +12,7 @@ interface BottomNavProps {
 
 const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; label: string }[] = [
     { name: 'Dashboard', icon: HomeIcon, label: 'Home' },
+    { name: 'AdminPanel', icon: Squares2X2Icon, label: 'Portal' },
     { name: 'BulkOperations', icon: ClipboardDocumentListIcon, label: 'Bulk Ops' },
     { name: 'Notices', icon: BellIcon, label: 'Notices' },
     { name: 'Help Desk', icon: ShieldCheckIcon, label: 'Help' },
@@ -28,14 +29,14 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
   const { user } = useAuth();
 
   const filteredNavItems = navItems.filter(item => {
-    if (user?.role === UserRole.SuperAdmin) return ['Dashboard', 'Billing'].includes(item.name);
+    if (user?.role === UserRole.SuperAdmin) return ['AdminPanel', 'Billing'].includes(item.name);
     if (user?.role === UserRole.HelpdeskAgent) return ['Notices', 'Help Desk'].includes(item.name);
     if (user?.role === UserRole.HelpdeskAdmin) return ['Notices', 'Help Desk', 'Directory'].includes(item.name);
     if (user?.role === UserRole.SecurityAdmin) return ['Notices', 'Visitors', 'Directory'].includes(item.name);
     if (user?.role === UserRole.Security) return ['Notices', 'Visitors'].includes(item.name);
     if (user?.role === UserRole.Tenant) return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(item.name);
     if (user?.role === UserRole.Admin) return item.name !== 'Billing';
-    return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations';
+    return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations' && item.name !== 'AdminPanel';
   });
 
   return (

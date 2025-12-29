@@ -47,7 +47,7 @@ function App() {
     const requested = requestedPage;
 
     if (role === UserRole.SuperAdmin) {
-        return ['Dashboard', 'Billing'].includes(requested) ? requested : 'Dashboard';
+        return ['AdminPanel', 'Billing'].includes(requested) ? requested : 'AdminPanel';
     }
     if (role === UserRole.HelpdeskAgent) {
         return ['Notices', 'Help Desk'].includes(requested) ? requested : 'Help Desk';
@@ -159,6 +159,7 @@ function App() {
     >
       <div className="gpu-accelerated min-h-full">
           {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
+          {activePage === 'AdminPanel' && <AdminPanel />}
           {activePage === 'Notices' && <NoticeBoard />}
           {activePage === 'Help Desk' && <HelpDesk />}
           {activePage === 'Visitors' && <Visitors />}
