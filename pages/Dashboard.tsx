@@ -15,13 +15,12 @@ import Button from '../components/ui/Button';
  */
 const useCountUp = (end: number, duration: number = 2) => {
     const [count, setCount] = useState(0);
-    const prevEndRef = useRef(end);
 
     useEffect(() => {
         if (end === count) return;
         
         let startTimestamp: number | null = null;
-        const startValue = count; // Continue from current value to avoid jarring jumps
+        const startValue = count; 
         
         const step = (timestamp: number) => {
             if (!startTimestamp) startTimestamp = timestamp;
@@ -35,7 +34,8 @@ const useCountUp = (end: number, duration: number = 2) => {
             }
         };
 
-        window.requestAnimationFrame(step);
+        const animationId = window.requestAnimationFrame(step);
+        return () => window.cancelAnimationFrame(animationId);
     }, [end]);
 
     return count;
@@ -57,36 +57,62 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
 
   useEffect(() => {
     if (!user?.communityId) return;
+    
+    // Create an AbortController for this fetch cycle
+    const controller = new AbortController();
+    let isMounted = true;
+
     const fetchData = async () => {
       try {
         setLoading(true);
         const promises: Promise<any>[] = [
-            getNotices(user.communityId),
-            getComplaints(user.communityId, user.id, user.role),
-            getVisitors(user.communityId, user.role),
-            getMaintenanceRecords(user.communityId, isAdmin ? undefined : user.id)
+            getNotices(user.communityId, controller.signal),
+            getComplaints(user.communityId, user.id, user.role, controller.signal),
+            getVisitors(user.communityId, user.role, controller.signal),
+            getMaintenanceRecords(user.communityId, isAdmin ? undefined : user.id, controller.signal)
         ];
-        if (isAdmin) promises.push(getExpenses(user.communityId));
+        if (isAdmin) promises.push(getExpenses(user.communityId, controller.signal));
+        
         const results = await Promise.all(promises);
-        setNotices(results[0]);
-        setComplaints(results[1]);
-        setVisitors(results[2]);
-        const records: MaintenanceRecord[] = results[3];
-        let lifetime = 0, myDues = 0, pendingVerifications = 0;
-        records.forEach(r => {
-            if (r.status === MaintenanceStatus.Paid) lifetime += Number(r.amount);
-            else if (r.userId === user.id && r.status === MaintenanceStatus.Pending) myDues += Number(r.amount);
-            if (r.status === MaintenanceStatus.Submitted) pendingVerifications++;
-        });
-        setMaintenanceStats({ lifetimeCollected: lifetime, myDues, pendingVerifications });
+        
+        // Only update state if the component is still mounted and the request wasn't aborted
+        if (!isMounted) return;
+
+        if (results[0]) setNotices(results[0]);
+        if (results[1]) setComplaints(results[1]);
+        if (results[2]) setVisitors(results[2]);
+        
+        if (results[3]) {
+            const records: MaintenanceRecord[] = results[3];
+            let lifetime = 0, myDues = 0, pendingVerifications = 0;
+            records.forEach(r => {
+                if (r.status === MaintenanceStatus.Paid) lifetime += Number(r.amount);
+                else if (r.userId === user.id && r.status === MaintenanceStatus.Pending) myDues += Number(r.amount);
+                if (r.status === MaintenanceStatus.Submitted) pendingVerifications++;
+            });
+            setMaintenanceStats({ lifetimeCollected: lifetime, myDues, pendingVerifications });
+        }
+
         if (isAdmin && results[4]) {
             const expenses: Expense[] = results[4];
             const total = expenses.filter(e => e.status === ExpenseStatus.Approved).reduce((sum, e) => sum + e.amount, 0);
             setExpenseStats({ totalExpenses: total });
         }
-      } catch (err: any) { setError(err.message || 'Sync failed'); } finally { setLoading(false); }
+      } catch (err: any) { 
+          if (err.name !== 'AbortError' && isMounted) {
+            setError(err.message || 'Sync failed'); 
+          }
+      } finally { 
+          if (isMounted) setLoading(false); 
+      }
     };
+
     fetchData();
+
+    return () => {
+        isMounted = false;
+        controller.abort(); // Cancel ongoing requests if user navigates away
+    };
   }, [user, isAdmin]);
 
   if (loading) return (
@@ -153,7 +179,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
           <div className="lg:col-span-7 space-y-3">
               <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">Announcements</h3>
               {latestNotice ? (
-                  <Card className="p-5 group rounded-2xl border border-slate-100 dark:border-white/5 bg-white dark:bg-zinc-900/40">
+                  <Card key={latestNotice.id} className="p-5 group rounded-2xl border border-slate-100 dark:border-white/5 bg-white dark:bg-zinc-900/40">
                       <div className="flex items-center gap-2 mb-3">
                            <span className="bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md">{latestNotice.type}</span>
                            <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{new Date(latestNotice.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
