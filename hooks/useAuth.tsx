@@ -49,7 +49,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           flatNumber: primaryUnit ? primaryUnit.flatNumber : userProfile.flat_number,
           role: resolvedRole, communityId: userProfile.community_id,
           communityName: userProfile.community_name || (userProfile.role === UserRole.SuperAdmin ? 'Platform' : 'Community'),
-          status: userProfile.status || 'active', units: mappedUnits, theme: userProfile.theme
+          status: userProfile.status || 'active', units: mappedUnits, theme: userProfile.theme,
+          // Mapped profile_data to tenantDetails and profile_data to fix errors
+          tenantDetails: userProfile.profile_data,
+          profile_data: userProfile.profile_data
       };
   };
 

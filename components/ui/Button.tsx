@@ -6,6 +6,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'filled' | 'outlined' | 'fab' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   leftIcon?: React.ReactNode;
+  // Added rightIcon property to fix error in CommunitySetup.tsx where it was used but not defined in props
+  rightIcon?: React.ReactNode;
 }
 
 // Destructure motion-conflicting props from the spread to avoid TypeScript errors with framer-motion
@@ -14,6 +16,8 @@ const Button: React.FC<ButtonProps> = ({
   variant = 'filled', 
   size = 'md', 
   leftIcon, 
+  // Added rightIcon to the destructured properties
+  rightIcon,
   className = '', 
   onAnimationStart,
   onDrag,
@@ -40,11 +44,16 @@ const Button: React.FC<ButtonProps> = ({
     lg: 'w-5 h-5'
   };
   
-  const renderedIcon = leftIcon && React.isValidElement(leftIcon) 
-    ? React.cloneElement(leftIcon as React.ReactElement<any>, { 
-        className: `shrink-0 ${iconSizes[size]} transition-transform` 
-      }) 
-    : leftIcon;
+  // Helper function to render icons with consistent sizing and classes
+  const renderIcon = (icon: React.ReactNode) => 
+    icon && React.isValidElement(icon) 
+      ? React.cloneElement(icon as React.ReactElement<any>, { 
+          className: `shrink-0 ${iconSizes[size]} transition-transform` 
+        }) 
+      : icon;
+
+  const renderedLeftIcon = renderIcon(leftIcon);
+  const renderedRightIcon = renderIcon(rightIcon);
 
   // Fix: Cast motion.button to any to resolve property 'whileHover' and 'whileTap' missing errors in specific TS environments
   const MotionButton = motion.button as any;
@@ -56,8 +65,9 @@ const Button: React.FC<ButtonProps> = ({
       className={`inline-flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shrink-0 select-none whitespace-nowrap overflow-hidden ${variantClasses[variant]} ${sizeClasses[size]} ${className}`} 
       {...props}
     >
-      {renderedIcon}
+      {renderedLeftIcon}
       <span className="truncate leading-none">{children}</span>
+      {renderedRightIcon}
     </MotionButton>
   );
 };

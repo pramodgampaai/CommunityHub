@@ -40,9 +40,15 @@ serve(async (req: any) => {
         throw new Error("Missing required fields");
     }
 
-    console.log(`Assigning unit for user ${userId} in community ${communityId}. Type: Standalone check incoming.`);
+    console.log(`Processing unit assignment for user ${userId} in community ${communityId}.`);
 
-    // 1. Insert Unit (Service Role bypasses RLS)
+    // 1. CLEANUP PREVIOUS ATTEMPTS (Idempotency)
+    // Delete any existing maintenance records or units for this user in this community
+    // This ensures that if the setup is re-run, we don't have duplicates or constraint errors.
+    await supabaseClient.from('maintenance_records').delete().eq('user_id', userId).eq('community_id', communityId);
+    await supabaseClient.from('units').delete().eq('user_id', userId).eq('community_id', communityId);
+
+    // 2. Insert Unit
     const { data: unit, error: unitError } = await supabaseClient
         .from('units')
         .insert({
@@ -59,7 +65,7 @@ serve(async (req: any) => {
 
     if (unitError) throw unitError;
 
-    // 2. Fetch Community for Rates
+    // 3. Fetch Community for Rates
     const { data: community, error: comError } = await supabaseClient
         .from('communities')
         .select('*')
@@ -68,7 +74,7 @@ serve(async (req: any) => {
     
     if (comError || !community) throw new Error('Community not found');
 
-    // 3. Maintenance Logic
+    // 4. Maintenance Logic
     let monthlyAmount = 0;
     const rawType = community.community_type || '';
     const type = rawType.toLowerCase();
@@ -76,7 +82,7 @@ serve(async (req: any) => {
     const fixedAmount = Number(community.fixed_maintenance_amount) || 0;
     const rate = Number(community.maintenance_rate) || 0;
 
-    // Robust Standalone Detection: Check string OR check if only fixed amount is present
+    // Robust Standalone Detection
     const isStandalone = type.includes('standalone') || (fixedAmount > 0 && rate === 0);
 
     if (isStandalone) {
@@ -88,7 +94,6 @@ serve(async (req: any) => {
     }
 
     if (monthlyAmount > 0 && unitData.maintenanceStartDate) {
-        // Robust Date Parsing (YYYY-MM-DD to UTC)
         const parts = unitData.maintenanceStartDate.split('-');
         if (parts.length === 3) {
             const startYear = parseInt(parts[0]);
@@ -96,12 +101,9 @@ serve(async (req: any) => {
             const startDay = parseInt(parts[2]);
 
             const now = new Date();
-            // Server 'current month' period start
             let currentPeriodDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-            // User 'start date' period start
             let iterDate = new Date(Date.UTC(startYear, startMonth, 1));
             
-            // Fix for Timezone Drifts: 
             if (iterDate > currentPeriodDate) {
                 currentPeriodDate = new Date(iterDate);
             }
@@ -111,7 +113,6 @@ serve(async (req: any) => {
             while (iterDate <= currentPeriodDate) {
                 let finalAmount = monthlyAmount;
 
-                // Pro-rata check: If we are in the exact start month
                 if (iterDate.getUTCFullYear() === startYear && iterDate.getUTCMonth() === startMonth) {
                     const daysInMonth = new Date(Date.UTC(startYear, startMonth + 1, 0)).getUTCDate();
                     const daysRemaining = daysInMonth - startDay + 1;
@@ -137,13 +138,10 @@ serve(async (req: any) => {
             }
 
             if (newRecords.length > 0) {
-                console.log(`Generating ${newRecords.length} maintenance records for user.`);
                 const { error: recordsError } = await supabaseClient.from('maintenance_records').insert(newRecords);
                 if (recordsError) throw recordsError;
             }
         }
-    } else {
-        console.warn(`Skipping record generation: monthlyAmount is ${monthlyAmount} or startDate is missing.`);
     }
 
     return new Response(

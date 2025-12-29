@@ -65,11 +65,13 @@ function App() {
         return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(requested) ? requested : 'Notices';
     }
     if (role === UserRole.Resident) {
-        const forbidden: Page[] = ['Billing', 'BulkOperations', 'CommunitySetup'];
+        const forbidden: Page[] = ['Billing', 'BulkOperations', 'CommunitySetup', 'AdminPanel'];
         return forbidden.includes(requested) ? 'Dashboard' : requested;
     }
     if (role === UserRole.Admin) {
-        return requested === 'Billing' ? 'Dashboard' : requested;
+        // Restricted both Billing and AdminPanel (Communities) for Property Admins
+        const forbidden: Page[] = ['Billing', 'AdminPanel'];
+        return forbidden.includes(requested) ? 'Dashboard' : requested;
     }
 
     return requested;

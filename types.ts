@@ -4,16 +4,16 @@ export enum UserRole {
   Admin = 'Admin',
   Resident = 'Resident',
   Security = 'Security',
-  HelpdeskAdmin = 'HelpdeskAdmin', // Previously Helpdesk, Acts as Helpdesk Admin
-  HelpdeskAgent = 'HelpdeskAgent', // Acts as Worker
-  SecurityAdmin = 'SecurityAdmin', // Manages Security Guards
-  Tenant = 'Tenant', // New Role
+  HelpdeskAdmin = 'HelpdeskAdmin',
+  HelpdeskAgent = 'HelpdeskAgent',
+  SecurityAdmin = 'SecurityAdmin',
+  Tenant = 'Tenant',
 }
 
 export interface Block {
     name: string;
     floorCount: number;
-    unitsPerFloor?: number; // For Standalone metadata
+    unitsPerFloor?: number;
 }
 
 export type CommunityType = 'High-Rise Apartment' | 'Standalone Apartment' | 'Gated Community Villa' | 'Standalone' | 'Gated';
@@ -31,6 +31,13 @@ export interface CommunityPricing {
     staff: number;
 }
 
+export interface PendingBalanceUpdate {
+    amount: number;
+    reason: string;
+    requesterId: string;
+    requesterName: string;
+}
+
 export interface Community {
   id: string;
   name: string;
@@ -38,23 +45,18 @@ export interface Community {
   status: 'active' | 'disabled';
   communityType?: CommunityType;
   blocks?: Block[];
-  maintenanceRate?: number; // Legacy/Current Snapshot
-  fixedMaintenanceAmount?: number; // Legacy/Current Snapshot
+  maintenanceRate?: number;
+  fixedMaintenanceAmount?: number;
   
-  // New Fields
+  // opening balance logic
+  openingBalance?: number;
+  openingBalanceLocked?: boolean;
+  pendingBalanceUpdate?: PendingBalanceUpdate | null;
+
   contacts?: CommunityContact[];
   subscriptionType?: 'Monthly' | 'Yearly';
   subscriptionStartDate?: string;
   pricePerUser?: CommunityPricing;
-}
-
-export interface MaintenanceConfiguration {
-    id: string;
-    communityId: string;
-    maintenanceRate: number;
-    fixedMaintenanceAmount: number;
-    effectiveDate: string;
-    createdAt: string;
 }
 
 export interface CommunityStat extends Community {
@@ -62,16 +64,9 @@ export interface CommunityStat extends Community {
     admin_count: number;
     helpdesk_count: number;
     security_count: number;
-    staff_count: number; // Aggregate of all staff roles for billing
+    staff_count: number;
     income_generated: number;
-    current_month_paid?: number; // New field for billing status
-}
-
-export interface FinancialHistory {
-    year: number;
-    totalCollected: number;
-    monthlyBreakdown: { month: string; amount: number; transactionCount: number }[];
-    communityBreakdown: { communityName: string; totalPaid: number }[];
+    current_month_paid?: number;
 }
 
 export interface Unit {
@@ -81,26 +76,25 @@ export interface Unit {
     flatNumber: string;
     block?: string;
     floor?: number;
-    // Fix: Changed flat_size to flatSize to resolve property missing errors in components
     flatSize?: number;
-    // Fix: Changed maintenance_start_date to maintenanceStartDate to resolve property missing errors in components
     maintenanceStartDate?: string;
 }
 
+// Added TenantProfile interface to fix errors in Directory.tsx
 export interface TenantProfile {
     aadharNumber: string;
     panNumber: string;
-    aadharUrl?: string; // Base64 or URL
-    panUrl?: string;    // Base64 or URL
-    workInfo: {
-        companyName: string;
-        designation: string;
-        officeAddress?: string;
-    };
+    aadharUrl?: string;
+    panUrl?: string;
     maritalStatus: 'Single' | 'Married';
     spouseName?: string;
-    kidsCount?: number;
-    kidsDetails?: string; // Simple text summary for now
+    kidsCount: number;
+    workInfo: {
+        companyName: string;
+        designation?: string;
+        officeAddress?: string;
+    };
+    is_tenant?: boolean;
 }
 
 export interface User {
@@ -108,16 +102,16 @@ export interface User {
   name: string;
   email: string;
   avatarUrl: string;
-  // Legacy fields for backward compatibility or Staff location
   flatNumber?: string; 
   role: UserRole;
   communityId?: string;
-  communityName?: string; // Display name of the community
+  communityName?: string;
   status: 'active' | 'disabled';
-  units?: Unit[]; // One-to-Many relationship
-  maintenanceStartDate?: string; // Legacy field
+  units?: Unit[];
   theme?: 'light' | 'dark';
-  tenantDetails?: TenantProfile; // Optional profile data for tenants
+  // Added tenantDetails and profile_data to fix errors in Directory.tsx and useAuth.tsx
+  tenantDetails?: TenantProfile;
+  profile_data?: any;
 }
 
 export enum NoticeType {
@@ -135,6 +129,7 @@ export interface Notice {
   createdAt: string;
   type: NoticeType;
   communityId: string;
+  // Added optional validFrom and validUntil to fix errors in NoticeBoard.tsx
   validFrom?: string;
   validUntil?: string;
 }
@@ -166,17 +161,17 @@ export interface Complaint {
   category: ComplaintCategory;
   userId: string;
   communityId: string;
-  assignedTo?: string; // User ID of the agent
-  assignedToName?: string; // Name of the agent (for display)
+  assignedTo?: string;
+  assignedToName?: string;
 }
 
 export enum VisitorStatus {
-    PendingApproval = 'Pending Approval', // Created by Security, waiting for Resident
-    Expected = 'Expected', // Created by Resident OR Approved by Resident
-    CheckedIn = 'Checked In', // Inside premises
-    CheckedOut = 'Checked Out', // Left premises
-    Denied = 'Denied', // Rejected by Resident or Security
-    Expired = 'Expired' // Did not arrive on time
+    PendingApproval = 'Pending Approval',
+    Expected = 'Expected',
+    CheckedIn = 'Checked In',
+    CheckedOut = 'Checked Out',
+    Denied = 'Denied',
+    Expired = 'Expired'
 }
 
 export enum VisitorType {
@@ -191,23 +186,17 @@ export interface Visitor {
   name: string;
   visitorType: VisitorType;
   vehicleNumber?: string;
-  purpose: string; // Optional if type is specific
+  purpose: string;
   status: VisitorStatus;
-  
-  // Timing
-  expectedAt: string; // ISO String
-  validUntil?: string; // ISO String - Entry expiry
-  entryTime?: string; // ISO String
-  exitTime?: string; // ISO String
-  
-  // Security
-  entryToken?: string; // Secure random string for QR Code
-  
-  // Relations
+  expectedAt: string;
+  validUntil?: string;
+  entryTime?: string;
+  exitTime?: string;
+  entryToken?: string;
   residentName: string;
   flatNumber: string;
   communityId: string;
-  userId?: string; // ID of the resident being visited
+  userId?: string;
 }
 
 export interface Amenity {
@@ -217,8 +206,8 @@ export interface Amenity {
   imageUrl: string;
   capacity: number;
   communityId: string;
-  maxDuration?: number; // Max duration in hours (0 or null = unlimited)
-  status?: 'Active' | 'Maintenance'; // Maintenance = Disabled
+  maxDuration?: number;
+  status?: 'Active' | 'Maintenance';
 }
 
 export interface Booking {
@@ -240,18 +229,17 @@ export enum MaintenanceStatus {
 export interface MaintenanceRecord {
     id: string;
     userId: string;
-    unitId?: string; // Linked to specific unit
+    unitId?: string;
     communityId: string;
     amount: number;
-    periodDate: string; // The 1st of the month
+    periodDate: string;
     status: MaintenanceStatus;
     paymentReceiptUrl?: string;
     upiTransactionId?: string;
     transactionDate?: string;
     createdAt: string;
-    // Joins
     userName?: string;
-    flatNumber?: string; // Display flat number
+    flatNumber?: string;
 }
 
 export enum ExpenseCategory {
@@ -276,17 +264,15 @@ export interface Expense {
     category: ExpenseCategory;
     description: string;
     date: string;
-    submittedBy: string; // User ID
+    submittedBy: string;
     submittedByName?: string;
     status: ExpenseStatus;
-    approvedBy?: string; // User ID
+    approvedBy?: string;
     approvedByName?: string;
     communityId: string;
     createdAt: string;
     receiptUrl?: string;
 }
-
-// --- Audit Log Interfaces ---
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE';
 
@@ -295,18 +281,26 @@ export interface AuditLog {
     createdAt: string;
     actorId: string;
     communityId: string;
-    actorName?: string; // Joined
-    actorRole?: string; // Joined
-    entity: string; // e.g. 'Complaint', 'Visitor'
+    actorName?: string;
+    actorRole?: string;
+    entity: string;
     entityId: string;
     action: AuditAction;
     details: {
         old?: any;
         new?: any;
         description?: string;
-        amount?: number; // For fallback payments
+        amount?: number;
         data?: any;
     };
+}
+
+// Added FinancialHistory interface to fix errors in api.ts, Billing.tsx and pdfGenerator.ts
+export interface FinancialHistory {
+    year: number;
+    totalCollected: number;
+    monthlyBreakdown: { month: string; amount: number; transactionCount: number }[];
+    communityBreakdown: { communityName: string; totalPaid: number }[];
 }
 
 export type Page = 'Dashboard' | 'AdminPanel' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses } from '../services/api';
-import type { Notice, Complaint, Visitor, MaintenanceRecord, Expense } from '../types';
+import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses, getCommunity } from '../services/api';
+import type { Notice, Complaint, Visitor, MaintenanceRecord, Expense, Community } from '../types';
 import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole, ExpenseStatus, Page } from '../types';
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
@@ -19,7 +19,8 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
   const [data, setData] = useState(dashboardCache || {
       notices: [], complaints: [], visitors: [], 
       maintenance: { lifetimeCollected: 0, myDues: 0, pendingVerifications: 0 },
-      expenses: { totalExpenses: 0 }
+      expenses: { totalExpenses: 0 },
+      community: null
   });
   
   const [loading, setLoading] = useState(!dashboardCache);
@@ -28,7 +29,6 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
 
   useEffect(() => {
     // HYDRATION GUARD: Don't fetch if the user profile isn't fully ready yet
-    // SuperAdmins might not have a communityId, but they also shouldn't really land here
     if (!user?.communityId || isFetchingRef.current) {
         if (user?.role === UserRole.SuperAdmin) setLoading(false);
         return;
@@ -42,12 +42,13 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
       try {
         const isAdmin = user.role === UserRole.Admin || user.role === UserRole.SuperAdmin;
         
-        // Promises now return the actual data arrays directly thanks to api.ts fixes
+        // Parallel fetch including community profile for opening balance
         const promises: Promise<any>[] = [
             getNotices(user.communityId, controller.signal),
             getComplaints(user.communityId, user.id, user.role, controller.signal),
             getVisitors(user.communityId, user.role, controller.signal),
-            getMaintenanceRecords(user.communityId, isAdmin ? undefined : user.id, controller.signal)
+            getMaintenanceRecords(user.communityId, isAdmin ? undefined : user.id, controller.signal),
+            getCommunity(user.communityId) // New fetch for Opening Balance
         ];
         if (isAdmin) promises.push(getExpenses(user.communityId, controller.signal));
         
@@ -58,6 +59,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
         const complaintsArr = (results[1] as Complaint[]) || [];
         const visitorsArr = (results[2] as Visitor[]) || [];
         const recordsArr = (results[3] as MaintenanceRecord[]) || [];
+        const communityObj = results[4] as Community;
         
         let lifetime = 0, myDues = 0, pendingVerifications = 0;
         recordsArr.forEach(r => {
@@ -67,8 +69,8 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
         });
 
         let totalExpenses = 0;
-        if (isAdmin && results[4]) {
-            totalExpenses = (results[4] as Expense[]).filter((e: Expense) => e.status === ExpenseStatus.Approved).reduce((sum: number, e: Expense) => sum + e.amount, 0);
+        if (isAdmin && results[5]) {
+            totalExpenses = (results[5] as Expense[]).filter((e: Expense) => e.status === ExpenseStatus.Approved).reduce((sum: number, e: Expense) => sum + e.amount, 0);
         }
 
         const newState = {
@@ -76,14 +78,14 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
             complaints: complaintsArr,
             visitors: visitorsArr,
             maintenance: { lifetimeCollected: lifetime, myDues, pendingVerifications },
-            expenses: { totalExpenses }
+            expenses: { totalExpenses },
+            community: communityObj
         };
 
         dashboardCache = newState;
         setData(newState);
         setError(null);
       } catch (err: any) { 
-          // ABORTION GUARD: Ignore errors caused by component unmounting or route changes
           if (err.name !== 'AbortError' && isMounted) {
               console.error("Dashboard Fetch Error:", err);
               setError(err.message); 
@@ -111,7 +113,11 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
   if (error && !dashboardCache) return <ErrorCard title="Dashboard Sync Error" message={error} />;
 
   const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin;
-  const treasuryVal = data.maintenance.lifetimeCollected - data.expenses.totalExpenses;
+  
+  // FIX: Treasury now includes opening balance
+  const openingBalance = data.community?.openingBalance || 0;
+  const treasuryVal = openingBalance + data.maintenance.lifetimeCollected - data.expenses.totalExpenses;
+  
   const pendingTickets = data.complaints.filter((c: Complaint) => c.status !== ComplaintStatus.Resolved).length;
   const latestNotice = data.notices[0];
   const activeVisitors = data.visitors.filter((v: Visitor) => v.status === VisitorStatus.Expected).slice(0, 3);

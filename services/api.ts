@@ -15,18 +15,36 @@ export interface MonthlyLedger {
     closingBalance: number;
 }
 
+// --- Internal Mapping Helpers ---
+const mapCommunityToDb = (community: Partial<Community>) => {
+    const mapped: any = {};
+    if (community.name !== undefined) mapped.name = community.name;
+    if (community.address !== undefined) mapped.address = community.address;
+    if (community.status !== undefined) mapped.status = community.status;
+    if (community.communityType !== undefined) mapped.community_type = community.communityType;
+    if (community.blocks !== undefined) mapped.blocks = community.blocks;
+    if (community.maintenanceRate !== undefined) mapped.maintenance_rate = community.maintenanceRate;
+    if (community.fixedMaintenanceAmount !== undefined) mapped.fixed_maintenance_amount = community.fixedMaintenanceAmount;
+    if (community.openingBalance !== undefined) mapped.opening_balance = community.openingBalance;
+    if (community.openingBalanceLocked !== undefined) mapped.opening_balance_locked = community.openingBalanceLocked;
+    if (community.pendingBalanceUpdate !== undefined) mapped.pending_balance_update = community.pendingBalanceUpdate;
+    if (community.contacts !== undefined) mapped.contact_info = community.contacts;
+    if (community.subscriptionType !== undefined) mapped.subscription_type = community.subscriptionType;
+    if (community.subscriptionStartDate !== undefined) mapped.subscription_start_date = community.subscriptionStartDate;
+    if (community.pricePerUser !== undefined) mapped.pricing_config = community.pricePerUser;
+    return mapped;
+};
+
 // --- Global Request Coalescing Layer ---
 const pendingRequests = new Map<string, Promise<any>>();
 
 const callEdgeFunction = async (functionName: string, body: any, options: { token?: string, signal?: AbortSignal } = {}) => {
-    // Determine the token to use
     let accessToken = options.token;
     if (!accessToken) {
         const { data: { session } } = await supabase.auth.getSession();
         accessToken = session?.access_token;
     }
 
-    // Include token in requestKey to prevent coalescing requests with different auth states
     const requestKey = `${functionName}:${accessToken?.substring(0, 10)}:${JSON.stringify(body)}`;
     
     if (pendingRequests.has(requestKey)) {
@@ -53,8 +71,6 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken.trim()}`,
-                    // CRITICAL FIX: Supabase Gateway requires the apikey (anon key) 
-                    // even when an Authorization header is present to avoid CORS 'Failed to fetch'
                     'apikey': supabaseKey 
                 },
                 body: JSON.stringify(body),
@@ -76,14 +92,11 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
             }
         } catch (error: any) {
             if (error.name === 'AbortError' || options.signal?.aborted) return null;
-            
-            // Transform generic network errors into readable ones
             if (error.message === 'Failed to fetch') {
-                throw new Error("Connection failed: The server is unreachable or the request was blocked. Please check your internet.");
+                throw new Error("Connection failed: The server is unreachable or the request was blocked.");
             }
             throw error;
         } finally {
-            // Clean up cache after a short delay
             setTimeout(() => pendingRequests.delete(requestKey), 500);
         }
     })();
@@ -143,8 +156,8 @@ export const getMaintenanceRecords = async (communityId: string, userId?: string
     return data.map((r: any) => ({
         id: r.id, userId: r.user_id, unitId: r.unit_id, communityId: r.community_id,
         amount: Number(r.amount) || 0, periodDate: r.period_date, status: r.status,
-        paymentReceiptUrl: r.payment_receipt_url, upiTransactionId: r.upi_transaction_id,
-        transaction_date: r.transaction_date, createdAt: r.created_at, userName: r.users?.name,
+        paymentReceiptUrl: r.payment_receipt_url, upi_transactionId: r.upi_transaction_id,
+        transactionDate: r.transaction_date, createdAt: r.created_at, userName: r.users?.name,
         flatNumber: r.units?.flat_number
     }));
 };
@@ -179,14 +192,14 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         }
         let userRole = u.role as UserRole;
         if (userRole === UserRole.Resident && u.profile_data?.is_tenant) userRole = UserRole.Tenant;
-        return { ...u, role: userRole, flatNumber: displayFlatNumber, units };
+        return { ...u, role: userRole, flatNumber: displayFlatNumber, units, tenantDetails: u.profile_data };
     });
 };
 
 export const getCommunity = async (id: string): Promise<Community> => {
-    // Route through Edge Function to avoid RLS recursion on the users table
     const result = await callEdgeFunction('get-community-profile', { id });
     const data = result.data;
+    // Defensive parsing: use default values if schema columns are missing
     return {
         id: data.id,
         name: data.name,
@@ -196,6 +209,9 @@ export const getCommunity = async (id: string): Promise<Community> => {
         blocks: data.blocks,
         maintenanceRate: Number(data.maintenance_rate) || 0,
         fixedMaintenanceAmount: Number(data.fixed_maintenance_amount) || 0,
+        openingBalance: data.opening_balance ? Number(data.opening_balance) : 0,
+        openingBalanceLocked: data.opening_balance_locked || false,
+        pendingBalanceUpdate: data.pending_balance_update || null,
         contacts: data.contact_info,
         subscriptionType: data.subscription_type,
         subscriptionStartDate: data.subscription_start_date,
@@ -206,9 +222,6 @@ export const getCommunity = async (id: string): Promise<Community> => {
 export const getCommunityStats = async (): Promise<CommunityStat[]> => {
     const result = await callEdgeFunction('get-community-stats', {});
     const data = result?.data || [];
-    
-    // Fix: Map the raw database response to the CommunityStat interface
-    // ensuring pricePerUser, communityType, etc. are properly populated.
     return data.map((stat: any) => ({
         id: stat.id,
         name: stat.name,
@@ -218,11 +231,13 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
         blocks: stat.blocks,
         maintenanceRate: Number(stat.maintenance_rate) || 0,
         fixedMaintenanceAmount: Number(stat.fixed_maintenance_amount) || 0,
+        openingBalance: stat.opening_balance ? Number(stat.opening_balance) : 0,
+        openingBalanceLocked: stat.opening_balance_locked || false,
+        pendingBalanceUpdate: stat.pending_balance_update || null,
         contacts: stat.contact_info,
         subscriptionType: stat.subscription_type,
         subscriptionStartDate: stat.subscription_start_date,
         pricePerUser: stat.pricing_config,
-        // Aggregated counts from the Edge Function
         resident_count: Number(stat.resident_count) || 0,
         admin_count: Number(stat.admin_count) || 0,
         staff_count: Number(stat.staff_count) || 0,
@@ -231,9 +246,54 @@ export const getCommunityStats = async (): Promise<CommunityStat[]> => {
     }));
 };
 
-export const createCommunity = (data: any) => supabase.from('communities').insert(data).select().single();
-export const updateCommunity = (id: string, data: any) => supabase.from('communities').update(data).eq('id', id);
+export const createCommunity = async (data: Partial<Community>) => {
+    const res = await supabase.from('communities').insert(mapCommunityToDb(data)).select().single();
+    if (res.error) throw res.error;
+    return res.data;
+};
+
+// Fixed: Handling successful success messages instead of full objects
+export const updateCommunity = async (id: string, data: Partial<Community>) => {
+    return callEdgeFunction('manage-community', {
+        action: 'UPDATE_PROFILE',
+        community_id: id,
+        data: mapCommunityToDb(data)
+    });
+};
+
 export const deleteCommunity = (id: string) => callEdgeFunction('delete-community', { community_id: id });
+
+// Opening Balance Management (Routed through Edge Functions for recursion safety)
+export const setInitialOpeningBalance = async (id: string, balance: number) => {
+    return callEdgeFunction('manage-community', {
+        action: 'SET_INITIAL_BALANCE',
+        community_id: id,
+        data: { balance }
+    });
+};
+
+export const requestOpeningBalanceUpdate = async (id: string, amount: number, reason: string, user: User) => {
+    return callEdgeFunction('manage-community', {
+        action: 'REQUEST_BALANCE_UPDATE',
+        community_id: id,
+        data: { amount, reason, requesterName: user.name }
+    });
+};
+
+export const approveOpeningBalanceUpdate = async (id: string, amount: number) => {
+    return callEdgeFunction('manage-community', {
+        action: 'APPROVE_BALANCE_UPDATE',
+        community_id: id,
+        data: { amount }
+    });
+};
+
+export const rejectOpeningBalanceUpdate = async (id: string) => {
+    return callEdgeFunction('manage-community', {
+        action: 'REJECT_BALANCE_UPDATE',
+        community_id: id
+    });
+};
 
 export const createNotice = (data: any, user: User) => callEdgeFunction('create-notice', { ...data, author_name: user.name, community_id: user.communityId });
 export const updateNotice = (id: string, data: any, user: User) => supabase.from('notices').update(data).eq('id', id);
@@ -304,6 +364,7 @@ export const submitMaintenancePayment = (id: string, receiptUrl: string, upiId: 
 export const verifyMaintenancePayment = (id: string) => supabase.from('maintenance_records').update({ status: MaintenanceStatus.Paid }).eq('id', id);
 
 export const createExpense = (data: any, user: User) => supabase.from('expenses').insert({ ...data, submitted_by: user.id, community_id: user.communityId, status: ExpenseStatus.Pending });
+export const themeUpdate = (id: string, theme: string) => callEdgeFunction('update-user-theme', { theme });
 export const approveExpense = (id: string, approverId: string) => supabase.from('expenses').update({ status: ExpenseStatus.Approved, approved_by: approverId }).eq('id', id);
 export const rejectExpense = (id: string, approverId: string, reason: string) => supabase.from('expenses').update({ status: ExpenseStatus.Rejected, approved_by: approverId, description: reason }).eq('id', id);
 export const getMonthlyLedger = (community_id: string, month: number, year: number) => callEdgeFunction('get-monthly-ledger', { community_id, month, year });

@@ -20,9 +20,9 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; lab
   { name: 'Directory', icon: UserGroupIcon, label: 'Directory' },
   { name: 'Maintenance', icon: CurrencyRupeeIcon, label: 'Maintenance' },
   { name: 'Expenses', icon: BanknotesIcon, label: 'Expenses' },
-  { name: 'BulkOperations', icon: ClipboardDocumentListIcon, label: 'Bulk Ops' },
   { name: 'Billing', icon: CalculatorIcon, label: 'Billing' },
   { name: 'CommunitySetup', icon: Cog6ToothIcon, label: 'Property Config' },
+  { name: 'BulkOperations', icon: ClipboardDocumentListIcon, label: 'Bulk Ops' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     // Tenant Role
     if (user?.role === UserRole.Tenant) return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(item.name);
     
-    if (user?.role === UserRole.Admin) return item.name !== 'Billing';
+    if (user?.role === UserRole.Admin) return !['Billing', 'AdminPanel'].includes(item.name);
     return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations' && item.name !== 'AdminPanel';
   });
 

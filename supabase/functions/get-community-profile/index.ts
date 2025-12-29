@@ -30,7 +30,6 @@ serve(async (req: any) => {
     const { id } = await req.json()
     if (!id) throw new Error('Missing community ID')
 
-    // Fetch Profile to verify membership or admin status
     const { data: profile } = await supabaseClient.from('users').select('role, community_id').eq('id', user.id).single()
     if (!profile) throw new Error('User profile not found')
 
@@ -38,6 +37,7 @@ serve(async (req: any) => {
         throw new Error('Unauthorized community scope')
     }
 
+    // Defensive: select '*' instead of naming specific potentially non-existent columns
     const { data: community, error: fetchError } = await supabaseClient
       .from('communities')
       .select('*')

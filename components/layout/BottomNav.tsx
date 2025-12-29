@@ -13,7 +13,6 @@ interface BottomNavProps {
 const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; label: string }[] = [
     { name: 'Dashboard', icon: HomeIcon, label: 'Home' },
     { name: 'AdminPanel', icon: Squares2X2Icon, label: 'Portal' },
-    { name: 'BulkOperations', icon: ClipboardDocumentListIcon, label: 'Bulk Ops' },
     { name: 'Notices', icon: BellIcon, label: 'Notices' },
     { name: 'Help Desk', icon: ShieldCheckIcon, label: 'Help' },
     { name: 'Visitors', icon: UsersIcon, label: 'Visitors' },
@@ -23,6 +22,7 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; lab
     { name: 'Expenses', icon: BanknotesIcon, label: 'Expenses' },
     { name: 'Billing', icon: CalculatorIcon, label: 'Admin' },
     { name: 'CommunitySetup', icon: Cog6ToothIcon, label: 'Config' },
+    { name: 'BulkOperations', icon: ClipboardDocumentListIcon, label: 'Bulk Ops' },
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
@@ -35,7 +35,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activePage, setActivePage }) => {
     if (user?.role === UserRole.SecurityAdmin) return ['Notices', 'Visitors', 'Directory'].includes(item.name);
     if (user?.role === UserRole.Security) return ['Notices', 'Visitors'].includes(item.name);
     if (user?.role === UserRole.Tenant) return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(item.name);
-    if (user?.role === UserRole.Admin) return item.name !== 'Billing';
+    if (user?.role === UserRole.Admin) return !['Billing', 'AdminPanel'].includes(item.name);
     return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations' && item.name !== 'AdminPanel';
   });
 

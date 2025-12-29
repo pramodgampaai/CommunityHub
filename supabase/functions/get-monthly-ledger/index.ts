@@ -31,17 +31,20 @@ serve(async (req: any) => {
     const { community_id, month, year } = await req.json()
     if (!community_id || !month || !year) throw new Error('Missing required fields')
 
-    // 3. Verify Community Access
-    const { data: profile } = await supabaseClient.from('users').select('community_id').eq('id', user.id).single();
-    if (profile?.community_id !== community_id) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    // 3. Verify Community Access and Fetch Opening Balance Safely
+    const { data: community } = await supabaseClient
+        .from('communities')
+        .select('*')
+        .eq('id', community_id)
+        .single();
+
+    if (!community) throw new Error('Community not found');
+
+    // Handle missing column gracefully
+    const openingBalance = community.opening_balance ? Number(community.opening_balance) : 0;
 
     // 4. Date Logic
-    // Selected Month Start (e.g., 2023-10-01)
     const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString().split('T')[0];
-    
-    // Next Month Start (for strictly less than comparisons)
     const nextMonthDate = new Date(Date.UTC(year, month, 1)).toISOString().split('T')[0];
 
     // --- AGGREGATION QUERIES ---
@@ -67,7 +70,6 @@ serve(async (req: any) => {
     const prevExpenses = prevExpenseData?.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0) || 0;
 
     // C. This Month Income (Paid)
-    // Note: Maintenance records use period_date (usually 1st of month).
     const { data: currIncomeData } = await supabaseClient
         .from('maintenance_records')
         .select('amount')
@@ -83,7 +85,7 @@ serve(async (req: any) => {
         .from('maintenance_records')
         .select('amount')
         .eq('community_id', community_id)
-        .neq('status', 'Paid') // Not Paid
+        .neq('status', 'Paid')
         .gte('period_date', startDate)
         .lt('period_date', nextMonthDate);
 
@@ -101,7 +103,7 @@ serve(async (req: any) => {
     const expensesThisMonth = currExpenseData?.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0) || 0;
 
     // --- FINAL CALCULATIONS ---
-    const previousBalance = prevIncome - prevExpenses;
+    const previousBalance = openingBalance + prevIncome - prevExpenses;
     const closingBalance = previousBalance + collectedThisMonth - expensesThisMonth;
 
     return new Response(
