@@ -12,6 +12,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUser: (data: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -98,7 +99,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             }
         } else if (!session) {
             lastTokenRef.current = null;
-            updateIfChanged(null);
             setLoading(false);
         }
     });
@@ -123,6 +123,10 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       }
   };
 
+  const updateUser = (data: Partial<User>) => {
+      setUserState(prev => prev ? { ...prev, ...data } : null);
+  };
+
   const logout = async () => {
     lastTokenRef.current = null;
     setUserState(null);
@@ -132,7 +136,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

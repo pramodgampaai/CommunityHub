@@ -25,7 +25,7 @@ import { updateTheme } from './services/api';
 export type Theme = 'light' | 'dark';
 
 function App() {
-  const { user, loading, refreshUser } = useAuth();
+  const { user, loading, updateUser } = useAuth();
   const [isPending, startTransition] = useTransition();
   
   const [requestedPage, setRequestedPage] = useState<Page>(() => {
@@ -86,7 +86,7 @@ function App() {
     } else if (user.theme) {
         setTheme(user.theme);
     }
-  }, [user]);
+  }, [user?.id, user?.theme]); // Only react to ID or theme property changes
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -94,16 +94,21 @@ function App() {
     root.classList.add(theme);
   }, [theme]);
 
-  const toggleTheme = async () => {
+  const toggleTheme = useCallback(async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
+    
+    // 1. Update local UI state immediately
     setTheme(newTheme); 
+    
     if (user) {
-        try {
-            await updateTheme(user.id, newTheme);
-            await refreshUser();
-        } catch (e) { console.error(e); }
+        // 2. Update Auth Context locally so other components see the change
+        updateUser({ theme: newTheme });
+        
+        // 3. Sync with DB in background - do NOT await or refresh user profile
+        // This prevents the data-fetching hooks from re-triggering.
+        updateTheme(user.id, newTheme).catch(e => console.error("Theme sync failed:", e));
     }
-  };
+  }, [theme, user, updateUser]);
 
   const navigateToPage = useCallback((page: Page, params?: any) => {
       if (requestedPage === page && !params) return;
@@ -132,8 +137,6 @@ function App() {
     );
   }
 
-  // OPTIMIZATION: If we have a user cached, don't show the full-screen spinner
-  // This prevents the flickering "white screen" when the app re-validates session
   if (loading && !user) {
     return (
       <div className="flex items-center justify-center h-[100dvh] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
