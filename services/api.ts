@@ -19,19 +19,21 @@ export interface MonthlyLedger {
 const pendingRequests = new Map<string, Promise<any>>();
 
 const callEdgeFunction = async (functionName: string, body: any, options: { token?: string, signal?: AbortSignal } = {}) => {
-    const requestKey = `${functionName}:${JSON.stringify(body)}`;
+    // Determine the token to use
+    let accessToken = options.token;
+    if (!accessToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        accessToken = session?.access_token;
+    }
+
+    // Include token in requestKey to prevent coalescing requests with different auth states
+    const requestKey = `${functionName}:${accessToken?.substring(0, 10)}:${JSON.stringify(body)}`;
     
     if (pendingRequests.has(requestKey)) {
         return pendingRequests.get(requestKey);
     }
 
     const requestPromise = (async () => {
-        let accessToken = options.token;
-        if (!accessToken) {
-            const { data: { session } } = await supabase.auth.getSession();
-            accessToken = session?.access_token;
-        }
-
         if (!accessToken) {
             pendingRequests.delete(requestKey);
             throw new Error("Authentication session expired. Please re-login.");
@@ -50,7 +52,10 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
+                    'Authorization': `Bearer ${accessToken.trim()}`,
+                    // CRITICAL FIX: Supabase Gateway requires the apikey (anon key) 
+                    // even when an Authorization header is present to avoid CORS 'Failed to fetch'
+                    'apikey': supabaseKey 
                 },
                 body: JSON.stringify(body),
                 signal: options.signal
@@ -71,9 +76,15 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
             }
         } catch (error: any) {
             if (error.name === 'AbortError' || options.signal?.aborted) return null;
+            
+            // Transform generic network errors into readable ones
+            if (error.message === 'Failed to fetch') {
+                throw new Error("Connection failed: The server is unreachable or the request was blocked. Please check your internet.");
+            }
             throw error;
         } finally {
-            setTimeout(() => pendingRequests.delete(requestKey), 300);
+            // Clean up cache after a short delay
+            setTimeout(() => pendingRequests.delete(requestKey), 500);
         }
     })();
 
@@ -133,7 +144,7 @@ export const getMaintenanceRecords = async (communityId: string, userId?: string
         id: r.id, userId: r.user_id, unitId: r.unit_id, communityId: r.community_id,
         amount: Number(r.amount) || 0, periodDate: r.period_date, status: r.status,
         paymentReceiptUrl: r.payment_receipt_url, upiTransactionId: r.upi_transaction_id,
-        transactionDate: r.transaction_date, createdAt: r.created_at, userName: r.users?.name,
+        transaction_date: r.transaction_date, createdAt: r.created_at, userName: r.users?.name,
         flatNumber: r.units?.flat_number
     }));
 };

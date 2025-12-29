@@ -27,6 +27,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
   const isFetchingRef = useRef(false);
 
   useEffect(() => {
+    // HYDRATION GUARD: Don't fetch if the user profile isn't fully ready yet
     if (!user?.communityId || isFetchingRef.current) return;
     
     isFetchingRef.current = true;
@@ -78,7 +79,11 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
         setData(newState);
         setError(null);
       } catch (err: any) { 
-          if (err.name !== 'AbortError' && isMounted) setError(err.message); 
+          // ABORTION GUARD: Ignore errors caused by component unmounting or route changes
+          if (err.name !== 'AbortError' && isMounted) {
+              console.error("Dashboard Fetch Error:", err);
+              setError(err.message); 
+          }
       } finally { 
           if (isMounted) setLoading(false); 
           isFetchingRef.current = false;
@@ -99,7 +104,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
     </div>
   );
 
-  if (error && !dashboardCache) return <ErrorCard title="Dashboard Error" message={error} />;
+  if (error && !dashboardCache) return <ErrorCard title="Dashboard Sync Error" message={error} />;
 
   const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin;
   const treasuryVal = data.maintenance.lifetimeCollected - data.expenses.totalExpenses;

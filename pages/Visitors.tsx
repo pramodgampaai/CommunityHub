@@ -49,7 +49,7 @@ const Visitors: React.FC = () => {
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
     const isGateStaff = user?.role === UserRole.Security || user?.role === UserRole.SecurityAdmin || user?.role === UserRole.SuperAdmin;
-    const canInvite = user?.role === UserRole.Resident || user?.role === UserRole.Admin;
+    const canInvite = user?.role === UserRole.Resident || user?.role === UserRole.Admin || user?.role === UserRole.Tenant;
 
     const fetchVisitors = async () => {
         if (user?.communityId) {
@@ -212,7 +212,6 @@ const Visitors: React.FC = () => {
                 return;
             }
 
-            // Fix: verifyVisitorEntry only accepts two arguments
             await verifyVisitorEntry(targetVisitor.id, cleanCode);
             setVerifiedVisitor(targetVisitor);
             setVerificationMode('selection');
@@ -268,7 +267,6 @@ const Visitors: React.FC = () => {
         if (!confirmDelete.id || !user) return;
         setIsSubmitting(true);
         try {
-            // Fix: deleteVisitor only accepts one argument
             await deleteVisitor(confirmDelete.id);
             setConfirmDelete({ isOpen: false, id: null });
             await fetchVisitors();

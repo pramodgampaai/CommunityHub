@@ -55,16 +55,21 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const fetchProfile = async (session: Session): Promise<User | null> => {
       if (isFetchingRef.current) return null;
       isFetchingRef.current = true;
+      
       try {
+          // STABILITY DELAY: Increased slightly to 250ms to ensure Edge Function 
+          // token synchronization in high-latency mobile environments.
+          if (session.access_token !== lastTokenRef.current) {
+              await new Promise(r => setTimeout(r, 250));
+          }
+
           const efData = await getUserProfile(session.access_token);
           if (efData && !efData.error) {
-              // The Edge Function now returns the community_name joined via service_role
-              // to prevent the recursion error 42P17.
               return transformProfile(efData, session.user.email || '');
           }
           return null;
-      } catch (e) {
-          console.warn("Profile fetch failed", e);
+      } catch (e: any) {
+          console.warn("Profile fetch failed:", e.message);
           return null;
       } finally {
           isFetchingRef.current = false;
@@ -78,18 +83,22 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         
         const currentToken = session?.access_token || null;
         const isNewToken = currentToken !== lastTokenRef.current;
-        lastTokenRef.current = currentToken;
-
+        
+        // Only trigger profile fetch if token actually changed
         if (event === 'SIGNED_OUT') {
+            lastTokenRef.current = null;
             updateIfChanged(null);
             setLoading(false);
-        } else if (session && isNewToken) {
+        } else if (session && (isNewToken || event === 'SIGNED_IN')) {
+            lastTokenRef.current = currentToken;
             const profile = await fetchProfile(session);
             if (mounted) {
                 if (profile) updateIfChanged(profile);
                 setLoading(false);
             }
         } else if (!session) {
+            lastTokenRef.current = null;
+            updateIfChanged(null);
             setLoading(false);
         }
     });

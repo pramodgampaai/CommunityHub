@@ -28,7 +28,6 @@ function App() {
   const { user, loading, refreshUser } = useAuth();
   const [isPending, startTransition] = useTransition();
   
-  // Track the page the user WANTS to see
   const [requestedPage, setRequestedPage] = useState<Page>(() => {
       const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
@@ -37,7 +36,6 @@ function App() {
   const [pageParams, setPageParams] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>('light');
 
-  // AUTHORIZATION LOGIC: Single source of truth for what is actually RENDERED.
   const activePage = useMemo((): Page => {
     if (!user) return requestedPage;
 
@@ -108,7 +106,7 @@ function App() {
   };
 
   const navigateToPage = useCallback((page: Page, params?: any) => {
-      if (requestedPage === page && !params) return; // Ignore redundant navigation
+      if (requestedPage === page && !params) return;
       startTransition(() => {
           setPageParams(params || null);
           setRequestedPage(page);
@@ -116,7 +114,7 @@ function App() {
   }, [requestedPage]);
 
   const handleManualPageChange = useCallback((page: Page) => {
-      if (requestedPage === page) return; // Ignore redundant clicks
+      if (requestedPage === page) return;
       startTransition(() => {
           setPageParams(null);
           setRequestedPage(page);
@@ -134,7 +132,9 @@ function App() {
     );
   }
 
-  if (loading) {
+  // OPTIMIZATION: If we have a user cached, don't show the full-screen spinner
+  // This prevents the flickering "white screen" when the app re-validates session
+  if (loading && !user) {
     return (
       <div className="flex items-center justify-center h-[100dvh] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
         <Spinner />
@@ -154,17 +154,19 @@ function App() {
         toggleTheme={toggleTheme}
         isPending={isPending}
     >
-      {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
-      {activePage === 'Notices' && <NoticeBoard />}
-      {activePage === 'Help Desk' && <HelpDesk />}
-      {activePage === 'Visitors' && <Visitors />}
-      {activePage === 'Amenities' && <Amenities />}
-      {activePage === 'Directory' && <Directory />}
-      {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
-      {activePage === 'Expenses' && <Expenses />}
-      {activePage === 'BulkOperations' && <BulkOperations />}
-      {activePage === 'CommunitySetup' && <CommunitySetup onComplete={() => setRequestedPage('Dashboard')} />}
-      {activePage === 'Billing' && <Billing />}
+      <div className="gpu-accelerated min-h-full">
+          {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
+          {activePage === 'Notices' && <NoticeBoard />}
+          {activePage === 'Help Desk' && <HelpDesk />}
+          {activePage === 'Visitors' && <Visitors />}
+          {activePage === 'Amenities' && <Amenities />}
+          {activePage === 'Directory' && <Directory />}
+          {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
+          {activePage === 'Expenses' && <Expenses />}
+          {activePage === 'BulkOperations' && <BulkOperations />}
+          {activePage === 'CommunitySetup' && <CommunitySetup onComplete={() => setRequestedPage('Dashboard')} />}
+          {activePage === 'Billing' && <Billing />}
+      </div>
     </Layout>
   );
 }

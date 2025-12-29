@@ -23,10 +23,19 @@ serve(async (req: any) => {
     )
 
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) throw new Error('Auth required');
+    if (!authHeader) throw new Error('Auth header missing');
     
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Invalid token');
+    // Robust token extraction
+    const token = authHeader.split(' ').pop();
+    if (!token || token === 'undefined' || token === 'null') {
+        throw new Error('Malformed Authorization token');
+    }
+    
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    if (userError || !user) {
+        console.error("Auth validation failed:", userError?.message);
+        throw new Error(`Invalid token: ${userError?.message || 'Identity verification failed'}`);
+    }
 
     // 1. Fetch Profile
     const { data: profile, error: profileError } = await supabaseClient
@@ -38,7 +47,7 @@ serve(async (req: any) => {
     if (profileError) throw new Error(`Database Profile Fetch Error: ${profileError.message}`);
     
     if (!profile) {
-        throw new Error(`Profile not found in database for ${user.email}. Contact administrator.`);
+        throw new Error(`Profile not found in database for ${user.email}. User exists in Auth but not in Public schema.`);
     }
 
     // 2. Fetch Community Name safely (bypass RLS)
