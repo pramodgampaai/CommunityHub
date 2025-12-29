@@ -45,7 +45,7 @@ const NoticeBoard: React.FC = () => {
   const [confirmConfig, setConfirmConfig] = useState<{
       isOpen: boolean; title: string; message: string; action: () => Promise<void>; isDestructive?: boolean; confirmLabel?: string;
   }>({
-      isOpen: false, title: '', message: '', action: async () => {}, isDestructive: false
+      isOpen: false, title: '', message: '', action: async () => {}, isDestructive: false, confirmLabel: 'Confirm'
   });
 
   const fetchNotices = async (communityId: string) => {
@@ -102,7 +102,6 @@ const NoticeBoard: React.FC = () => {
       setContent(notice.content); 
       setNoticeType(notice.type);
       
-      // Format ISO string to YYYY-MM-DD for date input
       if (notice.validFrom) {
           setValidFrom(new Date(notice.validFrom).toISOString().split('T')[0]);
       }
@@ -124,7 +123,7 @@ const NoticeBoard: React.FC = () => {
           isDestructive: true,
           confirmLabel: 'Delete',
           action: async () => {
-              await deleteNotice(id, user || undefined);
+              await deleteNotice(id);
               if (user?.communityId) await fetchNotices(user.communityId);
           }
       });

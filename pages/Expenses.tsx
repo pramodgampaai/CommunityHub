@@ -49,7 +49,7 @@ const Expenses: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [filterStatus, setFilterStatus] = useState<ExpenseStatus | 'All'>('All');
-    const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; action: () => Promise<void>; isDestructive?: boolean; confirmLabel?: string; }>({ isOpen: false, title: '', message: '', action: async () => {}, isDestructive: false });
+    const [confirmConfig, setConfirmConfig] = useState<{ isOpen: boolean; title: string; message: string; action: () => Promise<void>; isDestructive?: boolean; confirmLabel?: string; }>({ isOpen: false, title: '', message: '', action: async () => {}, isDestructive: false, confirmLabel: 'Confirm' });
 
     const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin || user?.role === UserRole.HelpdeskAdmin;
     const isResident = user?.role === UserRole.Resident;
@@ -61,7 +61,6 @@ const Expenses: React.FC = () => {
             const data = await getExpenses(user.communityId); 
             setExpenses(data); 
             
-            // Re-sync selected expense to get latest status/proof if modal is already open
             if (selectedExpense) {
                 const refreshed = data.find(e => e.id === selectedExpense.id);
                 if (refreshed) setSelectedExpense(refreshed);
@@ -78,10 +77,9 @@ const Expenses: React.FC = () => {
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            // Validate image size (2MB limit for Base64 storage in TEXT column)
             if (file.size > 2 * 1024 * 1024) {
                 alert("Attachment too large. Please upload an image under 2MB for verification.");
-                e.target.value = ''; // Reset input
+                e.target.value = ''; 
                 return;
             }
             const reader = new FileReader();
@@ -114,7 +112,7 @@ const Expenses: React.FC = () => {
             await fetchExpensesData();
         } catch (error: any) { 
             console.error("Expense logging error:", error);
-            alert("Critical Error: Ensure 'receipt_url' column exists in your Supabase 'expenses' table.");
+            alert("Logging failed. Please try again.");
         } finally { 
             setIsSubmitting(false); 
         }
@@ -213,32 +211,68 @@ const Expenses: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-end md:items-center bg-white dark:bg-zinc-900/40 p-4 rounded-2xl border border-slate-50 dark:border-white/5 shadow-sm">
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-                    <div className="relative flex-1 md:flex-none w-full sm:w-auto">
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Period Selection</label>
-                        <div className="flex gap-2">
-                            <input type="month" value={selectedMonth} onChange={(e) => { setSelectedMonth(e.target.value); if (isAdmin) setViewMode('monthly'); }} className="block w-full md:w-auto px-4 py-2 text-sm rounded-xl input-field font-bold"/>
-                            <Button size="sm" variant="outlined" onClick={handleDownloadReport} disabled={isGeneratingReport} leftIcon={<ArrowDownTrayIcon />}>Download Ledger</Button>
-                        </div>
-                    </div>
-                    {isAdmin && (
-                        <div className="flex items-end h-full pt-5 w-full sm:w-auto">
-                            <button onClick={() => setViewMode(viewMode === 'monthly' ? 'all' : 'monthly')} className={`text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl transition-all ${viewMode === 'all' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-white/5'}`}>{viewMode === 'all' ? 'Showing Entire History' : 'View Current Month'}</button>
-                        </div>
-                    )}
+            {/* Filter Bar - Standardized Alignment and Heights */}
+            <div className="flex flex-wrap items-end gap-4 bg-white dark:bg-zinc-900/40 p-5 rounded-[2rem] border border-slate-50 dark:border-white/5 shadow-sm">
+                
+                {/* 1. Period Selection */}
+                <div className="flex-1 min-w-[200px]">
+                    <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 ml-1">Period Selection</label>
+                    <input 
+                        type="month" 
+                        value={selectedMonth} 
+                        onChange={(e) => { setSelectedMonth(e.target.value); if (isAdmin) setViewMode('monthly'); }} 
+                        className="block w-full h-12 px-4 py-2 text-sm rounded-xl input-field font-bold"
+                    />
                 </div>
+
+                {/* 2. Download Report */}
+                <div className="shrink-0">
+                    <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-transparent mb-2 select-none">Action</label>
+                    <Button 
+                        size="lg" 
+                        variant="outlined" 
+                        onClick={handleDownloadReport} 
+                        disabled={isGeneratingReport} 
+                        leftIcon={<ArrowDownTrayIcon />}
+                        className="h-12"
+                    >
+                        Report
+                    </Button>
+                </div>
+
+                {/* 3. Toggle View Mode (Admin Only) */}
                 {isAdmin && (
-                    <div className="relative w-full md:w-48">
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Status Filter</label>
+                    <div className="flex-1 min-w-[180px]">
+                        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 ml-1">Archive Scope</label>
+                        <button 
+                            onClick={() => setViewMode(viewMode === 'monthly' ? 'all' : 'monthly')} 
+                            className={`w-full h-12 text-[10px] font-black uppercase tracking-widest px-4 rounded-xl transition-all border ${
+                                viewMode === 'all' 
+                                ? 'bg-brand-600 text-white border-brand-600 shadow-lg shadow-brand-600/20' 
+                                : 'text-slate-500 bg-slate-50 dark:bg-white/5 border-slate-100 dark:border-white/10 hover:text-brand-600 hover:border-brand-500/30'
+                            }`}
+                        >
+                            {viewMode === 'all' ? 'Entire History' : 'Current Month Only'}
+                        </button>
+                    </div>
+                )}
+                
+                {/* 4. Status Filter (Admin Only) */}
+                {isAdmin && (
+                    <div className="flex-1 min-w-[180px]">
+                        <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 ml-1">Process Status</label>
                         <div className="relative">
-                            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)} className="appearance-none block w-full px-4 py-2.5 rounded-xl input-field text-xs font-bold bg-white dark:bg-zinc-900">
-                                <option value="All">All Transactions</option>
-                                <option value={ExpenseStatus.Pending}>Pending Approval</option>
+                            <select 
+                                value={filterStatus} 
+                                onChange={(e) => setFilterStatus(e.target.value as any)} 
+                                className="appearance-none block w-full h-12 px-4 rounded-xl input-field text-xs font-bold bg-white dark:bg-zinc-900"
+                            >
+                                <option value="All">All Vouchers</option>
+                                <option value={ExpenseStatus.Pending}>Awaiting Review</option>
                                 <option value={ExpenseStatus.Approved}>Authorized</option>
-                                <option value={ExpenseStatus.Rejected}>Declined</option>
+                                <option value={ExpenseStatus.Rejected}>Disallowed</option>
                             </select>
-                            <FunnelIcon className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         </div>
                     </div>
                 )}
@@ -298,7 +332,6 @@ const Expenses: React.FC = () => {
                 )}
             </div>
 
-            {/* LOG EXPENSE MODAL */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Log New Expenditure" subtitle="FUNDS OUTFLOW" size="md">
                 <form className="space-y-4" onSubmit={handleFormSubmit}>
                     <div>
@@ -347,7 +380,6 @@ const Expenses: React.FC = () => {
                 </form>
             </Modal>
             
-            {/* DETAIL MODAL (Approval Center) */}
             <Modal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} title="Expense Verification" subtitle="AUDIT REVIEW" size="lg">
                 {selectedExpense && (
                     <div className="space-y-6">
@@ -393,7 +425,6 @@ const Expenses: React.FC = () => {
                                 <div className="p-12 text-center text-slate-400 bg-slate-50 dark:bg-white/5 rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/10">
                                     <AlertTriangleIcon className="w-8 h-8 mx-auto mb-2 opacity-30 text-amber-500" />
                                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image data missing in registry</p>
-                                    <p className="text-[8px] mt-2 text-slate-400 uppercase italic">Developer Note: Run SQL: 'ALTER TABLE expenses ADD COLUMN receipt_url TEXT;'</p>
                                 </div>
                             )}
                         </div>

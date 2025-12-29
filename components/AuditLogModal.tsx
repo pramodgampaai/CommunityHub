@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getAuditLogs } from '../services/api';
 import type { AuditLog, AuditAction } from '../types';
@@ -39,7 +40,8 @@ const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose, entityTy
         if (!user?.communityId || !isOpen) return;
         try {
             setLoading(true);
-            const data = await getAuditLogs(user.communityId, user.id, user.role);
+            // Fix: getAuditLogs only accepts one argument
+            const data = await getAuditLogs(user.communityId);
             
             // Client-side Filter Implementation based on Role-Based Access Rules
             const entities = Array.isArray(entityType) ? entityType : [entityType];

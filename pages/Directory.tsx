@@ -222,7 +222,8 @@ const Directory: React.FC = () => {
         if (!user) return;
         setIsSubmitting(true);
         try {
-            await onboardTenant(tenantData, user);
+            // Fix: onboardTenant call was missing required arguments. Expected: tenantData, ownerId, communityId, flatNumber.
+            await onboardTenant(tenantData, user.id, user.communityId || '', user.flatNumber || '');
             setIsAddTenantOpen(false);
             resetTenantForm();
             await fetchUsers();

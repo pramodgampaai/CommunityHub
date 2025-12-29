@@ -6,7 +6,7 @@ declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, prefer',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -25,18 +25,18 @@ serve(async (req: any) => {
 
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), { status: 401, headers: corsHeaders });
+      throw new Error('Missing Authorization header');
     }
     
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid authentication token' }), { status: 401, headers: corsHeaders });
+      throw new Error('Invalid authentication token');
     }
 
     const body = await req.json().catch(() => ({}));
     const { community_id } = body;
     if (!community_id) {
-      return new Response(JSON.stringify({ error: 'Missing community_id parameter' }), { status: 400, headers: corsHeaders });
+      throw new Error('Missing community_id parameter');
     }
 
     // Strict validation via database source of truth
@@ -44,13 +44,12 @@ serve(async (req: any) => {
     if (pErr) throw new Error(`Identity Verification Failed: ${pErr.message}`);
     
     if (!profile) {
-      // It's possible the user auth exists but the profile table hasn't synced yet
-      return new Response(JSON.stringify({ error: 'User record missing in registry. Please re-login.' }), { status: 403, headers: corsHeaders });
+      throw new Error('User record missing in registry. Please re-login.');
     }
 
     // Community Isolation Check
     if (profile.role !== 'SuperAdmin' && profile.community_id !== community_id) {
-        return new Response(JSON.stringify({ error: 'Unauthorized community scope access.' }), { status: 403, headers: corsHeaders });
+        throw new Error('Unauthorized community scope access.');
     }
 
     const { data, error } = await supabaseClient
@@ -68,10 +67,9 @@ serve(async (req: any) => {
 
   } catch (error: any) {
     console.error("Expense Fetcher Crash:", error.message);
-    // Return 200 with an error object to avoid browser fetch interrupts on some platforms
     return new Response(
       JSON.stringify({ error: error.message, data: [] }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 })

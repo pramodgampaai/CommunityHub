@@ -38,11 +38,9 @@ function App() {
   const [theme, setTheme] = useState<Theme>('light');
 
   // AUTHORIZATION LOGIC: Single source of truth for what is actually RENDERED.
-  // This prevents the "double load" by ensuring we never render an unauthorized page first.
   const activePage = useMemo((): Page => {
     if (!user) return requestedPage;
 
-    // Rule 1: Setup Enforcement
     const hasUnits = user.units && user.units.length > 0;
     const isSetupRequiredRole = user.role === UserRole.Admin || user.role === UserRole.Resident;
     if (isSetupRequiredRole && !hasUnits) return 'CommunitySetup';
@@ -50,7 +48,6 @@ function App() {
     const role = user.role;
     const requested = requestedPage;
 
-    // Rule 2: Role-based Permission Boundaries
     if (role === UserRole.SuperAdmin) {
         return ['Dashboard', 'Billing'].includes(requested) ? requested : 'Dashboard';
     }
@@ -80,12 +77,10 @@ function App() {
     return requested;
   }, [user, requestedPage]);
 
-  // Persist the valid page
   useEffect(() => {
       localStorage.setItem('nilayam_last_page', activePage);
   }, [activePage]);
 
-  // Theme logic
   useEffect(() => {
     if (!user) {
         if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) setTheme('dark');
@@ -113,18 +108,20 @@ function App() {
   };
 
   const navigateToPage = useCallback((page: Page, params?: any) => {
+      if (requestedPage === page && !params) return; // Ignore redundant navigation
       startTransition(() => {
           setPageParams(params || null);
           setRequestedPage(page);
       });
-  }, []);
+  }, [requestedPage]);
 
   const handleManualPageChange = useCallback((page: Page) => {
+      if (requestedPage === page) return; // Ignore redundant clicks
       startTransition(() => {
           setPageParams(null);
           setRequestedPage(page);
       });
-  }, []);
+  }, [requestedPage]);
 
   if (!isSupabaseConfigured) {
     return (

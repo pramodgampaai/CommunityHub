@@ -74,9 +74,10 @@ const HelpDesk: React.FC = () => {
   };
 
   const fetchActivity = async (complaintId: string) => {
+      if (!user?.communityId) return;
       setHistoryLoading(true);
       try {
-          const logs = await getComplaintActivity(complaintId);
+          const logs = await getComplaintActivity(complaintId, user.communityId);
           setActivityLogs(logs);
       } catch (e) {
           console.error("Activity fetch failed", e);

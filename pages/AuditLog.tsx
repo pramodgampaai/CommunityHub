@@ -37,7 +37,8 @@ const AuditLogPage: React.FC = () => {
         if (!user?.communityId) return;
         try {
             setLoading(true);
-            const data = await getAuditLogs(user.communityId, user.id, user.role);
+            // Fix: getAuditLogs only accepts one argument
+            const data = await getAuditLogs(user.communityId);
             setLogs(data);
         } catch (error) {
             console.error("Failed to fetch audit logs", error);

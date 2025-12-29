@@ -28,7 +28,7 @@ serve(async (req: any) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
     if (userError || !user) throw new Error('Invalid token');
 
-    // Strict fetch from database
+    // 1. Fetch Profile
     const { data: profile, error: profileError } = await supabaseClient
         .from('users')
         .select('*')
@@ -41,6 +41,19 @@ serve(async (req: any) => {
         throw new Error(`Profile not found in database for ${user.email}. Contact administrator.`);
     }
 
+    // 2. Fetch Community Name safely (bypass RLS)
+    if (profile.community_id) {
+        const { data: comm } = await supabaseClient
+            .from('communities')
+            .select('name')
+            .eq('id', profile.community_id)
+            .maybeSingle();
+        if (comm) {
+            profile.community_name = comm.name;
+        }
+    }
+
+    // 3. Fetch Associated Units
     let units = [];
     const roleStr = String(profile.role || '').toLowerCase();
     const isTenant = roleStr === 'tenant' || (profile.profile_data?.is_tenant);

@@ -71,7 +71,8 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
         if (!selectedRecord || !user) return;
         setIsSubmitting(true);
         try {
-            await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, paymentDate, user);
+            // Fix: submitMaintenancePayment only accepts 4 arguments
+            await submitMaintenancePayment(selectedRecord.id, receiptUrl, upiId, paymentDate);
             setIsPaymentModalOpen(false); 
             await fetchRecords();
             setFeedback({
@@ -108,7 +109,8 @@ const Maintenance: React.FC<{ initialFilter?: any }> = ({ initialFilter }) => {
         }
 
         try { 
-            await verifyMaintenancePayment(record.id, user); 
+            // Fix: verifyMaintenancePayment only accepts one argument
+            await verifyMaintenancePayment(record.id); 
             await fetchRecords(); 
             setFeedback({
                 isOpen: true,

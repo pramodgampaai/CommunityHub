@@ -212,7 +212,8 @@ const Visitors: React.FC = () => {
                 return;
             }
 
-            await verifyVisitorEntry(targetVisitor.id, cleanCode, user);
+            // Fix: verifyVisitorEntry only accepts two arguments
+            await verifyVisitorEntry(targetVisitor.id, cleanCode);
             setVerifiedVisitor(targetVisitor);
             setVerificationMode('selection');
             setIsVerifyModalOpen(false);
@@ -267,7 +268,8 @@ const Visitors: React.FC = () => {
         if (!confirmDelete.id || !user) return;
         setIsSubmitting(true);
         try {
-            await deleteVisitor(confirmDelete.id, user);
+            // Fix: deleteVisitor only accepts one argument
+            await deleteVisitor(confirmDelete.id);
             setConfirmDelete({ isOpen: false, id: null });
             await fetchVisitors();
         } catch (error) { console.error(error); } finally { setIsSubmitting(false); }
