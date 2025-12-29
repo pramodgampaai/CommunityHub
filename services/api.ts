@@ -4,7 +4,7 @@ import {
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
     Amenity, Booking, MaintenanceRecord, Expense, AuditLog, 
     FinancialHistory, Unit, UserRole, 
-    ComplaintStatus, VisitorStatus, ExpenseStatus, MaintenanceStatus
+    ComplaintStatus, VisitorStatus, ExpenseStatus, MaintenanceStatus, Asset
 } from '../types';
 
 export interface MonthlyLedger {
@@ -196,10 +196,35 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
     });
 };
 
+export const getAssets = async (communityId: string): Promise<Asset[]> => {
+    const response = await callEdgeFunction('manage-asset', { action: 'LIST', community_id: communityId });
+    const data = response?.data || [];
+    return data.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        category: a.category,
+        quantity: a.quantity,
+        status: a.status,
+        purchaseDate: a.purchase_date,
+        warrantyExpiry: a.warranty_expiry,
+        nextServiceDate: a.next_service_date,
+        communityId: a.community_id
+    }));
+};
+
+export const createAsset = (data: Partial<Asset>, communityId: string) => 
+    callEdgeFunction('manage-asset', { action: 'CREATE', community_id: communityId, data });
+
+export const updateAsset = (id: string, data: Partial<Asset>) => 
+    callEdgeFunction('manage-asset', { action: 'UPDATE', id, data });
+
+export const deleteAsset = (id: string) => 
+    callEdgeFunction('manage-asset', { action: 'DELETE', id });
+
 export const getCommunity = async (id: string): Promise<Community> => {
     const result = await callEdgeFunction('get-community-profile', { id });
     const data = result.data;
-    // Defensive parsing: use default values if schema columns are missing
     return {
         id: data.id,
         name: data.name,
@@ -252,7 +277,6 @@ export const createCommunity = async (data: Partial<Community>) => {
     return res.data;
 };
 
-// Fixed: Handling successful success messages instead of full objects
 export const updateCommunity = async (id: string, data: Partial<Community>) => {
     return callEdgeFunction('manage-community', {
         action: 'UPDATE_PROFILE',
@@ -263,7 +287,6 @@ export const updateCommunity = async (id: string, data: Partial<Community>) => {
 
 export const deleteCommunity = (id: string) => callEdgeFunction('delete-community', { community_id: id });
 
-// Opening Balance Management (Routed through Edge Functions for recursion safety)
 export const setInitialOpeningBalance = async (id: string, balance: number) => {
     return callEdgeFunction('manage-community', {
         action: 'SET_INITIAL_BALANCE',
@@ -364,7 +387,6 @@ export const submitMaintenancePayment = (id: string, receiptUrl: string, upiId: 
 export const verifyMaintenancePayment = (id: string) => supabase.from('maintenance_records').update({ status: MaintenanceStatus.Paid }).eq('id', id);
 
 export const createExpense = (data: any, user: User) => supabase.from('expenses').insert({ ...data, submitted_by: user.id, community_id: user.communityId, status: ExpenseStatus.Pending });
-export const themeUpdate = (id: string, theme: string) => callEdgeFunction('update-user-theme', { theme });
 export const approveExpense = (id: string, approverId: string) => supabase.from('expenses').update({ status: ExpenseStatus.Approved, approved_by: approverId }).eq('id', id);
 export const rejectExpense = (id: string, approverId: string, reason: string) => supabase.from('expenses').update({ status: ExpenseStatus.Rejected, approved_by: approverId, description: reason }).eq('id', id);
 export const getMonthlyLedger = (community_id: string, month: number, year: number) => callEdgeFunction('get-monthly-ledger', { community_id, month, year });

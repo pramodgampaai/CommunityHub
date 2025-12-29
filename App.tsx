@@ -8,6 +8,7 @@ import NoticeBoard from './pages/NoticeBoard';
 import HelpDesk from './pages/HelpDesk';
 import Visitors from './pages/Visitors';
 import Amenities from './pages/Amenities';
+import Assets from './pages/Assets';
 import AdminPanel from './pages/AdminPanel';
 import Directory from './pages/Directory';
 import Maintenance from './pages/Maintenance';
@@ -62,7 +63,7 @@ function App() {
         return ['Notices', 'Visitors'].includes(requested) ? requested : 'Visitors';
     }
     if (role === UserRole.Tenant) {
-        return ['Notices', 'Help Desk', 'Visitors', 'Amenities'].includes(requested) ? requested : 'Notices';
+        return ['Notices', 'Help Desk', 'Visitors', 'Amenities', 'Assets'].includes(requested) ? requested : 'Notices';
     }
     if (role === UserRole.Resident) {
         const forbidden: Page[] = ['Billing', 'BulkOperations', 'CommunitySetup', 'AdminPanel'];
@@ -166,6 +167,7 @@ function App() {
           {activePage === 'Help Desk' && <HelpDesk />}
           {activePage === 'Visitors' && <Visitors />}
           {activePage === 'Amenities' && <Amenities />}
+          {activePage === 'Assets' && <Assets />}
           {activePage === 'Directory' && <Directory />}
           {activePage === 'Maintenance' && <Maintenance initialFilter={pageParams?.filter} />}
           {activePage === 'Expenses' && <Expenses />}

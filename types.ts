@@ -210,6 +210,25 @@ export interface Amenity {
   status?: 'Active' | 'Maintenance';
 }
 
+export enum AssetStatus {
+    Active = 'Active',
+    UnderRepair = 'Under Repair',
+    Scrapped = 'Scrapped'
+}
+
+export interface Asset {
+    id: string;
+    name: string;
+    description: string;
+    category: string;
+    quantity: number;
+    status: AssetStatus;
+    purchaseDate?: string;
+    warrantyExpiry?: string;
+    nextServiceDate?: string;
+    communityId: string;
+}
+
 export interface Booking {
   id: string;
   amenityId: string;
@@ -303,4 +322,4 @@ export interface FinancialHistory {
     communityBreakdown: { communityName: string; totalPaid: number }[];
 }
 
-export type Page = 'Dashboard' | 'AdminPanel' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';
+export type Page = 'Dashboard' | 'AdminPanel' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Assets' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';
