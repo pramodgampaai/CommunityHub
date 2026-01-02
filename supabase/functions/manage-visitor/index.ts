@@ -45,6 +45,7 @@ serve(async (req: any) => {
         if (input.visitorType) { mapped.visitor_type = input.visitorType; delete mapped.visitorType; }
         if (input.expectedAt) { mapped.expected_at = input.expectedAt; delete mapped.expectedAt; }
         if (input.vehicleNumber !== undefined) { mapped.vehicle_number = input.vehicleNumber; delete mapped.vehicleNumber; }
+        if (input.totalGuests !== undefined) { mapped.total_guests = input.totalGuests; delete mapped.totalGuests; }
         return mapped;
     };
 
@@ -93,7 +94,7 @@ serve(async (req: any) => {
         auditDesc = `Visitor invite revoked for: ${old?.name || id}`;
     }
 
-    // Server-side Audit Logging
+    // Server-side Audit Logging for mutations
     try {
         await supabaseClient.from('audit_logs').insert({
             community_id: profile.community_id,

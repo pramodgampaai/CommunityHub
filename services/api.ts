@@ -145,7 +145,8 @@ export const getVisitors = async (communityId: string, role?: UserRole, signal?:
         id: v.id, name: v.name, visitorType: v.visitor_type, vehicleNumber: v.vehicle_number,
         purpose: v.purpose, status: v.status, expectedAt: v.expected_at, validUntil: v.valid_until,
         entryTime: v.entry_time, exitTime: v.exit_time, entryToken: v.entry_token,
-        residentName: v.resident_name, flatNumber: v.flat_number, communityId: v.community_id, userId: v.user_id
+        residentName: v.resident_name, flatNumber: v.flat_number, communityId: v.community_id, userId: v.user_id,
+        totalGuests: v.total_guests || 1
     }));
 };
 
@@ -345,7 +346,8 @@ export const createVisitor = async (data: any, user: User): Promise<Visitor> => 
     return { 
         ...v, visitorType: v.visitor_type, vehicleNumber: v.vehicle_number, 
         expectedAt: v.expected_at, entryToken: v.entry_token, residentName: v.resident_name, 
-        flatNumber: v.flat_number, communityId: v.community_id, userId: v.user_id 
+        flatNumber: v.flat_number, communityId: v.community_id, userId: v.user_id,
+        totalGuests: v.total_guests || 1
     };
 };
 

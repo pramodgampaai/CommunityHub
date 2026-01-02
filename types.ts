@@ -197,6 +197,7 @@ export interface Visitor {
   flatNumber: string;
   communityId: string;
   userId?: string;
+  totalGuests: number;
 }
 
 export interface Amenity {

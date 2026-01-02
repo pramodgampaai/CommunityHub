@@ -38,6 +38,7 @@ const Visitors: React.FC = () => {
     const [visitorType, setVisitorType] = useState<VisitorType>(VisitorType.Guest);
     const [vehicleNumber, setVehicleNumber] = useState('');
     const [expectedAt, setExpectedAt] = useState('');
+    const [totalGuests, setTotalGuests] = useState<number>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Feedbacks
@@ -90,9 +91,9 @@ const Visitors: React.FC = () => {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 64px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Nilayam', canvas.width / 2, 100);
+        ctx.fillText('Nilayam', canvas.width / 2, 80);
         ctx.font = 'bold 20px sans-serif';
-        ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 140);
+        ctx.fillText('COMMUNITY ACCESS PASS', canvas.width / 2, 120);
 
         ctx.fillStyle = '#1e293b';
         ctx.font = 'bold 54px sans-serif';
@@ -106,9 +107,18 @@ const Visitors: React.FC = () => {
         ctx.font = 'bold 110px monospace';
         ctx.fillText(visitor.entryToken || 'INV-EXT', canvas.width / 2, 450);
 
+        // Guest Count Badge
+        ctx.fillStyle = '#f0fdfa';
+        ctx.beginPath();
+        ctx.roundRect(canvas.width / 2 - 100, 480, 200, 40, 20);
+        ctx.fill();
+        ctx.fillStyle = '#0d9488';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(`GROUP SIZE: ${visitor.totalGuests || 1}`, canvas.width / 2, 508);
+
         const qrSize = 450;
         const qrX = (canvas.width - qrSize) / 2;
-        const qrY = 520;
+        const qrY = 550;
         ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = 2;
         ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
@@ -116,10 +126,10 @@ const Visitors: React.FC = () => {
 
         ctx.fillStyle = '#1e293b';
         ctx.font = 'bold 32px sans-serif';
-        ctx.fillText(`Invited by ${visitor.residentName}`, canvas.width / 2, 1050);
+        ctx.fillText(`Invited by ${visitor.residentName}`, canvas.width / 2, 1080);
         ctx.fillStyle = '#64748b';
         ctx.font = 'bold 24px sans-serif';
-        ctx.fillText(`Unit: ${visitor.flatNumber} • ${user?.communityName || 'Property'}`, canvas.width / 2, 1100);
+        ctx.fillText(`Unit: ${visitor.flatNumber} • ${user?.communityName || 'Property'}`, canvas.width / 2, 1130);
 
         return canvas;
     };
@@ -156,17 +166,15 @@ const Visitors: React.FC = () => {
 
             const file = new File([blob], `Nilayam_Pass_${visitor.name.replace(/\s+/g, '_')}.png`, { type: 'image/png' });
             
-            // Check if Web Share API supports files (iPhone Safari does)
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 await navigator.share({
                     files: [file],
                     title: 'Visitor Pass',
-                    text: `Pre-authorized visit for ${visitor.name} at Nilayam.`
+                    text: `Pre-authorized visit for ${visitor.name} (${visitor.totalGuests} Guests) at Nilayam.`
                 });
             } else {
-                // Fallback to text share if files aren't supported
                 const arrival = new Date(visitor.expectedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-                const text = `Hi ${visitor.name}! I've pre-authorized your visit. 📍 Unit: ${visitor.flatNumber} • ⏰ Arrival: ${arrival} • 🔑 Entry Code: ${visitor.entryToken}`;
+                const text = `Hi ${visitor.name}! I've pre-authorized your visit for ${visitor.totalGuests} people. 📍 Unit: ${visitor.flatNumber} • ⏰ Arrival: ${arrival} • 🔑 Entry Code: ${visitor.entryToken}`;
                 
                 if (navigator.share) {
                     await navigator.share({ title: 'Visitor Pass', text: text });
@@ -177,7 +185,6 @@ const Visitors: React.FC = () => {
             }
         } catch (err) {
             console.error("Share failed", err);
-            // Silent fail if user cancelled share, but provide fallback for desktop
             const arrival = new Date(visitor.expectedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
             const text = `Hi ${visitor.name}! I've pre-authorized your visit. 📍 Unit: ${visitor.flatNumber} • ⏰ Arrival: ${arrival} • 🔑 Entry Code: ${visitor.entryToken}`;
             const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -230,7 +237,14 @@ const Visitors: React.FC = () => {
         setIsSubmitting(true);
         try {
             const dateISO = new Date(expectedAt).toISOString();
-            const payload = { name, visitorType, vehicleNumber, expectedAt: dateISO, purpose: visitorType === VisitorType.Guest ? 'Visitation' : 'Service' };
+            const payload = { 
+                name, 
+                visitorType, 
+                vehicleNumber, 
+                expectedAt: dateISO, 
+                purpose: visitorType === VisitorType.Guest ? 'Visitation' : 'Service',
+                totalGuests: totalGuests || 1
+            };
             if (editingId) {
                 await updateVisitor(editingId, payload, user);
             } else {
@@ -245,13 +259,14 @@ const Visitors: React.FC = () => {
     };
 
     const resetForm = () => {
-        setName(''); setVisitorType(VisitorType.Guest); setVehicleNumber(''); setExpectedAt(''); setEditingId(null);
+        setName(''); setVisitorType(VisitorType.Guest); setVehicleNumber(''); setExpectedAt(''); setTotalGuests(1); setEditingId(null);
     };
 
     const handleEdit = (visitor: Visitor) => {
         setName(visitor.name);
         setVisitorType(visitor.visitorType);
         setVehicleNumber(visitor.vehicleNumber || '');
+        setTotalGuests(visitor.totalGuests || 1);
         const date = new Date(visitor.expectedAt);
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -336,6 +351,7 @@ const Visitors: React.FC = () => {
                                 <div className="flex items-center gap-2 mb-1">
                                     <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{visitor.name}</h3>
                                     <span className={`px-2 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md ${visitor.status === 'Checked In' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}>{visitor.status}</span>
+                                    <span className="bg-brand-50 text-brand-600 text-[8px] font-black uppercase px-2 py-0.5 rounded-md ml-1">{visitor.totalGuests || 1} Guests</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <p className="text-sm text-slate-500 font-medium">Loc: <span className="text-slate-800 dark:text-zinc-300 font-bold">{visitor.flatNumber}</span></p>
@@ -369,8 +385,8 @@ const Visitors: React.FC = () => {
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Update Guest Info" : "Authorize Guest"} subtitle="Security Manifest" size="md">
                 <form className="space-y-5" onSubmit={handleFormSubmit}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Guest Name</label>
+                        <div className="sm:col-span-2">
+                          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Guest Primary Name</label>
                           <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="Full Name" className="rounded-xl input-field text-base font-bold"/>
                         </div>
                         <div>
@@ -381,6 +397,10 @@ const Visitors: React.FC = () => {
                             </select>
                             <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                           </div>
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Total No. of Guests</label>
+                            <input type="number" value={totalGuests} onChange={e => setTotalGuests(parseInt(e.target.value) || 1)} required min="1" max="20" className="rounded-xl input-field text-base font-bold"/>
                         </div>
                     </div>
                     <div>
@@ -423,6 +443,9 @@ const Visitors: React.FC = () => {
                                         className="w-48 h-48 rounded-xl"
                                     />
                                     <p className="mt-3 font-mono font-black text-2xl text-brand-600 tracking-widest">{selectedPassVisitor.entryToken || 'INV-EXT'}</p>
+                                    <div className="mt-2 inline-block px-3 py-1 bg-brand-50 rounded-full border border-brand-100">
+                                        <p className="text-[10px] font-black uppercase text-brand-600">Entry for {selectedPassVisitor.totalGuests} People</p>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-1">
