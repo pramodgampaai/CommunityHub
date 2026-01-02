@@ -246,7 +246,8 @@ const Visitors: React.FC = () => {
                 totalGuests: totalGuests || 1
             };
             if (editingId) {
-                await updateVisitor(editingId, payload, user);
+                // Fix: Removed 3rd argument 'user' to match services/api.ts signature
+                await updateVisitor(editingId, payload);
             } else {
                 const newVisitor = await createVisitor(payload, user);
                 setSelectedPassVisitor(newVisitor);
