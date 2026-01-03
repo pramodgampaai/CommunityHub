@@ -23,7 +23,6 @@ const mapCommunityToDb = (community: Partial<Community>) => {
     if (community.communityType !== undefined) mapped.community_type = community.communityType;
     if (community.blocks !== undefined) mapped.blocks = community.blocks;
     if (community.maintenanceRate !== undefined) mapped.maintenance_rate = community.maintenanceRate;
-    // Fix: correct property name from fixed_maintenance_amount to fixedMaintenanceAmount
     if (community.fixedMaintenanceAmount !== undefined) mapped.fixed_maintenance_amount = community.fixedMaintenanceAmount;
     if (community.openingBalance !== undefined) mapped.opening_balance = community.openingBalance;
     if (community.openingBalanceLocked !== undefined) mapped.opening_balance_locked = community.openingBalanceLocked;
@@ -35,9 +34,6 @@ const mapCommunityToDb = (community: Partial<Community>) => {
     return mapped;
 };
 
-/**
- * Standardizes Visitor objects from DB to Frontend Interface
- */
 const mapDbToVisitor = (v: any): Visitor => ({
     id: v.id,
     name: v.name,
@@ -57,16 +53,11 @@ const mapDbToVisitor = (v: any): Visitor => ({
     totalGuests: v.total_guests
 });
 
-// --- Global Request Coalescing Layer ---
 const pendingRequests = new Map<string, Promise<any>>();
 
-/**
- * Standardizes calls to Supabase Edge Functions.
- * Function endpoints follow the pattern: [BASE_URL]/functions/v1/[functionName]
- */
-const callEdgeFunction = async (functionName: string, body: any, options: { token?: string, signal?: AbortSignal } = {}) => {
+const callEdgeFunction = async (functionName: string, body: any, options: { token?: string, signal?: AbortSignal, anonymous?: boolean } = {}) => {
     let accessToken = options.token;
-    if (!accessToken) {
+    if (!accessToken && !options.anonymous) {
         const { data: { session } } = await supabase.auth.getSession();
         accessToken = session?.access_token;
     }
@@ -78,7 +69,7 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
     }
 
     const requestPromise = (async () => {
-        if (!accessToken) {
+        if (!accessToken && !options.anonymous) {
             pendingRequests.delete(requestKey);
             throw new Error("Authentication session expired. Please re-login.");
         }
@@ -87,13 +78,15 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
         const url = `${baseUrl}/functions/v1/${functionName}`;
 
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'apikey': supabaseKey 
+            };
+            if (accessToken) headers['Authorization'] = `Bearer ${accessToken.trim()}`;
+
             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken.trim()}`,
-                    'apikey': supabaseKey 
-                },
+                headers,
                 body: JSON.stringify(body),
                 signal: options.signal
             });
@@ -122,6 +115,10 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
     pendingRequests.set(requestKey, requestPromise);
     return requestPromise;
 };
+
+// --- CONTACT US MODULE ---
+export const sendContactEnquiry = (data: { name: string, email: string, subject: string, message: string }) => 
+    callEdgeFunction('send-enquiry', data, { anonymous: true });
 
 // --- API MODULES: NOTICES ---
 export const getNotices = async (communityId: string, signal?: AbortSignal): Promise<Notice[]> => {
@@ -371,12 +368,7 @@ export const rejectOpeningBalanceUpdate = (id: string) => callEdgeFunction('mana
 export const assignAdminUnit = (unitData: any, user: User, community: Community) => callEdgeFunction('assign-unit', { unitData, communityId: community.id, userId: user.id });
 export const requestPasswordReset = (email: string) => supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' });
 
-/**
- * Updates the user's password.
- * Uses native Auth client to correctly handle recovery sessions from URL hash.
- */
 export const updateUserPassword = async (password: string) => {
-    // Session Verification Pre-check
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         throw new Error("Auth session missing! Please ensure you are arriving via a valid recovery link.");
