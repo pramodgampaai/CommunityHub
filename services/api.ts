@@ -1,3 +1,4 @@
+
 import { supabase, supabaseKey, supabaseProjectUrl } from './supabase';
 import { 
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
@@ -330,7 +331,6 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         let displayFlatNumber = u.flat_number;
         if (units.length > 0) {
             const p = units[0];
-            // Fix: Replaced invalid template literal logic `${p.block + '-' : ''}` with correct ternary syntax
             displayFlatNumber = p.block ? `${p.block}-${p.flatNumber}` : p.flatNumber;
         }
         let userRole = u.role as UserRole;
@@ -376,6 +376,12 @@ export const requestPasswordReset = (email: string) => supabase.auth.resetPasswo
  * Uses native Auth client to correctly handle recovery sessions from URL hash.
  */
 export const updateUserPassword = async (password: string) => {
+    // Session Verification Pre-check
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        throw new Error("Auth session missing! Please ensure you are arriving via a valid recovery link.");
+    }
+
     const { data, error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
     return data;

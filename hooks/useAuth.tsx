@@ -61,8 +61,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       isFetchingRef.current = true;
       
       try {
-          // STABILITY DELAY: Increased slightly to 250ms to ensure Edge Function 
-          // token synchronization in high-latency mobile environments.
+          // STABILITY DELAY: Ensure Edge Function token synchronization
           if (session.access_token !== lastTokenRef.current) {
               await new Promise(r => setTimeout(r, 250));
           }
@@ -88,10 +87,14 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         const currentToken = session?.access_token || null;
         const isNewToken = currentToken !== lastTokenRef.current;
         
-        // Only trigger profile fetch if token actually changed
         if (event === 'SIGNED_OUT') {
             lastTokenRef.current = null;
             updateIfChanged(null);
+            setLoading(false);
+        } else if (event === 'PASSWORD_RECOVERY') {
+            // CRITICAL: When recovering password, we have a temporary session.
+            // Do NOT fetch profile as it might fail or clear the session state.
+            console.debug("Auth Event: PASSWORD_RECOVERY detected.");
             setLoading(false);
         } else if (session && (isNewToken || event === 'SIGNED_IN')) {
             lastTokenRef.current = currentToken;
