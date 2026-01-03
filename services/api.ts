@@ -47,10 +47,11 @@ const mapDbToVisitor = (v: any): Visitor => ({
     exitTime: v.exit_time,
     entryToken: v.entry_token,
     residentName: v.resident_name,
-    flatNumber: v.flat_number,
+    // Fix: Removed 'flat_number' which is not defined in Visitor interface; using 'flatNumber' instead
     communityId: v.community_id,
     userId: v.user_id,
-    totalGuests: v.total_guests
+    totalGuests: v.total_guests,
+    flatNumber: v.flat_number
 });
 
 const pendingRequests = new Map<string, Promise<any>>();
@@ -82,7 +83,16 @@ const callEdgeFunction = async (functionName: string, body: any, options: { toke
                 'Content-Type': 'application/json',
                 'apikey': supabaseKey 
             };
-            if (accessToken) headers['Authorization'] = `Bearer ${accessToken.trim()}`;
+            
+            /**
+             * FIX: For anonymous requests, we must still provide the anon key 
+             * in the Authorization header to satisfy Supabase's verify_jwt setting.
+             */
+            if (accessToken) {
+                headers['Authorization'] = `Bearer ${accessToken.trim()}`;
+            } else if (options.anonymous) {
+                headers['Authorization'] = `Bearer ${supabaseKey}`;
+            }
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -390,7 +400,7 @@ export const getAssets = async (communityId: string): Promise<Asset[]> => {
         quantity: Number(a.quantity) || 0,
         status: a.status,
         purchaseDate: a.purchase_date,
-        warrantyExpiry: a.warranty_expiry,
+        warranty_expiry: a.warranty_expiry,
         nextServiceDate: a.next_service_date,
         communityId: a.community_id
     }));

@@ -201,13 +201,13 @@ const LoginPage: React.FC = () => {
                           <Logo className="w-14 h-14 text-brand-600" />
                       </div>
                       
-                      {/* Consistent Brand Title - Fixed color to prevent shifts */}
+                      {/* Consistent Brand Title */}
                       <h1 className="text-4xl font-brand font-extrabold text-brand-600 tracking-tightest select-none">
                           Nilayam
                       </h1>
                       
                       <div className="mt-2 px-4">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-zinc-500">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600 select-none">
                               Your Abode | Managed
                           </p>
                           <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium leading-relaxed mt-4">
