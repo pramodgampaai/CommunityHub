@@ -16,6 +16,7 @@ import Expenses from './pages/Expenses';
 import CommunitySetup from './pages/CommunitySetup';
 import Billing from './pages/Billing';
 import BulkOperations from './pages/BulkOperations';
+import ResetPassword from './pages/ResetPassword';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
@@ -29,6 +30,9 @@ function App() {
   const { user, loading, updateUser } = useAuth();
   const [isPending, startTransition] = useTransition();
   
+  // Detect if we are in password reset mode from URL
+  const isResetFlow = window.location.pathname === '/reset-password';
+
   const [requestedPage, setRequestedPage] = useState<Page>(() => {
       const savedPage = localStorage.getItem('nilayam_last_page');
       return (savedPage as Page) || 'Dashboard';
@@ -38,6 +42,7 @@ function App() {
   const [theme, setTheme] = useState<Theme>('light');
 
   const activePage = useMemo((): Page => {
+    if (isResetFlow) return 'Dashboard'; // Dummy return, handled in JSX
     if (!user) return requestedPage;
 
     const hasUnits = user.units && user.units.length > 0;
@@ -70,17 +75,18 @@ function App() {
         return forbidden.includes(requested) ? 'Dashboard' : requested;
     }
     if (role === UserRole.Admin) {
-        // Restricted both Billing and AdminPanel (Communities) for Property Admins
         const forbidden: Page[] = ['Billing', 'AdminPanel'];
         return forbidden.includes(requested) ? 'Dashboard' : requested;
     }
 
     return requested;
-  }, [user, requestedPage]);
+  }, [user, requestedPage, isResetFlow]);
 
   useEffect(() => {
-      localStorage.setItem('nilayam_last_page', activePage);
-  }, [activePage]);
+      if (!isResetFlow) {
+        localStorage.setItem('nilayam_last_page', activePage);
+      }
+  }, [activePage, isResetFlow]);
 
   useEffect(() => {
     if (!user) {
@@ -89,7 +95,7 @@ function App() {
     } else if (user.theme) {
         setTheme(user.theme);
     }
-  }, [user?.id, user?.theme]); // Only react to ID or theme property changes
+  }, [user?.id, user?.theme]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -99,16 +105,9 @@ function App() {
 
   const toggleTheme = useCallback(async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
-    
-    // 1. Update local UI state immediately
     setTheme(newTheme); 
-    
     if (user) {
-        // 2. Update Auth Context locally so other components see the change
         updateUser({ theme: newTheme });
-        
-        // 3. Sync with DB in background - do NOT await or refresh user profile
-        // This prevents the data-fetching hooks from re-triggering.
         updateTheme(user.id, newTheme).catch(e => console.error("Theme sync failed:", e));
     }
   }, [theme, user, updateUser]);
@@ -138,6 +137,11 @@ function App() {
         </Card>
       </div>
     );
+  }
+
+  // Mandatory Reset Flow - Bypass standard layout
+  if (isResetFlow) {
+    return <ResetPassword />;
   }
 
   if (loading && !user) {
