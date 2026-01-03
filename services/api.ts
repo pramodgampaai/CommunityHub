@@ -1,4 +1,3 @@
-
 import { supabase, supabaseKey, supabaseProjectUrl } from './supabase';
 import { 
     User, Community, CommunityStat, Notice, Complaint, Visitor, 
@@ -331,6 +330,7 @@ export const getResidents = async (communityId: string): Promise<User[]> => {
         let displayFlatNumber = u.flat_number;
         if (units.length > 0) {
             const p = units[0];
+            // Fix: Replaced invalid template literal logic `${p.block + '-' : ''}` with correct ternary syntax
             displayFlatNumber = p.block ? `${p.block}-${p.flatNumber}` : p.flatNumber;
         }
         let userRole = u.role as UserRole;
@@ -370,7 +370,16 @@ export const approveOpeningBalanceUpdate = (id: string, amount: number) => callE
 export const rejectOpeningBalanceUpdate = (id: string) => callEdgeFunction('manage-community', { action: 'REJECT_BALANCE_UPDATE', community_id: id });
 export const assignAdminUnit = (unitData: any, user: User, community: Community) => callEdgeFunction('assign-unit', { unitData, communityId: community.id, userId: user.id });
 export const requestPasswordReset = (email: string) => supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' });
-export const updateUserPassword = (password: string) => callEdgeFunction('update-user-password', { password });
+
+/**
+ * Updates the user's password.
+ * Uses native Auth client to correctly handle recovery sessions from URL hash.
+ */
+export const updateUserPassword = async (password: string) => {
+    const { data, error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    return data;
+};
 
 export const getAssets = async (communityId: string): Promise<Asset[]> => {
     const response = await callEdgeFunction('manage-asset', { action: 'LIST', community_id: communityId });

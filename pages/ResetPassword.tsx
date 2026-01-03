@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { updateUserPassword } from '../services/api';
 import Button from '../components/ui/Button';
@@ -11,8 +11,17 @@ const ResetPassword: React.FC = () => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isHydrating, setIsHydrating] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+
+    // Small delay to let Supabase Auth consume the hash from URL
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsHydrating(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, []);
 
     const validatePassword = (pwd: string) => {
         if (pwd.length < 8) return "Password must be at least 8 characters long.";
@@ -40,17 +49,29 @@ const ResetPassword: React.FC = () => {
         try {
             await updateUserPassword(password);
             setSuccess(true);
-            // Wait 2 seconds then redirect to login (via logout)
+            // Wait 2.5 seconds then redirect to login (via logout)
             setTimeout(async () => {
                 await logout();
             }, 2500);
         } catch (err: any) {
             console.error("Reset failed:", err);
-            setError(err.message || "Failed to update security credentials.");
+            let msg = err.message || "Failed to update security credentials.";
+            if (msg.includes("session")) {
+                msg = "Recovery session not detected. Please request a new recovery link from the login page.";
+            }
+            setError(msg);
         } finally {
             setIsLoading(false);
         }
     };
+
+    if (isHydrating) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)]">
+                <div className="w-10 h-10 border-4 border-brand-500/20 border-t-brand-600 rounded-full animate-spin"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4 relative overflow-hidden">
