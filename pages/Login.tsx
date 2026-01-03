@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
 import { requestPasswordReset } from '../services/api';
@@ -18,17 +18,21 @@ const LoginPage: React.FC = () => {
   const [resetSuccess, setResetSuccess] = useState(false);
   const { login } = useAuth();
 
-  // Clear error when user interacts with inputs or switches view
-  useEffect(() => {
-    if (error) setError(null);
-  }, [email, password, view]);
+  const handleInputChange = (setter: (v: string) => void, value: string) => {
+      setter(value);
+      if (error) setError(null);
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+
     setIsLoading(true);
     setError(null);
+    
     try {
       await login(email, password);
+      // Success will cause useAuth state change and App will navigate
     } catch (err: any) {
       console.error('Login failed:', err);
       let errorMessage = 'An unexpected error occurred. Please try again.';
@@ -37,13 +41,11 @@ const LoginPage: React.FC = () => {
           if (typeof err === 'string') {
               errorMessage = err;
           } else if (typeof err === 'object') {
-              // Handle structured AuthError objects
               errorMessage = err.message || err.error_description || err.description || JSON.stringify(err);
           }
       }
       
       const lowerMsg = errorMessage.toLowerCase();
-      // Simplify common auth errors for end-users
       if (
           lowerMsg.includes("invalid login credentials") || 
           lowerMsg.includes("invalid email or password") ||
@@ -96,21 +98,15 @@ const LoginPage: React.FC = () => {
       {/* Main Login Container */}
       <div className="w-full max-w-md flex flex-col justify-center p-10 sm:p-14 space-y-10 bg-white dark:bg-[#121214] rounded-[3.5rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl relative z-10 animate-fadeIn">
         <div className="flex flex-col items-center text-center">
-            {/* Logo */}
             <div className="mb-6 relative">
                 <Logo className="w-14 h-14 text-brand-600 relative z-10" />
             </div>
-            
-            {/* Brand Title */}
             <h1 className="text-3xl font-brand font-extrabold text-brand-600 tracking-tightest">Nilayam</h1>
-            
-            {/* Tagline */}
             <div className="mt-2.5">
                 <p className="font-brand text-[9px] font-bold uppercase tracking-[0.4em] text-brand-600">
                     Your Abode <span className="opacity-30 mx-1 font-light">|</span> Managed
                 </p>
             </div>
-            
             <div className="mt-8">
                 <p className="text-sm font-medium text-slate-500 dark:text-zinc-400">
                     {view === 'login' ? 'Welcome back. Please authenticate.' : 'Initialize credential recovery.'}
@@ -147,7 +143,7 @@ const LoginPage: React.FC = () => {
                             className="input-field block w-full px-6 py-4 rounded-2xl text-base"
                             placeholder="resident@nilayam.com"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onChange={(e) => handleInputChange(setEmail, e.target.value)}
                         />
                     </div>
                     <div>
@@ -159,7 +155,7 @@ const LoginPage: React.FC = () => {
                             className="input-field block w-full px-6 py-4 rounded-2xl text-base"
                             placeholder="••••••••"
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            onChange={(e) => handleInputChange(setPassword, e.target.value)}
                         />
                     </div>
                     <div className="flex items-center justify-end px-2 pt-1">
@@ -198,7 +194,7 @@ const LoginPage: React.FC = () => {
                                     className="input-field block w-full px-6 py-4 rounded-2xl text-base"
                                     placeholder="your@email.com"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(e) => handleInputChange(setEmail, e.target.value)}
                                 />
                             </div>
                         </div>
@@ -220,9 +216,6 @@ const LoginPage: React.FC = () => {
                 </div>
             </form>
         )}
-
-        <div className="pt-8 text-center border-t border-slate-50 dark:border-white/5 opacity-30">
-        </div>
       </div>
     </div>
   );

@@ -23,7 +23,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const lastTokenRef = useRef<string | null>(null);
   const isFetchingRef = useRef<boolean>(false);
 
-  // STABILITY FIX: Use functional update to avoid stale closures during auth events
   const updateIfChanged = (newUser: User | null) => {
       setUserState(prev => {
           const oldStr = JSON.stringify(prev);
@@ -50,7 +49,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           role: resolvedRole, communityId: userProfile.community_id,
           communityName: userProfile.community_name || (userProfile.role === UserRole.SuperAdmin ? 'Platform' : 'Community'),
           status: userProfile.status || 'active', units: mappedUnits, theme: userProfile.theme,
-          // Mapped profile_data to tenantDetails and profile_data to fix errors
           tenantDetails: userProfile.profile_data,
           profile_data: userProfile.profile_data
       };
@@ -61,7 +59,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       isFetchingRef.current = true;
       
       try {
-          // STABILITY DELAY: Ensure Edge Function token synchronization
           if (session.access_token !== lastTokenRef.current) {
               await new Promise(r => setTimeout(r, 250));
           }
@@ -92,9 +89,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             updateIfChanged(null);
             setLoading(false);
         } else if (event === 'PASSWORD_RECOVERY') {
-            // CRITICAL: When recovering password, we have a temporary session.
-            // Do NOT fetch profile as it might fail or clear the session state.
-            console.debug("Auth Event: PASSWORD_RECOVERY detected.");
             setLoading(false);
         } else if (session && (isNewToken || event === 'SIGNED_IN')) {
             lastTokenRef.current = currentToken;
@@ -116,9 +110,12 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   }, []);
 
   const login = async (email: string, pass: string) => {
-    setLoading(true);
+    // SECURITY FIX: Do not set global loading true here.
+    // Setting global loading causes the root App component to show a Spinner
+    // and unmount the LoginPage. If login fails, the LoginPage is remounted
+    // but its local error state is lost, looking like a "page reload".
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) { setLoading(false); throw error; }
+    if (error) throw error;
   };
 
   const refreshUser = async () => {
