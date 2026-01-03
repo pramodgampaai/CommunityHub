@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
 import { requestPasswordReset } from '../services/api';
 import Logo from '../components/ui/Logo';
+import { AlertTriangleIcon } from '../components/icons';
+import { motion, AnimatePresence } from 'framer-motion';
 
 type LoginView = 'login' | 'forgot_password';
 
@@ -15,6 +17,11 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
   const { login } = useAuth();
+
+  // Clear error when user interacts with inputs or switches view
+  useEffect(() => {
+    if (error) setError(null);
+  }, [email, password, view]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,13 +37,21 @@ const LoginPage: React.FC = () => {
           if (typeof err === 'string') {
               errorMessage = err;
           } else if (typeof err === 'object') {
-              errorMessage = err.message || err.error_description || JSON.stringify(err);
+              // Handle structured AuthError objects
+              errorMessage = err.message || err.error_description || err.description || JSON.stringify(err);
           }
       }
       
       const lowerMsg = errorMessage.toLowerCase();
-      if (lowerMsg.includes("invalid login credentials") || lowerMsg.includes("invalid email or password")) {
-          errorMessage = "Invalid credentials. Verify your email or contact your property administrator.";
+      // Simplify common auth errors for end-users
+      if (
+          lowerMsg.includes("invalid login credentials") || 
+          lowerMsg.includes("invalid email or password") ||
+          lowerMsg.includes("invalid_credentials")
+      ) {
+          errorMessage = "Invalid credentials. Please verify your email and security key.";
+      } else if (lowerMsg.includes("email not confirmed")) {
+          errorMessage = "Account registration is pending confirmation. Please check your inbox.";
       }
       
       setError(errorMessage);
@@ -55,7 +70,7 @@ const LoginPage: React.FC = () => {
         setResetSuccess(true);
     } catch (err: any) {
         console.error('Password reset request failed:', err);
-        let errorMessage = 'Failed to send reset link. Please try again.';
+        let errorMessage = 'Failed to send reset link. Please verify the email address.';
         if (err && typeof err === 'object' && 'message' in err) {
             errorMessage = String(err.message);
         }
@@ -73,12 +88,12 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4 relative overflow-hidden">
-      {/* Background Architectural Grid Pattern - Consistent on all screens */}
+      {/* Background Architectural Grid Pattern */}
       <div className="absolute inset-0 z-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none">
           <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(var(--text-light) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
       </div>
 
-      {/* Main Login Container - Centered Card */}
+      {/* Main Login Container */}
       <div className="w-full max-w-md flex flex-col justify-center p-10 sm:p-14 space-y-10 bg-white dark:bg-[#121214] rounded-[3.5rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl relative z-10 animate-fadeIn">
         <div className="flex flex-col items-center text-center">
             {/* Logo */}
@@ -103,54 +118,69 @@ const LoginPage: React.FC = () => {
             </div>
         </div>
         
+        {/* Focused Error Display */}
+        <AnimatePresence mode="wait">
+            {error && (
+                <motion.div 
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/30 rounded-2xl flex items-start gap-3 shadow-sm"
+                >
+                    <AlertTriangleIcon className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
+                    <p className="text-xs font-bold text-rose-800 dark:text-rose-200 leading-relaxed">
+                        {error}
+                    </p>
+                </motion.div>
+            )}
+        </AnimatePresence>
+        
         {view === 'login' ? (
-            <form className="mt-8 space-y-8" onSubmit={handleLoginSubmit}>
-            {error && <div className="p-4 text-xs text-red-600 font-bold bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-100 dark:border-red-800 text-center">{error}</div>}
-            <div className="space-y-6">
-                <div>
-                    <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Email Identity</label>
-                    <input
-                        type="email"
-                        autoComplete="email"
-                        required
-                        className="input-field block w-full px-6 py-4 rounded-2xl text-base"
-                        placeholder="resident@nilayam.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                    />
+            <form className="mt-2 space-y-8" onSubmit={handleLoginSubmit}>
+                <div className="space-y-6">
+                    <div>
+                        <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Email Identity</label>
+                        <input
+                            type="email"
+                            autoComplete="email"
+                            required
+                            className="input-field block w-full px-6 py-4 rounded-2xl text-base"
+                            placeholder="resident@nilayam.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Security Key</label>
+                        <input
+                            type="password"
+                            autoComplete="current-password"
+                            required
+                            className="input-field block w-full px-6 py-4 rounded-2xl text-base"
+                            placeholder="••••••••"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center justify-end px-2 pt-1">
+                        <button
+                            type="button"
+                            onClick={() => toggleView('forgot_password')}
+                            className="font-mono text-[10px] font-bold text-brand-600 hover:text-brand-700 uppercase tracking-widest transition-colors"
+                        >
+                            Recover Credentials
+                        </button>
+                    </div>
                 </div>
-                <div>
-                    <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Security Key</label>
-                    <input
-                        type="password"
-                        autoComplete="current-password"
-                        required
-                        className="input-field block w-full px-6 py-4 rounded-2xl text-base"
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                    />
-                </div>
-                <div className="flex items-center justify-end px-2 pt-1">
-                    <button
-                        type="button"
-                        onClick={() => toggleView('forgot_password')}
-                        className="font-mono text-[10px] font-bold text-brand-600 hover:text-brand-700 uppercase tracking-widest transition-colors"
-                    >
-                        Recover Credentials
-                    </button>
-                </div>
-            </div>
 
-            <div className="pt-2">
-                <Button type="submit" size="lg" className="w-full shadow-xl rounded-2xl h-14" disabled={isLoading}>
-                    {isLoading ? 'Verifying...' : 'Authenticate'}
-                </Button>
-            </div>
+                <div className="pt-2">
+                    <Button type="submit" size="lg" className="w-full shadow-xl rounded-2xl h-14" disabled={isLoading}>
+                        {isLoading ? 'Verifying...' : 'Authenticate'}
+                    </Button>
+                </div>
             </form>
         ) : (
-            <form className="mt-8 space-y-8" onSubmit={handleForgotSubmit}>
-                {error && <p className="text-red-500 text-xs text-center font-bold">{error}</p>}
+            <form className="mt-2 space-y-8" onSubmit={handleForgotSubmit}>
                 {resetSuccess ? (
                     <div className="text-green-600 dark:text-green-400 text-center bg-green-50 dark:bg-green-900/10 p-8 rounded-[2.5rem] border border-green-100 dark:border-green-900/20">
                         <p className="text-sm font-bold uppercase tracking-widest">Link Dispatched</p>
@@ -192,7 +222,6 @@ const LoginPage: React.FC = () => {
         )}
 
         <div className="pt-8 text-center border-t border-slate-50 dark:border-white/5 opacity-30">
-            {/* Empty footer for padding/layout consistency */}
         </div>
       </div>
     </div>
