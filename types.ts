@@ -1,4 +1,3 @@
-
 export enum UserRole {
   SuperAdmin = 'SuperAdmin',
   Admin = 'Admin',
@@ -23,6 +22,12 @@ export interface CommunityContact {
     email: string;
     primaryPhone: string;
     secondaryPhone?: string;
+}
+
+export interface CommunityPricing {
+    resident: number;
+    admin: number;
+    staff: number;
 }
 
 export interface CommunityPricing {
@@ -80,7 +85,6 @@ export interface Unit {
     maintenanceStartDate?: string;
 }
 
-// Added TenantProfile interface to fix errors in Directory.tsx
 export interface TenantProfile {
     aadharNumber: string;
     panNumber: string;
@@ -109,7 +113,6 @@ export interface User {
   status: 'active' | 'disabled';
   units?: Unit[];
   theme?: 'light' | 'dark';
-  // Added tenantDetails and profile_data to fix errors in Directory.tsx and useAuth.tsx
   tenantDetails?: TenantProfile;
   profile_data?: any;
 }
@@ -129,7 +132,6 @@ export interface Notice {
   createdAt: string;
   type: NoticeType;
   communityId: string;
-  // Added optional validFrom and validUntil to fix errors in NoticeBoard.tsx
   validFrom?: string;
   validUntil?: string;
 }
@@ -198,8 +200,10 @@ export interface Visitor {
   communityId: string;
   userId?: string;
   totalGuests: number;
+  photoUrl?: string;
 }
 
+// Fixed: Changed from enum to interface to correctly define property types and resolve duplicate identifier errors
 export interface Amenity {
   id: string;
   name: string;
@@ -315,7 +319,6 @@ export interface AuditLog {
     };
 }
 
-// Added FinancialHistory interface to fix errors in api.ts, Billing.tsx and pdfGenerator.ts
 export interface FinancialHistory {
     year: number;
     totalCollected: number;
@@ -323,4 +326,70 @@ export interface FinancialHistory {
     communityBreakdown: { communityName: string; totalPaid: number }[];
 }
 
-export type Page = 'Dashboard' | 'AdminPanel' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Assets' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations';
+export enum MarketplaceItemStatus {
+    Active = 'Active',
+    Sold = 'Sold'
+}
+
+export enum MarketplaceCategory {
+    Electronics = 'Electronics',
+    Furniture = 'Furniture',
+    Apparel = 'Apparel',
+    Groceries = 'Groceries',
+    Appliances = 'Appliances',
+    Vehicles = 'Vehicles',
+    Other = 'Other'
+}
+
+export interface MarketplaceItem {
+    id: string;
+    sellerId: string;
+    sellerName: string;
+    sellerFlat: string;
+    communityId: string;
+    title: string;
+    description: string;
+    price: number;
+    category: MarketplaceCategory;
+    status: MarketplaceItemStatus;
+    imageUrl?: string;
+    createdAt: string;
+}
+
+export interface RealEstateListing {
+    id: string;
+    ownerId: string;
+    ownerName?: string;
+    ownerFlat?: string;
+    unitId: string;
+    unitFlat: string;
+    unitBlock: string;
+    unitSize: number;
+    unitFloor: number;
+    communityId: string;
+    rentAmount: number;
+    depositAmount: number;
+    availableFrom: string;
+    furnishingStatus: 'Unfurnished' | 'Semi-furnished' | 'Fully-furnished';
+    description: string;
+    imageUrl?: string;
+    status: 'Active' | 'Leased' | 'Closed';
+    createdAt: string;
+}
+
+export interface MarketplaceMessage {
+    id: string;
+    itemId?: string;
+    itemTitle?: string;
+    rentalId?: string;
+    rentalTitle?: string;
+    senderId: string;
+    senderName: string;
+    senderFlat: string;
+    receiverId: string;
+    message: string;
+    isRead: boolean;
+    createdAt: string;
+}
+
+export type Page = 'Dashboard' | 'AdminPanel' | 'Notices' | 'Help Desk' | 'Visitors' | 'Amenities' | 'Assets' | 'Directory' | 'Maintenance' | 'Expenses' | 'CommunitySetup' | 'Billing' | 'BulkOperations' | 'Marketplace';

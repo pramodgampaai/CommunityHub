@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon, Cog6ToothIcon, ClipboardDocumentListIcon, Squares2X2Icon, ClipboardDocumentCheckIcon } from '../icons';
+import { HomeIcon, BellIcon, ShieldCheckIcon, UsersIcon, SparklesIcon, UserGroupIcon, CurrencyRupeeIcon, BanknotesIcon, CalculatorIcon, Cog6ToothIcon, ClipboardDocumentListIcon, Squares2X2Icon, ClipboardDocumentCheckIcon, ShoppingBagIcon } from '../icons';
 import type { Page } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -16,11 +16,12 @@ const navItems: { name: Page; icon: React.FC<React.SVGProps<SVGSVGElement>>; lab
   { name: 'Notices', icon: BellIcon, label: 'Notice Board' },
   { name: 'Help Desk', icon: ShieldCheckIcon, label: 'Help Desk' },
   { name: 'Visitors', icon: UsersIcon, label: 'Visitors' },
-  { name: 'Amenities', icon: SparklesIcon, label: 'Amenities' },
+  { name: 'Amenities', icon: SparklesIcon, label: 'Facilities' },
   { name: 'Assets', icon: ClipboardDocumentCheckIcon, label: 'Assets' },
   { name: 'Directory', icon: UserGroupIcon, label: 'Directory' },
   { name: 'Maintenance', icon: CurrencyRupeeIcon, label: 'Maintenance' },
   { name: 'Expenses', icon: BanknotesIcon, label: 'Expenses' },
+  { name: 'Marketplace', icon: ShoppingBagIcon, label: 'Marketplace' },
   { name: 'Billing', icon: CalculatorIcon, label: 'Billing' },
   { name: 'CommunitySetup', icon: Cog6ToothIcon, label: 'Property Config' },
   { name: 'BulkOperations', icon: ClipboardDocumentListIcon, label: 'Bulk Ops' },
@@ -39,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     if (user?.role === UserRole.Security) return ['Notices', 'Visitors'].includes(item.name);
     
     // Tenant Role
-    if (user?.role === UserRole.Tenant) return ['Notices', 'Help Desk', 'Visitors', 'Amenities', 'Assets'].includes(item.name);
+    if (user?.role === UserRole.Tenant) return ['Notices', 'Help Desk', 'Visitors', 'Amenities', 'Assets', 'Marketplace'].includes(item.name);
     
     if (user?.role === UserRole.Admin) return !['Billing', 'AdminPanel'].includes(item.name);
     return item.name !== 'Billing' && item.name !== 'CommunitySetup' && item.name !== 'BulkOperations' && item.name !== 'AdminPanel';

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import Button from '../components/ui/Button';
+import Spinner from '../components/ui/Spinner';
 import { requestPasswordReset, sendContactEnquiry } from '../services/api';
 import Logo from '../components/ui/Logo';
 import { 
@@ -102,7 +103,6 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-        // This transmits directly to the Supabase Edge Function anonymously
         await sendContactEnquiry({
             name: contactName,
             email: contactEmail,
@@ -134,15 +134,14 @@ const LoginPage: React.FC = () => {
   return (
     <div className="flex flex-col lg:flex-row h-screen bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] overflow-hidden">
       
-      {/* LEFT SIDE: Brand Narrative (Desktop Only) */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-12 lg:p-24 xl:p-32 bg-brand-600 dark:bg-[#0f1115] text-white relative overflow-hidden shrink-0">
           <div className="absolute inset-0 z-0 opacity-10 pointer-events-none">
               <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(white 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
           </div>
           
           <motion.div 
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="relative z-10 space-y-8"
           >
@@ -167,8 +166,8 @@ const LoginPage: React.FC = () => {
                   {features.map((f, i) => (
                       <motion.div 
                         key={i}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
                         transition={{ delay: 0.4 + (i * 0.1), duration: 0.5 }}
                         className="space-y-2"
                       >
@@ -183,7 +182,6 @@ const LoginPage: React.FC = () => {
           </motion.div>
       </div>
 
-      {/* RIGHT SIDE: Dynamic View Portal - FIXED SCROLLING */}
       <div className="w-full lg:w-1/2 h-full overflow-y-auto relative gpu-accelerated scroll-smooth">
         <div className="absolute inset-0 z-0 lg:hidden opacity-[0.03] dark:opacity-[0.05] pointer-events-none fixed">
             <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(var(--text-light) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
@@ -191,8 +189,8 @@ const LoginPage: React.FC = () => {
 
         <div className="min-h-full flex flex-col items-center justify-center p-4 sm:p-8 lg:p-12 relative z-10">
           <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               className="w-full max-w-md my-auto py-10"
           >
               <div className="bg-white dark:bg-[#121214] p-8 sm:p-12 rounded-[3rem] border border-[var(--border-light)] dark:border-white/5 shadow-2xl space-y-8">
@@ -201,7 +199,6 @@ const LoginPage: React.FC = () => {
                           <Logo className="w-14 h-14 text-brand-600" />
                       </div>
                       
-                      {/* Consistent Brand Title */}
                       <h1 className="text-4xl font-brand font-extrabold text-brand-600 tracking-tightest select-none">
                           Nilayam
                       </h1>
@@ -249,7 +246,9 @@ const LoginPage: React.FC = () => {
                                   <button type="button" onClick={() => toggleView('forgot_password')} className="font-mono text-[10px] font-bold text-brand-600 uppercase tracking-widest hover:underline">Lost Credentials?</button>
                               </div>
                           </div>
-                          <Button type="submit" size="lg" className="w-full h-14 rounded-2xl shadow-xl shadow-brand-500/10" disabled={isLoading}>{isLoading ? 'Authenticating...' : 'Sign In'}</Button>
+                          <Button type="submit" size="lg" className="w-full h-14 rounded-2xl shadow-xl shadow-brand-500/10" disabled={isLoading} leftIcon={isLoading ? <Spinner /> : undefined}>
+                              {isLoading ? 'Authenticating...' : 'Sign In'}
+                          </Button>
                       </form>
                   )}
 
@@ -267,7 +266,9 @@ const LoginPage: React.FC = () => {
                                       <label className="block font-mono text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 ml-2">Registration Email</label>
                                       <input type="email" autoComplete="email" required className="input-field block w-full px-5 py-3.5 rounded-2xl text-base" placeholder="your@email.com" value={email} onChange={(e) => handleInputChange(setEmail, e.target.value)} />
                                   </div>
-                                  <Button type="submit" size="lg" className="w-full h-14 rounded-2xl" disabled={isLoading}>{isLoading ? 'Sending...' : 'Request Reset'}</Button>
+                                  <Button type="submit" size="lg" className="w-full h-14 rounded-2xl" disabled={isLoading} leftIcon={isLoading ? <Spinner /> : undefined}>
+                                      {isLoading ? 'Sending...' : 'Request Reset'}
+                                  </Button>
                               </>
                           )}
                           <div className="text-center">
@@ -277,7 +278,7 @@ const LoginPage: React.FC = () => {
                   )}
 
                   {view === 'about' && (
-                      <div className="space-y-6 animate-fadeIn">
+                      <div className="space-y-6">
                           <div className="space-y-4">
                               <div className="bg-slate-50 dark:bg-white/5 p-5 rounded-2xl border border-slate-100 dark:border-white/5">
                                   <h4 className="text-xs font-black uppercase text-brand-600 tracking-widest mb-2 flex items-center gap-2">
@@ -304,7 +305,7 @@ const LoginPage: React.FC = () => {
                   )}
 
                   {view === 'contact' && (
-                      <form className="space-y-4 animate-fadeIn" onSubmit={handleContactSubmit}>
+                      <form className="space-y-4" onSubmit={handleContactSubmit}>
                           {resetSuccess ? (
                               <div className="text-center bg-emerald-50 dark:bg-emerald-900/10 p-8 rounded-3xl border border-emerald-100">
                                   <CheckCircleIcon className="w-10 h-10 mx-auto mb-4 text-emerald-600" />
@@ -325,13 +326,14 @@ const LoginPage: React.FC = () => {
                                   </div>
                                   <div>
                                       <label className="block font-mono text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1 ml-1">Subject</label>
+                                      {/* Fix: Added missing closing quote for className and ensured input is properly typed */}
                                       <input type="text" required className="input-field block w-full px-4 py-2 rounded-xl text-sm" placeholder="Community Enquiry" value={contactSubject} onChange={e => setContactSubject(e.target.value)} />
                                   </div>
                                   <div>
                                       <label className="block font-mono text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-1 ml-1">Message Body</label>
                                       <textarea required className="input-field block w-full px-4 py-2 rounded-xl text-sm resize-none" rows={4} placeholder="How can we assist your community?" value={contactMessage} onChange={e => setContactMessage(e.target.value)} />
                                   </div>
-                                  <Button type="submit" size="lg" className="w-full h-12 rounded-xl" disabled={isLoading} leftIcon={isLoading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <EnvelopeIcon />}>
+                                  <Button type="submit" size="lg" className="w-full h-12 rounded-xl" disabled={isLoading} leftIcon={isLoading ? <Spinner /> : <EnvelopeIcon />}>
                                       {isLoading ? 'Transmitting...' : 'Enquire'}
                                   </Button>
                               </>
@@ -343,7 +345,6 @@ const LoginPage: React.FC = () => {
                   )}
                   </div>
 
-                  {/* Footer Navigation */}
                   <div className="pt-8 border-t border-slate-50 dark:border-white/5 flex items-center justify-center gap-6">
                       <button onClick={() => toggleView('about')} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-brand-600 transition-colors">About Nilayam</button>
                       <div className="w-1 h-1 bg-slate-200 rounded-full" />

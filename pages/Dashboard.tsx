@@ -1,36 +1,33 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses, getCommunity } from '../services/api';
+import { getNotices, getComplaints, getVisitors, getMaintenanceRecords, getExpenses, getCommunity, getCachedData } from '../services/api';
 import type { Notice, Complaint, Visitor, MaintenanceRecord, Expense, Community } from '../types';
 import { ComplaintStatus, VisitorStatus, MaintenanceStatus, UserRole, ExpenseStatus, Page } from '../types';
 import Card from '../components/ui/Card';
 import ErrorCard from '../components/ui/ErrorCard';
 import { useAuth } from '../hooks/useAuth';
-import { UsersIcon, ShieldCheckIcon, PlusIcon, ArrowRightIcon, BellIcon } from '../components/icons';
+import { UsersIcon, ShieldCheckIcon, PlusIcon, ArrowRightIcon, BellIcon, XMarkIcon } from '../components/icons';
 import Button from '../components/ui/Button';
-
-// Static memory cache for zero-flicker transitions
-let dashboardCache: any = null;
 
 const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }> = ({ navigateToPage }) => {
   const { user } = useAuth();
   
-  // Initialize from cache if available
-  const [data, setData] = useState(dashboardCache || {
+  // Use a unique compound key for cache
+  const cacheKey = `dashboard:${user?.id}:${user?.communityId || 'global'}`;
+  const [data, setData] = useState(() => getCachedData(cacheKey) || {
       notices: [], complaints: [], visitors: [], 
       maintenance: { lifetimeCollected: 0, myDues: 0, pendingVerifications: 0 },
       expenses: { totalExpenses: 0 },
       community: null
   });
   
-  const [loading, setLoading] = useState(!dashboardCache);
+  const [loading, setLoading] = useState(!getCachedData(cacheKey));
   const [error, setError] = useState<string | null>(null);
   const isFetchingRef = useRef(false);
 
   useEffect(() => {
-    // HYDRATION GUARD: Don't fetch if the user profile isn't fully ready yet
     if (!user?.communityId || isFetchingRef.current) {
-        if (user?.role === UserRole.SuperAdmin) setLoading(false);
+        if (user?.role === UserRole.SuperAdmin && !user?.communityId) setLoading(false);
         return;
     }
     
@@ -42,13 +39,12 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
       try {
         const isAdmin = user.role === UserRole.Admin || user.role === UserRole.SuperAdmin;
         
-        // Parallel fetch including community profile for opening balance
         const promises: Promise<any>[] = [
             getNotices(user.communityId, controller.signal),
             getComplaints(user.communityId, user.id, user.role, controller.signal),
             getVisitors(user.communityId, user.role, controller.signal),
             getMaintenanceRecords(user.communityId, isAdmin ? undefined : user.id, controller.signal),
-            getCommunity(user.communityId) // New fetch for Opening Balance
+            getCommunity(user.communityId)
         ];
         if (isAdmin) promises.push(getExpenses(user.communityId, controller.signal));
         
@@ -82,7 +78,8 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
             community: communityObj
         };
 
-        dashboardCache = newState;
+        const { setCachedData } = await import('../services/api');
+        setCachedData(cacheKey, newState);
         setData(newState);
         setError(null);
       } catch (err: any) { 
@@ -100,7 +97,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
     return () => { isMounted = false; controller.abort(); isFetchingRef.current = false; };
   }, [user?.id, user?.communityId]);
 
-  if (loading && !dashboardCache) return (
+  if (loading && !getCachedData(cacheKey)) return (
     <div className="max-w-7xl mx-auto p-4 space-y-4">
         <div className="h-24 bg-gray-100 dark:bg-zinc-900 rounded-xl animate-pulse" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -110,21 +107,18 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
     </div>
   );
 
-  if (error && !dashboardCache) return <ErrorCard title="Dashboard Sync Error" message={error} />;
+  if (error && !getCachedData(cacheKey)) return <ErrorCard title="Dashboard Sync Error" message={error} />;
 
   const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin;
-  
-  // FIX: Treasury now includes opening balance
   const openingBalance = data.community?.openingBalance || 0;
   const treasuryVal = openingBalance + data.maintenance.lifetimeCollected - data.expenses.totalExpenses;
-  
   const pendingTickets = data.complaints.filter((c: Complaint) => c.status !== ComplaintStatus.Resolved).length;
   const latestNotice = data.notices[0];
   const activeVisitors = data.visitors.filter((v: Visitor) => v.status === VisitorStatus.Expected).slice(0, 3);
 
   return (
     <div className="max-w-7xl mx-auto px-2 sm:px-4 space-y-6">
-      <section className="flex flex-col md:flex-row justify-between items-start md:items-end gap-3">
+      <section className="flex flex-col md:flex-row justify-between items-start md:items-end gap-3 min-h-[5rem]">
           <div className="flex items-start gap-2.5">
               <div className="w-1 h-10 bg-brand-500 rounded-full mt-0.5" />
               <div>
@@ -185,7 +179,7 @@ const Dashboard: React.FC<{ navigateToPage: (page: Page, params?: any) => void }
 
           <div className="lg:col-span-5 space-y-3">
               <h3 className="text-[10px] font-black text-brand-600 dark:text-brand-400 font-mono uppercase tracking-[0.3em] px-1">Security Registry</h3>
-              <Card className="p-5 rounded-2xl bg-slate-50/50 dark:bg-zinc-900/20 border-none">
+              <Card className="p-5 rounded-2xl bg-slate-50/50 dark:bg-zinc-900/20 border-none shadow-sm">
                   {activeVisitors.length > 0 ? (
                       <div className="space-y-3">
                           {activeVisitors.map((v: Visitor) => (

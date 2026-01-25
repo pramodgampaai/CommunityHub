@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
+import Spinner from './ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import { updateUserPassword } from '../services/api';
 
@@ -172,7 +173,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
                             />
                         </div>
                         <div className="pt-2 flex justify-end">
-                             <Button type="submit" disabled={isSubmitting || success !== null}>
+                             <Button type="submit" disabled={isSubmitting || success !== null} leftIcon={isSubmitting ? <Spinner /> : undefined}>
                                 {isSubmitting ? 'Updating...' : (success ? 'Done' : 'Update Password')}
                              </Button>
                         </div>

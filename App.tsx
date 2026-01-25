@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useTransition, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/Login';
@@ -17,6 +17,7 @@ import CommunitySetup from './pages/CommunitySetup';
 import Billing from './pages/Billing';
 import BulkOperations from './pages/BulkOperations';
 import ResetPassword from './pages/ResetPassword';
+import Marketplace from './pages/Marketplace';
 import type { Page } from './types';
 import { UserRole } from './types';
 import Spinner from './components/ui/Spinner';
@@ -28,33 +29,46 @@ export type Theme = 'light' | 'dark';
 
 function App() {
   const { user, loading, updateUser } = useAuth();
-  const [isPending, startTransition] = useTransition();
   
-  // Detect if we are in password reset mode from URL
   const isResetFlow = window.location.pathname === '/reset-password';
 
-  const [requestedPage, setRequestedPage] = useState<Page>(() => {
-      const savedPage = localStorage.getItem('nilayam_last_page');
-      return (savedPage as Page) || 'Dashboard';
-  });
-  
+  const [requestedPage, setRequestedPage] = useState<Page>('Dashboard');
   const [pageParams, setPageParams] = useState<any>(null);
   const [theme, setTheme] = useState<Theme>('light');
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const navigateToPage = useCallback((page: Page, params?: any) => {
+      setIsNavigating(true);
+      setPageParams(params || null);
+      setRequestedPage(page);
+      // Brief delay to allow top bar animation to be seen
+      setTimeout(() => setIsNavigating(false), 300);
+  }, []);
+
+  const handleManualPageChange = useCallback((page: Page) => {
+      setIsNavigating(true);
+      setPageParams(null);
+      setRequestedPage(page);
+      setTimeout(() => setIsNavigating(false), 300);
+  }, []);
 
   const activePage = useMemo((): Page => {
-    if (isResetFlow) return 'Dashboard'; // Dummy return, handled in JSX
+    if (isResetFlow) return 'Dashboard'; 
     if (!user) return requestedPage;
 
     const hasUnits = user.units && user.units.length > 0;
     const isSetupRequiredRole = user.role === UserRole.Admin || user.role === UserRole.Resident;
+    
     if (isSetupRequiredRole && !hasUnits) return 'CommunitySetup';
 
     const role = user.role;
     const requested = requestedPage;
 
     if (role === UserRole.SuperAdmin) {
+        // SuperAdmin is strictly restricted to global panels
         return ['AdminPanel', 'Billing'].includes(requested) ? requested : 'AdminPanel';
     }
+    
     if (role === UserRole.HelpdeskAgent) {
         return ['Notices', 'Help Desk'].includes(requested) ? requested : 'Help Desk';
     }
@@ -68,7 +82,7 @@ function App() {
         return ['Notices', 'Visitors'].includes(requested) ? requested : 'Visitors';
     }
     if (role === UserRole.Tenant) {
-        return ['Notices', 'Help Desk', 'Visitors', 'Amenities', 'Assets'].includes(requested) ? requested : 'Notices';
+        return ['Notices', 'Help Desk', 'Visitors', 'Amenities', 'Assets', 'Marketplace'].includes(requested) ? requested : 'Notices';
     }
     if (role === UserRole.Resident) {
         const forbidden: Page[] = ['Billing', 'BulkOperations', 'CommunitySetup', 'AdminPanel'];
@@ -80,13 +94,7 @@ function App() {
     }
 
     return requested;
-  }, [user, requestedPage, isResetFlow]);
-
-  useEffect(() => {
-      if (!isResetFlow) {
-        localStorage.setItem('nilayam_last_page', activePage);
-      }
-  }, [activePage, isResetFlow]);
+  }, [user?.role, user?.units?.length, requestedPage, isResetFlow]);
 
   useEffect(() => {
     if (!user) {
@@ -112,22 +120,6 @@ function App() {
     }
   }, [theme, user, updateUser]);
 
-  const navigateToPage = useCallback((page: Page, params?: any) => {
-      if (requestedPage === page && !params) return;
-      startTransition(() => {
-          setPageParams(params || null);
-          setRequestedPage(page);
-      });
-  }, [requestedPage]);
-
-  const handleManualPageChange = useCallback((page: Page) => {
-      if (requestedPage === page) return;
-      startTransition(() => {
-          setPageParams(null);
-          setRequestedPage(page);
-      });
-  }, [requestedPage]);
-
   if (!isSupabaseConfigured) {
     return (
       <div className="flex items-center justify-center h-[100dvh] bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] p-4 text-center">
@@ -139,7 +131,6 @@ function App() {
     );
   }
 
-  // Mandatory Reset Flow - Bypass standard layout
   if (isResetFlow) {
     return <ResetPassword />;
   }
@@ -162,11 +153,11 @@ function App() {
         setActivePage={handleManualPageChange} 
         theme={theme} 
         toggleTheme={toggleTheme}
-        isPending={isPending}
+        isPending={isNavigating}
     >
       <div className="gpu-accelerated min-h-full">
           {activePage === 'Dashboard' && <Dashboard navigateToPage={navigateToPage} />}
-          {activePage === 'AdminPanel' && <AdminPanel />}
+          {activePage === 'AdminPanel' && <AdminPanel navigateToPage={navigateToPage} />}
           {activePage === 'Notices' && <NoticeBoard />}
           {activePage === 'Help Desk' && <HelpDesk />}
           {activePage === 'Visitors' && <Visitors />}
@@ -178,6 +169,7 @@ function App() {
           {activePage === 'BulkOperations' && <BulkOperations />}
           {activePage === 'CommunitySetup' && <CommunitySetup onComplete={() => setRequestedPage('Dashboard')} />}
           {activePage === 'Billing' && <Billing />}
+          {activePage === 'Marketplace' && <Marketplace />}
       </div>
     </Layout>
   );

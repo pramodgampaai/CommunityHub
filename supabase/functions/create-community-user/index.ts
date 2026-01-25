@@ -22,51 +22,46 @@ serve(async (req: any) => {
     )
 
     const { name, email, password, community_id, role, flat_number, unit_data } = await req.json()
-
     if (!email || !password || !name || !community_id || !role) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
+      throw new Error('Incomplete identity payload');
     }
 
-    // --- PERMISSION CHECK ---
+    const cleanEmail = email.toLowerCase().trim();
+
+    // 1. SECURITY VALIDATION
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Missing Authorization header');
-    const { data: { user: requesterAuth } } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (!requesterAuth) throw new Error('Invalid token');
+    const { data: { user: requesterAuth } } = await supabaseClient.auth.getUser(authHeader?.replace('Bearer ', '') || '');
+    if (!requesterAuth) throw new Error('Invalid security session');
 
     const { data: requesterProfile } = await supabaseClient.from('users').select('role, community_id').eq('id', requesterAuth.id).single();
-    if (!requesterProfile) throw new Error('Requester profile not found');
-
-    const requesterRole = requesterProfile.role;
-    if (requesterRole !== 'SuperAdmin' && requesterProfile.community_id !== community_id) {
-         throw new Error('Unauthorized community scope');
+    if (!requesterProfile || (requesterProfile.role !== 'SuperAdmin' && requesterProfile.community_id !== community_id)) {
+         throw new Error('Unauthorized scope violation');
     }
 
-    // Role Hierarchy Validation
-    let isAllowed = false;
-    switch (requesterRole) {
-        case 'SuperAdmin': isAllowed = true; break;
-        case 'Admin': isAllowed = ['Admin', 'Resident', 'HelpdeskAdmin', 'SecurityAdmin'].includes(role); break;
-        case 'HelpdeskAdmin': isAllowed = role === 'HelpdeskAgent'; break;
-        case 'SecurityAdmin': isAllowed = role === 'Security'; break;
+    // 2. IDENTITY SCRUB (Critical Fix)
+    // Clear public table first to avoid trigger collisions
+    await supabaseClient.from('users').delete().eq('email', cleanEmail);
+    
+    // Clear Auth system
+    const { data: { users: allUsers } } = await supabaseClient.auth.admin.listUsers();
+    const existingInAuth = allUsers.find(u => u.email?.toLowerCase() === cleanEmail);
+    if (existingInAuth) {
+        await supabaseClient.auth.admin.deleteUser(existingInAuth.id);
     }
 
-    if (!isAllowed) throw new Error('Unauthorized role level creation');
-
-    // 1. Create Auth User
+    // 3. FRESH PROVISIONING
     const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
-      email, password, email_confirm: true, 
+      email: cleanEmail, 
+      password, 
+      email_confirm: true, 
       user_metadata: { name, community_id, role, flat_number: flat_number || (unit_data ? unit_data.flat_number : null) }
     });
 
-    if (createError) throw createError;
-    if (!user) throw new Error('User creation failed');
+    if (createError) throw new Error(`Auth Rejection: ${createError.message}`);
+    if (!user) throw new Error('Identity creation failed');
 
-    // 2. Profile Creation
+    // 4. PROFILE SYNC
     let displayFlatNumber = flat_number;
-    // If it's a resident and structured data is provided, use that for display
     if (role === 'Resident' && unit_data) {
         displayFlatNumber = unit_data.block ? `${unit_data.block}-${unit_data.flat_number}` : unit_data.flat_number;
     }
@@ -75,19 +70,19 @@ serve(async (req: any) => {
       .from('users')
       .upsert({
         id: user.id,
-        email, name, role,
+        email: cleanEmail, name, role,
         community_id,
         flat_number: displayFlatNumber, 
         status: 'active',
         avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
-      })
+      }, { onConflict: 'id' });
 
     if (profileError) {
       await supabaseClient.auth.admin.deleteUser(user.id);
       throw profileError;
     }
 
-    // 3. Structured Unit Assignment for Residents
+    // 5. UNIT ALLOCATION
     if (role === 'Resident' && unit_data) {
         const { data: unit, error: unitError } = await supabaseClient.from('units').insert({
             community_id,
@@ -100,7 +95,6 @@ serve(async (req: any) => {
         }).select().single();
 
         if (!unitError && unit) {
-            // Recalculate Maintenance (Mirroring logic in assign-unit function)
             const { data: community } = await supabaseClient.from('communities').select('*').eq('id', community_id).single();
             if (community) {
                 let monthlyAmount = 0;
@@ -140,11 +134,12 @@ serve(async (req: any) => {
     }
 
     return new Response(
-      JSON.stringify({ user, message: 'Resident onboarded successfully' }),
+      JSON.stringify({ success: true, message: 'Identity provisioned and verified.' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
   } catch (error: any) {
+    console.error("Provisioning Error:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }

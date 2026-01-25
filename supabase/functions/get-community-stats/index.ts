@@ -61,32 +61,29 @@ serve(async (req: any) => {
         }
     } catch (ignore) {}
 
-    try {
-        const { data: auditData, error: auditError } = await supabaseClient
-            .from('audit_logs')
-            .select('community_id, details')
-            .eq('entity', 'Billing')
-            .eq('action', 'UPDATE')
-            .gte('created_at', startOfMonth);
-
-        if (!auditError && auditData) {
-            auditData.forEach((log: any) => {
-                if (log.details && log.details.amount) {
-                     totalPaidMap[log.community_id] = (totalPaidMap[log.community_id] || 0) + (Number(log.details.amount) || 0);
-                }
-            });
-        }
-    } catch (ignore) {}
-
     const stats = communities.map((community: any) => {
       const communityUsers = users.filter((u: any) => u.community_id === community.id);
-      const resident_count = communityUsers.filter((u: any) => u.role === 'Resident').length;
+      
+      // Included 'Tenant' in resident population
+      const resident_count = communityUsers.filter((u: any) => ['Resident', 'Tenant'].includes(u.role)).length;
+      
       const admin_count = communityUsers.filter((u: any) => u.role === 'Admin').length;
-      const staff_count = communityUsers.filter((u: any) => ['HelpdeskAdmin', 'Helpdesk', 'HelpdeskAgent', 'SecurityAdmin', 'Security'].includes(u.role)).length;
+      
+      // Aggregate all staff level roles
+      const staff_count = communityUsers.filter((u: any) => 
+        ['HelpdeskAdmin', 'HelpdeskAgent', 'SecurityAdmin', 'Security'].includes(u.role)
+      ).length;
+
       const current_month_paid = totalPaidMap[community.id] || 0;
 
+      // Transform DB row (snake_case) to Frontend type (camelCase)
       return {
-        ...community,
+        id: community.id,
+        name: community.name,
+        address: community.address,
+        status: community.status,
+        communityType: community.community_type,
+        pricePerUser: community.pricing_config,
         resident_count,
         admin_count,
         staff_count,

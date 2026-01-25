@@ -5,7 +5,7 @@ import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
 import type { Page } from '../../types';
 import type { Theme } from '../../App';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface LayoutProps {
   children: ReactNode;
@@ -19,6 +19,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, theme, toggleTheme, isPending }) => {
   const scrollContainerRef = useRef<HTMLElement>(null);
 
+  // Immediate scroll reset on page change without triggering layout shifts
   useLayoutEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
@@ -27,17 +28,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, th
 
   return (
     <div className="flex h-[100dvh] w-full bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-[var(--text-light)] dark:text-[var(--text-dark)] transition-colors duration-300 overflow-hidden relative">
-      {/* Non-intrusive progress bar */}
-      <AnimatePresence>
-        {isPending && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="loading-progress" 
-          />
-        )}
-      </AnimatePresence>
+      {isPending && (
+        <div className="loading-progress" />
+      )}
       
       <Sidebar activePage={activePage} setActivePage={setActivePage} />
       
@@ -48,20 +41,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, setActivePage, th
         
         <main 
           ref={scrollContainerRef}
-          className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] outline-none relative gpu-accelerated"
+          className="flex-1 overflow-x-hidden overflow-y-auto bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] outline-none relative"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          {/* 
-              STABILITY FIX: 
-              Wrap children in a motion div with a key to handle smooth cross-fading.
-              This prevents the "instant jump" by slightly slowing the transition
-              and ensuring the GPU handles the frame swap.
-          */}
+          {/* Subtle opacity-only transition for content speed */}
           <motion.div 
-            key={activePage}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.1, ease: "linear" }}
             className="container mx-auto px-3 sm:px-5 lg:px-6 py-4 md:py-5 pb-28 md:pb-6 max-w-full min-h-full"
           >
             {children}

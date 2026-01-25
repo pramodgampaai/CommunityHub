@@ -26,25 +26,19 @@ serve(async (req: any) => {
     const { data: profile } = await supabaseAdmin.from('users').select('role, community_id').eq('id', user.id).single();
     if (!profile) throw new Error('Profile not found');
 
+    const isSuperAdmin = profile.role === 'SuperAdmin';
     const isAdmin = ['Admin', 'SuperAdmin', 'HelpdeskAdmin'].includes(profile.role);
     if (!isAdmin) throw new Error('Permission denied');
 
-    // Internal Mapping Helper to handle camelCase to snake_case conversion
+    // Mapping Helper
     const mapNoticeData = (input: any) => {
         const mapped: any = {};
         if (input.title !== undefined) mapped.title = input.title;
         if (input.content !== undefined) mapped.content = input.content;
         if (input.type !== undefined) mapped.type = input.type;
         if (input.author !== undefined) mapped.author = input.author;
-        
-        // Map camelCase to snake_case
         if (input.validFrom !== undefined) mapped.valid_from = input.validFrom;
         if (input.validUntil !== undefined) mapped.valid_until = input.validUntil;
-        
-        // Handle direct snake_case if sent
-        if (input.valid_from !== undefined) mapped.valid_from = input.valid_from;
-        if (input.valid_until !== undefined) mapped.valid_until = input.valid_until;
-        
         return mapped;
     };
 
@@ -53,39 +47,36 @@ serve(async (req: any) => {
     if (action === 'CREATE') {
         const insertData = { 
             ...mapNoticeData(data), 
-            community_id: profile.community_id 
+            community_id: profile.community_id || data.community_id
         };
-        const { data: notice, error } = await supabaseAdmin
-            .from('notices')
-            .insert(insertData)
-            .select()
-            .single();
-            
+        const { data: notice, error } = await supabaseAdmin.from('notices').insert(insertData).select().single();
         if (error) throw error;
         result = notice;
         
     } else if (action === 'UPDATE') {
         if (!id) throw new Error('Missing ID for update');
         const updateData = mapNoticeData(data);
-        const { data: notice, error } = await supabaseAdmin
-            .from('notices')
-            .update(updateData)
-            .eq('id', id)
-            .eq('community_id', profile.community_id)
-            .select()
-            .single();
-            
+        
+        let query = supabaseAdmin.from('notices').update(updateData).eq('id', id);
+        
+        // Only enforce community isolation for regular Admins
+        if (!isSuperAdmin) {
+            query = query.eq('community_id', profile.community_id);
+        }
+
+        const { data: notice, error } = await query.select().single();
         if (error) throw error;
         result = notice;
         
     } else if (action === 'DELETE') {
         if (!id) throw new Error('Missing ID for delete');
-        const { error } = await supabaseAdmin
-            .from('notices')
-            .delete()
-            .eq('id', id)
-            .eq('community_id', profile.community_id);
+        
+        let query = supabaseAdmin.from('notices').delete().eq('id', id);
+        if (!isSuperAdmin) {
+            query = query.eq('community_id', profile.community_id);
+        }
             
+        const { error } = await query;
         if (error) throw error;
     }
 
@@ -94,10 +85,7 @@ serve(async (req: any) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (error: any) {
-    console.error("Manage Notice Function Error:", error.message);
-    return new Response(
-        JSON.stringify({ error: error.message }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    );
+    console.error("Manage Notice Error:", error.message);
+    return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
   }
 })

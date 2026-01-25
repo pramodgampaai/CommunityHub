@@ -1,13 +1,15 @@
+
 import React, { useState, useEffect } from 'react';
 import { getCommunityStats, recordCommunityPayment, getFinancialHistory, getFinancialYears } from '../services/api';
 import type { CommunityStat, FinancialHistory } from '../types';
 import Card from '../components/ui/Card';
 import Spinner from '../components/ui/Spinner';
 import ErrorCard from '../components/ui/ErrorCard';
-import { CalculatorIcon, CurrencyRupeeIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, ChevronDownIcon, CheckCircleIcon, BanknotesIcon, FunnelIcon } from '../components/icons';
+import { CalculatorIcon, CurrencyRupeeIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, ChevronDownIcon, CheckCircleIcon, BanknotesIcon, FunnelIcon, HistoryIcon } from '../components/icons';
 import { generateInvoice, generateAnnualReport } from '../services/pdfGenerator';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import FeedbackModal from '../components/ui/FeedbackModal';
 import { useAuth } from '../hooks/useAuth';
 
 const Billing: React.FC = () => {
@@ -39,6 +41,10 @@ const Billing: React.FC = () => {
     const [paymentNotes, setPaymentNotes] = useState('');
     const [receiptUrl, setReceiptUrl] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
+        isOpen: false, type: 'success', title: '', message: ''
+    });
 
     const fetchStats = async () => {
         try {
@@ -113,7 +119,7 @@ const Billing: React.FC = () => {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 1024 * 1024) {
-                alert("File too large. Please select an image under 1MB.");
+                setFeedback({ isOpen: true, type: 'error', title: 'Limit Exceeded', message: "Please select an image under 1MB." });
                 return;
             }
             const reader = new FileReader();
@@ -138,12 +144,12 @@ const Billing: React.FC = () => {
                 notes: paymentNotes,
                 recordedBy: user.id
             });
-            alert("Payment recorded successfully!");
+            setFeedback({ isOpen: true, type: 'success', title: 'Payment Logged', message: 'The community account has been successfully credited.' });
             setIsPaymentModalOpen(false);
             await fetchStats();
         } catch (err: any) {
             console.error("Payment recording failed", err);
-            alert("Failed to record payment: " + (err.message || "Unknown error"));
+            setFeedback({ isOpen: true, type: 'error', title: 'Transaction Failed', message: err.message || "Could not record the community payment." });
         } finally {
             setIsSubmitting(false);
         }
@@ -338,9 +344,26 @@ const Billing: React.FC = () => {
                                                     <p className="font-brand font-extrabold text-slate-900 dark:text-slate-50">₹{(stat.staff_count * staffPrice).toLocaleString()}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex justify-end gap-3">
-                                                <Button variant="outlined" size="sm" onClick={(e) => { e.stopPropagation(); generateInvoice(stat); }} leftIcon={<ArrowDownTrayIcon />}>Invoice</Button>
-                                                {!isPaid && <Button size="sm" onClick={(e) => handleRecordPaymentClick(stat, communityTotal, e)} leftIcon={<BanknotesIcon />}>Record Payment</Button>}
+                                            <div className="flex gap-2">
+                                                <Button 
+                                                    onClick={(e) => { e.stopPropagation(); generateInvoice(stat); }}
+                                                    variant="outlined" 
+                                                    size="sm" 
+                                                    className="flex-1 text-[9px]"
+                                                    leftIcon={<ArrowDownTrayIcon />}
+                                                >
+                                                    Generate Invoice
+                                                </Button>
+                                                {!isPaid && (
+                                                    <Button 
+                                                        onClick={(e) => handleRecordPaymentClick(stat, communityTotal, e)}
+                                                        size="sm" 
+                                                        className="flex-1 text-[9px]"
+                                                        leftIcon={<BanknotesIcon />}
+                                                    >
+                                                        Log Remittance
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -353,66 +376,155 @@ const Billing: React.FC = () => {
 
             {viewMode === 'reports' && (
                 <div className="space-y-6 animate-fadeIn">
-                     <div className="flex items-center justify-between bg-white dark:bg-zinc-900/40 p-4 rounded-2xl border border-slate-50 dark:border-white/5 shadow-sm">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Fiscal Analytics</h3>
-                        <div className="relative">
-                            <select 
-                                value={selectedYear} 
-                                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                                className="block w-full px-8 py-2 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900"
-                            >
-                                {availableYears.map(yr => <option key={yr} value={yr}>{yr}</option>)}
-                            </select>
-                            <ChevronDownIcon className="absolute right-3 top-2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <div className="flex justify-between items-center bg-white dark:bg-zinc-900/40 p-4 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Fiscal Year</label>
+                            <div className="relative">
+                                <select 
+                                    value={selectedYear} 
+                                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                                    className="appearance-none pl-4 pr-10 py-2 rounded-xl input-field text-sm font-bold bg-slate-50 dark:bg-black/20"
+                                >
+                                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                                <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                            </div>
                         </div>
+                        {history && (
+                            <Button 
+                                onClick={() => generateAnnualReport(history)}
+                                size="md" 
+                                leftIcon={<ArrowDownTrayIcon />}
+                            >
+                                Export Fiscal Data
+                            </Button>
+                        )}
                     </div>
 
-                    {historyLoading ? <div className="h-64 flex items-center justify-center"><Spinner /></div> : history && (
+                    {historyLoading ? <div className="flex justify-center p-20"><Spinner /></div> : history ? (
                         <>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Card className="p-6 bg-brand-600 dark:bg-[#0f1115] text-white border-none rounded-3xl">
-                                    <p className="text-[9px] font-mono font-black uppercase tracking-[0.3em] opacity-70 mb-1">Annual Aggregate ({selectedYear})</p>
-                                    <p className="text-4xl font-brand font-extrabold tracking-tight">₹{history.totalCollected.toLocaleString()}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="p-8 border-none bg-emerald-600 text-white shadow-xl rounded-[2.5rem]">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="p-3 bg-white/20 rounded-2xl"><CurrencyRupeeIcon className="w-8 h-8" /></div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Gross Annual Revenue</p>
+                                            <h3 className="text-4xl font-brand font-extrabold tracking-tight">₹{history.totalCollected.toLocaleString()}</h3>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/10">
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase opacity-60">Settled Nodes</p>
+                                            <p className="text-xl font-brand font-extrabold">{history.monthlyBreakdown.reduce((a, b) => a + b.transactionCount, 0)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase opacity-60">Growth Yield</p>
+                                            <p className="text-xl font-brand font-extrabold">Active</p>
+                                        </div>
+                                    </div>
                                 </Card>
-                                <Card className="p-6 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 flex items-center justify-center rounded-3xl">
-                                    <Button onClick={() => generateAnnualReport(history)} size="lg" className="w-full h-full text-[10px]" leftIcon={<ArrowDownTrayIcon />}>Download Audit Manifest</Button>
+
+                                <Card className="p-8 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 shadow-sm flex flex-col justify-center rounded-[2.5rem]">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Revenue Distribution Trend</h4>
+                                    <BarChart data={history.monthlyBreakdown} />
                                 </Card>
                             </div>
-                            <Card className="p-6 bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 rounded-3xl">
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Revenue Flow Chart</h3>
-                                <BarChart data={history.monthlyBreakdown} />
+
+                            <Card className="p-0 overflow-hidden bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 rounded-[2.5rem]">
+                                <div className="p-6 border-b border-slate-50 dark:border-white/5 bg-slate-50/50 dark:bg-black/20">
+                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Node Performance Breakdown</h4>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead>
+                                            <tr className="text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50/30 dark:bg-white/[0.02]">
+                                                <th className="p-5">Community Registry</th>
+                                                <th className="p-5 text-right">Annual Contribution</th>
+                                                <th className="p-5 text-right">Portfolio Percent</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 dark:divide-white/5">
+                                            {history.communityBreakdown.map((c, i) => (
+                                                <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/[0.01] transition-colors">
+                                                    <td className="p-5 font-brand font-extrabold text-slate-800 dark:text-slate-200">{c.communityName}</td>
+                                                    <td className="p-5 text-right font-brand font-extrabold text-brand-600">₹{c.totalPaid.toLocaleString()}</td>
+                                                    <td className="p-5 text-right">
+                                                        <div className="flex items-center justify-end gap-3">
+                                                            <span className="text-[10px] font-black text-slate-400">{Math.round((c.totalPaid / history.totalCollected) * 100)}%</span>
+                                                            <div className="w-24 h-1.5 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                                                <div style={{ width: `${(c.totalPaid / history.totalCollected) * 100}%` }} className="h-full bg-brand-500" />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </Card>
                         </>
+                    ) : (
+                        <div className="py-24 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-[3rem] opacity-30">
+                            {/* Fix: Ensured HistoryIcon is properly rendered in the fallback state */}
+                            <HistoryIcon className="w-16 h-16 mx-auto mb-4" />
+                            <p className="font-brand font-extrabold text-xl">Fiscal Ledger Null</p>
+                        </div>
                     )}
                 </div>
             )}
 
-            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Registry Payment" subtitle={selectedCommunityForPayment?.name.toUpperCase()}>
-                <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                     <div>
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Received Sum (₹)</label>
-                        <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} required min="0" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
+            {/* Payment Recording Modal */}
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Log Remittance" subtitle="FINANCIAL ADJUSTMENT" size="lg">
+                <form onSubmit={handlePaymentSubmit} className="space-y-6">
+                    <div className="p-6 bg-slate-50 dark:bg-black/20 rounded-[2rem] border border-slate-100 dark:border-white/5 text-center">
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{selectedCommunityForPayment?.name.toUpperCase()} BALANCE</p>
+                         <p className="text-5xl font-brand font-extrabold text-brand-600">₹{parseFloat(paymentAmount || '0').toLocaleString()}</p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Receipt Date</label>
-                            <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold"/>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div className="sm:col-span-2">
+                             <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Transaction Proof (Digital Receipt)</label>
+                             <div className="relative group">
+                                <input type="file" accept="image/*" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                                <div className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-8 text-center group-hover:border-brand-500 group-hover:bg-brand-50/10 transition-all">
+                                    {receiptUrl ? (
+                                        <div className="relative inline-block">
+                                            <img src={receiptUrl} alt="Receipt" className="max-h-32 mx-auto rounded-lg shadow-lg border border-slate-200" />
+                                            <div className="absolute -top-2 -right-2 bg-emerald-500 text-white rounded-full p-1"><CheckCircleIcon className="w-4 h-4" /></div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <ArrowDownTrayIcon className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Transmit Source Proof</p>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                         <div>
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Attachment (Optional)</label>
-                            <input type="file" accept="image/*" onChange={handleFileUpload} className="block w-full text-[11px] text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-brand-50 file:text-brand-600 cursor-pointer"/>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Amount Settled (₹)</label>
+                            <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} required className="rounded-xl input-field text-sm font-bold"/>
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Payment Timestamp</label>
+                            <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required className="rounded-xl input-field text-xs font-bold appearance-none"/>
+                        </div>
+                        <div className="sm:col-span-2">
+                             <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Transaction Annotations</label>
+                             <textarea value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} rows={3} placeholder="Optional reference notes..." className="rounded-xl input-field text-sm font-medium leading-relaxed" />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Audit Notes</label>
-                        <textarea value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} placeholder="e.g. Wire transfer ref: TR123456" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-medium" rows={2}/>
-                    </div>
-                    <div className="flex justify-end pt-4 gap-3">
-                        <Button type="button" variant="outlined" onClick={() => setIsPaymentModalOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting} leftIcon={<CheckCircleIcon />}>{isSubmitting ? 'Syncing...' : 'Record Payment'}</Button>
+
+                    <div className="pt-4 border-t border-slate-50 dark:border-white/5 flex justify-end gap-3">
+                        <Button type="button" variant="ghost" onClick={() => setIsPaymentModalOpen(false)}>Discard</Button>
+                        <Button type="submit" disabled={isSubmitting} leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                            {isSubmitting ? 'Syncing Ledger...' : 'Log Remittance'}
+                        </Button>
                     </div>
                 </form>
             </Modal>
+
+            <FeedbackModal isOpen={feedback.isOpen} onClose={() => setFeedback({ ...feedback, isOpen: false })} title={feedback.title} message={feedback.message} type={feedback.type} />
         </div>
     );
 };

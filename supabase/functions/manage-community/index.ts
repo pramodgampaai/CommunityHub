@@ -39,40 +39,86 @@ serve(async (req: any) => {
 
     if (!profile) throw new Error('User profile not found');
 
+    // Robust Mapping Layer: Frontend camelCase -> Database snake_case
+    const mapToDb = (input: any) => {
+        if (!input) return input;
+        const mapped: any = { ...input };
+        
+        // Map 'communityType' to 'community_type'
+        if (input.communityType !== undefined) {
+            mapped.community_type = input.communityType;
+            delete mapped.communityType;
+        } else if (input.type !== undefined && action === 'CREATE') {
+            // Fallback for some creation payloads
+            mapped.community_type = input.type;
+            delete mapped.type;
+        }
+        
+        // Map 'pricePerUser' to 'pricing_config'
+        if (input.pricePerUser !== undefined) {
+            mapped.pricing_config = input.pricePerUser;
+            delete mapped.pricePerUser;
+        }
+        
+        // Maintenance Settings maps
+        if (input.maintenanceRate !== undefined) {
+            mapped.maintenance_rate = input.maintenanceRate;
+            delete mapped.maintenanceRate;
+        }
+        if (input.fixedMaintenanceAmount !== undefined) {
+            mapped.fixed_maintenance_amount = input.fixedMaintenanceAmount;
+            delete mapped.fixedMaintenanceAmount;
+        }
+        
+        // Opening balance maps
+        if (input.openingBalance !== undefined) {
+            mapped.opening_balance = input.openingBalance;
+            delete mapped.openingBalance;
+        }
+        if (input.openingBalanceLocked !== undefined) {
+            mapped.opening_balance_locked = input.openingBalanceLocked;
+            delete mapped.openingBalanceLocked;
+        }
+        
+        return mapped;
+    };
+
     let resultData = null;
     let auditDesc = "";
 
     switch (action) {
         case 'CREATE': {
-            if (profile.role !== 'SuperAdmin') throw new Error('Unauthorized: Only SuperAdmins can create communities');
+            if (profile.role !== 'SuperAdmin') throw new Error('Unauthorized: Only SuperAdmins can register communities');
             
+            const payload = mapToDb(data);
             const { data: community, error: cErr } = await supabaseAdmin
                 .from('communities')
-                .insert(data)
+                .insert(payload)
                 .select()
                 .single();
 
             if (cErr) throw cErr;
             resultData = community;
-            auditDesc = `New community registered: ${community.name}`;
+            auditDesc = `Community infrastructure initialized: ${community.name}`;
             break;
         }
 
         case 'UPDATE_PROFILE': {
             if (profile.role !== 'SuperAdmin' && (profile.role !== 'Admin' || profile.community_id !== community_id)) {
-                throw new Error('Unauthorized community modification');
+                throw new Error('Unauthorized community modification attempt');
             }
             
+            const payload = mapToDb(data);
             const { data: updated, error: uErr } = await supabaseAdmin
                 .from('communities')
-                .update(data)
+                .update(payload)
                 .eq('id', community_id)
                 .select()
                 .single();
 
             if (uErr) throw uErr;
             resultData = updated;
-            auditDesc = "Community profile configuration updated.";
+            auditDesc = "Community profile attributes updated.";
             break;
         }
 
@@ -83,7 +129,7 @@ serve(async (req: any) => {
                 .update({ opening_balance: data.balance, opening_balance_locked: true })
                 .eq('id', community_id);
             if (bErr) throw bErr;
-            auditDesc = `Initial opening balance secured: ₹${data.balance}`;
+            auditDesc = `Opening balance locked at ₹${data.balance}`;
             break;
         }
 
@@ -98,7 +144,7 @@ serve(async (req: any) => {
                 })
                 .eq('id', community_id);
             if (rErr) throw rErr;
-            auditDesc = `Modification request for opening balance submitted: ₹${data.amount}`;
+            auditDesc = `Ledger adjustment requested: ₹${data.amount}`;
             break;
         }
 
@@ -108,21 +154,21 @@ serve(async (req: any) => {
                 .update({ opening_balance: data.amount, pending_balance_update: null })
                 .eq('id', community_id);
             if (aErr) throw aErr;
-            auditDesc = `Opening balance modification approved: ₹${data.amount}`;
+            auditDesc = `Ledger adjustment approved: ₹${data.amount}`;
             break;
         }
 
         case 'REJECT_BALANCE_UPDATE': {
             const { error: jErr } = await supabaseAdmin.from('communities').update({ pending_balance_update: null }).eq('id', community_id);
             if (jErr) throw jErr;
-            auditDesc = "Opening balance modification request rejected.";
+            auditDesc = "Ledger adjustment request discarded.";
             break;
         }
     }
 
     // Audit Logging
     const targetId = community_id || resultData?.id;
-    if (targetId) {
+    if (targetId && auditDesc) {
         await supabaseAdmin.from('audit_logs').insert({
             community_id: targetId, actor_id: user.id, action: 'UPDATE', entity: 'Community', entity_id: targetId, details: { description: auditDesc }
         });
@@ -131,6 +177,7 @@ serve(async (req: any) => {
     return new Response(JSON.stringify({ success: true, data: resultData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
 
   } catch (error: any) {
+    console.error("Manage Community Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
   }
 })

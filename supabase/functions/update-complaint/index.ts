@@ -31,13 +31,25 @@ serve(async (req: any) => {
     if (!id) throw new Error('Missing complaint ID')
 
     const { data: profile } = await supabaseClient.from('users').select('role').eq('id', user.id).single();
-    const role = profile?.role ? profile.role.toLowerCase() : '';
+    const role = profile?.role ? profile.role : '';
 
     const { data: oldComplaint, error: fetchError } = await supabaseClient.from('complaints').select('*').eq('id', id).single();
     if (fetchError || !oldComplaint) throw new Error('Complaint not found');
 
-    const isAdmin = role === 'admin' || role === 'superadmin' || role === 'helpdeskadmin';
-    const isAgent = role === 'helpdeskagent';
+    const isSuperAdmin = role === 'SuperAdmin';
+    const isHelpdeskAdmin = role === 'HelpdeskAdmin';
+    const isAgent = role === 'HelpdeskAgent';
+    const isCommunityAdmin = role === 'Admin';
+
+    // Enforcement: Community Admin should have no stake in assigning tickets OR changing status
+    if (isCommunityAdmin) {
+        if (assigned_to !== undefined) {
+            throw new Error('Policy Violation: Community Administrators are restricted from modifying helpdesk ticket routing.');
+        }
+        if (status !== undefined) {
+            throw new Error('Policy Violation: Community Administrators are restricted from transitioning ticket status.');
+        }
+    }
 
     if (isAgent) {
         const isAssignedToSelf = oldComplaint.assigned_to === user.id;
@@ -48,13 +60,15 @@ serve(async (req: any) => {
 
     const updates: any = {};
     let auditDesc = "Complaint updated";
+    
     if (status) {
         updates.status = status;
         auditDesc = `Status transitioned to ${status}`;
     }
-    if (assigned_to) {
+    
+    if (assigned_to !== undefined) {
         updates.assigned_to = assigned_to;
-        auditDesc = assigned_to === user.id ? "Ticket claimed by staff" : "Ticket routed to new agent";
+        auditDesc = assigned_to === user.id ? "Ticket claimed by staff" : (assigned_to === null ? "Ticket returned to shared queue" : "Ticket routed to new agent");
     }
 
     const { data: updated, error: updateError } = await supabaseClient

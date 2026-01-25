@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { updateUserPassword } from '../services/api';
 import { supabase } from '../services/supabase';
 import Button from '../components/ui/Button';
+import Spinner from '../components/ui/Spinner';
 import Logo from '../components/ui/Logo';
 import { CheckCircleIcon, AlertTriangleIcon } from '../components/icons';
 
@@ -162,7 +163,7 @@ const ResetPassword: React.FC = () => {
                                 </div>
 
                                 <div className="pt-4">
-                                    <Button type="submit" size="lg" className="w-full shadow-xl rounded-2xl h-14" disabled={isLoading || !hasSession}>
+                                    <Button type="submit" size="lg" className="w-full shadow-xl rounded-2xl h-14" disabled={isLoading || !hasSession} leftIcon={isLoading ? <Spinner /> : undefined}>
                                         {isLoading ? 'Transmitting...' : 'Update & Authenticate'}
                                     </Button>
                                 </div>

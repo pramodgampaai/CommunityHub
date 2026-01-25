@@ -1,36 +1,36 @@
-
 import React, { useState, useEffect } from 'react';
-import { getAmenities, createAmenity, updateAmenity, deleteAmenity, createBooking, getBookings } from '../services/api';
+import { getAmenities, createAmenity, updateAmenity, deleteAmenity, createBooking, getBookings, getCachedData } from '../services/api';
 import type { Amenity, Booking } from '../types';
 import { UserRole } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Spinner from '../components/ui/Spinner';
 import Modal from '../components/ui/Modal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import AuditLogModal from '../components/AuditLogModal';
 import FeedbackModal from '../components/ui/FeedbackModal';
-import { PlusIcon, HistoryIcon, PencilIcon, TrashIcon, CheckCircleIcon, ClockIcon, AlertTriangleIcon, CalendarIcon } from '../components/icons';
+import { PlusIcon, HistoryIcon, PencilIcon, TrashIcon, CheckCircleIcon, ClockIcon, AlertTriangleIcon, CalendarIcon, ChevronDownIcon, XIcon, HomeIcon } from '../components/icons';
 import { useAuth } from '../hooks/useAuth';
 
 const Amenities: React.FC = () => {
   const { user } = useAuth();
-  const [amenities, setAmenities] = useState<Amenity[]>([]);
-  const [allBookings, setAllBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKeyA = `amenities:${user?.communityId}`;
+  const cacheKeyB = `bookings:${user?.communityId}`;
   
-  // Feedback State
+  const [amenities, setAmenities] = useState<Amenity[]>(() => getCachedData(cacheKeyA) || []);
+  const [allBookings, setAllBookings] = useState<Booking[]>(() => getCachedData(cacheKeyB) || []);
+  const [loading, setLoading] = useState(!getCachedData(cacheKeyA));
+  
   const [feedback, setFeedback] = useState<{ isOpen: boolean; type: 'success' | 'error' | 'info'; title: string; message: string }>({
     isOpen: false, type: 'success', title: '', message: ''
   });
 
-  // Modal States
   const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedAmenity, setSelectedAmenity] = useState<Amenity | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
 
-  // Form States
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -44,7 +44,6 @@ const Amenities: React.FC = () => {
 
   const fetchData = async () => {
     if (user?.communityId) {
-        setLoading(true);
         try {
             const [amenityData, bookingData] = await Promise.all([
                 getAmenities(user.communityId),
@@ -60,26 +59,24 @@ const Amenities: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [user]);
+  useEffect(() => { fetchData(); }, [user]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        if (file.size > 1024 * 1024) {
-            setFeedback({
-                isOpen: true,
-                type: 'error',
-                title: 'File Too Large',
-                message: "The selected image exceeds the 1MB limit. Please optimize the image or choose a smaller file."
+        // STRICT SIZE LIMIT: 1MB to prevent Gateway Timeout or 'Failed to fetch' errors
+        if (file.size > 1 * 1024 * 1024) {
+            setFeedback({ 
+                isOpen: true, 
+                type: 'error', 
+                title: 'Image Too Large', 
+                message: "Please select an image smaller than 1MB. High-resolution photos can cause connectivity failures." 
             });
+            e.target.value = '';
             return;
         }
         const reader = new FileReader();
-        reader.onloadend = () => {
-            setImageUrl(reader.result as string);
-        };
+        reader.onloadend = () => setImageUrl(reader.result as string);
         reader.readAsDataURL(file);
     }
   };
@@ -88,401 +85,338 @@ const Amenities: React.FC = () => {
       e.preventDefault();
       if (!user) return;
       if (!imageUrl) {
-          setFeedback({
-              isOpen: true,
-              type: 'info',
-              title: 'Asset Requirements',
-              message: "A visual representation (image) is required for all community amenities."
-          });
+          setFeedback({ isOpen: true, type: 'info', title: 'Data Missing', message: "A facility image is required for registration." });
           return;
       }
       setIsSubmitting(true);
       try {
-          const payload = {
-              name, description, imageUrl,
-              capacity: parseInt(capacity),
-              maxDuration: parseInt(maxDuration) || 0
+          const payload = { 
+              name, 
+              description, 
+              imageUrl, 
+              capacity: parseInt(capacity), 
+              maxDuration: parseInt(maxDuration) || 0 
           };
 
-          if (editingId) {
-              await updateAmenity(editingId, payload);
-          } else {
-              await createAmenity(payload, user);
-          }
+          if (editingId) await updateAmenity(editingId, payload);
+          else await createAmenity(payload, user);
 
           setIsCreateModalOpen(false);
           resetForm();
           await fetchData();
-          
-          setFeedback({
-              isOpen: true,
-              type: 'success',
-              title: editingId ? 'Amenity Updated' : 'Amenity Registered',
-              message: `"${name}" has been successfully ${editingId ? 'updated in' : 'added to'} the community asset registry.`
+          setFeedback({ 
+              isOpen: true, 
+              type: 'success', 
+              title: 'Registry Updated', 
+              message: `"${name}" has been successfully synchronized with the community database.` 
           });
       } catch (err: any) { 
-          setFeedback({
-              isOpen: true,
-              type: 'error',
-              title: 'Registry Error',
-              message: err.message || "Failed to save amenity details. Please try again."
-          });
+          let msg = err.message || "An unexpected error occurred.";
+          if (msg.includes("Failed to fetch")) {
+              msg = "Network connection interrupted or the server rejected a large payload. Try a smaller image.";
+          }
+          setFeedback({ isOpen: true, type: 'error', title: 'Registry Error', message: msg });
       } finally { setIsSubmitting(false); }
-  };
-
-  const handleEditClick = (amenity: Amenity) => {
-      setEditingId(amenity.id);
-      setName(amenity.name);
-      setDescription(amenity.description);
-      setImageUrl(amenity.imageUrl);
-      setCapacity(amenity.capacity.toString());
-      setMaxDuration((amenity.maxDuration || 4).toString());
-      setIsCreateModalOpen(true);
-  };
-
-  const handleDelete = async () => {
-      if (!confirmDelete.id) return;
-      setIsSubmitting(true);
-      try {
-          await deleteAmenity(confirmDelete.id);
-          setConfirmDelete({ isOpen: false, id: null });
-          await fetchData();
-          setFeedback({
-              isOpen: true,
-              type: 'success',
-              title: 'Asset Removed',
-              message: 'The amenity and all associated booking logs have been permanently deleted.'
-          });
-      } catch (error: any) {
-          setFeedback({
-              isOpen: true,
-              type: 'error',
-              title: 'Deletion Failed',
-              message: error.message || "We encountered an issue removing this amenity. Please contact system support."
-          });
-      } finally {
-          setIsSubmitting(false);
-      }
   };
 
   const handleBooking = async (e: React.FormEvent) => {
       e.preventDefault();
       setBookingError(null);
       if (!user || !selectedAmenity) return;
-
       const start = new Date(startTime);
       const end = new Date(endTime);
-
-      if (end <= start) {
-          setBookingError("End time must be after start time.");
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          setBookingError("Please select valid start and end times.");
           return;
       }
 
-      // Check against Max Duration (in hours)
+      if (end <= start) { 
+          setBookingError("End time must be after start time."); 
+          return; 
+      }
+      
       if (selectedAmenity.maxDuration && selectedAmenity.maxDuration > 0) {
           const diffMs = end.getTime() - start.getTime();
           const diffHrs = diffMs / (1000 * 60 * 60);
-          
           if (diffHrs > selectedAmenity.maxDuration) {
-              setBookingError(`Max duration for this facility is ${selectedAmenity.maxDuration}h. You requested ${diffHrs.toFixed(1)}h.`);
+              setBookingError(`Max duration for this facility is ${selectedAmenity.maxDuration}h.`);
               return;
           }
       }
 
-      // Check for overlap locally before submitting
-      const hasOverlap = allBookings.some(b => {
-          if (b.amenityId !== selectedAmenity.id) return false;
-          const bStart = new Date(b.startTime);
-          const bEnd = new Date(b.endTime);
-          return (start < bEnd && end > bStart);
-      });
-
-      if (hasOverlap) {
-          setBookingError("The selected time slot overlaps with an existing booking.");
-          return;
-      }
-
       setIsSubmitting(true);
       try {
-          await createBooking({
-              amenityId: selectedAmenity.id,
-              startTime: start.toISOString(),
-              endTime: end.toISOString(),
+          await createBooking({ 
+              amenityId: selectedAmenity.id, 
+              startTime: start.toISOString(), 
+              endTime: end.toISOString() 
           }, user);
           setIsBookingModalOpen(false);
-          
-          setFeedback({
-              isOpen: true,
-              type: 'success',
-              title: 'Reservation Confirmed',
-              message: `Your booking for ${selectedAmenity.name} has been successfully registered in the ledger.`
-          });
-          
+          setFeedback({ isOpen: true, type: 'success', title: 'Reservation Confirmed', message: `Booking for ${selectedAmenity.name} secured.` });
           resetBookingForm();
           await fetchData();
       } catch (err: any) { 
-          setBookingError(err.message || "Failed to create booking."); 
+          setBookingError(err.message); 
       } finally { 
           setIsSubmitting(false); 
       }
   };
 
-  const resetForm = () => {
-      setName('');
-      setDescription('');
-      setImageUrl('');
-      setCapacity('50');
-      setMaxDuration('4');
-      setEditingId(null);
+  const resetForm = () => { 
+      setName(''); 
+      setDescription(''); 
+      setImageUrl(''); 
+      setCapacity('50'); 
+      setMaxDuration('4'); 
+      setEditingId(null); 
   };
 
-  const resetBookingForm = () => {
-      setStartTime('');
-      setEndTime('');
-      setBookingError(null);
+  const resetBookingForm = () => { 
+      setStartTime(''); 
+      setEndTime(''); 
+      setBookingError(null); 
       setSelectedAmenity(null);
+      setIsBookingModalOpen(false);
   };
 
-  const isAdmin = user?.role === UserRole.Admin;
+  const isAdmin = user?.role === UserRole.Admin || user?.role === UserRole.SuperAdmin;
 
-  const activeAmenityBookings = selectedAmenity 
-    ? allBookings
-        .filter(b => {
-            const isSameAmenity = b.amenityId === selectedAmenity.id;
-            if (!isSameAmenity) return false;
-            const targetDate = startTime ? new Date(startTime) : new Date();
-            const targetDateStr = targetDate.toDateString();
-            const bookingStartDateStr = new Date(b.startTime).toDateString();
-            const bookingEndDateStr = new Date(b.endTime).toDateString();
-            return bookingStartDateStr === targetDateStr || bookingEndDateStr === targetDateStr;
-        })
-        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    : [];
-
-  const formatTimeRange = (startStr: string, endStr: string) => {
-      const s = new Date(startStr);
-      const e = new Date(endStr);
-      const timeS = s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const timeE = e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      return `${timeS} - ${timeE}`;
-  };
-
-  const getDayHeader = () => {
-      const date = startTime ? new Date(startTime) : new Date();
-      const isToday = date.toDateString() === new Date().toDateString();
-      const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      return isToday ? "Today's Busy Slots" : `Busy Slots (${dateStr})`;
-  };
+  // Filter bookings for the selected amenity
+  const filteredBookings = allBookings
+    .filter(b => b.amenityId === selectedAmenity?.id)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+    <div className="space-y-6 pb-10">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 min-h-[5rem]">
         <div className="flex items-start gap-3">
             <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
             <div>
-                <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Assets</span>
-                <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">Amenities</h1>
+                <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Assets & Facilities</span>
+                <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 dark:text-brand-400 tracking-tight leading-tight">Amenities</h1>
             </div>
         </div>
         <div className="flex gap-2">
-            <Button onClick={() => setIsAuditOpen(true)} variant="outlined" size="sm" leftIcon={<HistoryIcon />}>
-                Log
-            </Button>
-            {isAdmin && (
-                 <Button onClick={() => { resetForm(); setIsCreateModalOpen(true); }} size="sm" leftIcon={<PlusIcon />}>
-                    New Amenity
-                </Button>
-            )}
+            <Button onClick={() => setIsAuditOpen(true)} variant="outlined" size="md" leftIcon={<HistoryIcon />}>Audit Log</Button>
+            {isAdmin && <Button onClick={() => { resetForm(); setIsCreateModalOpen(true); }} size="md" leftIcon={<PlusIcon />}>Add Facility</Button>}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {loading ? (
+        {loading && amenities.length === 0 ? (
              Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-64 bg-slate-100 dark:bg-white/5 rounded-xl animate-pulse" />)
         ) : (
             amenities.map(amenity => (
-                <Card key={amenity.id} className="p-0 flex flex-col overflow-hidden rounded-xl bg-white dark:bg-zinc-900/40 border border-slate-100 dark:border-white/5 group">
-                    <div className="h-40 relative overflow-hidden">
-                        <img src={amenity.imageUrl} alt={amenity.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
-                        <span className="absolute bottom-3 left-4 bg-brand-600 text-white text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-md">
-                            {amenity.status || 'Active'}
-                        </span>
-                        
-                        {isAdmin && (
-                            <div className="absolute top-3 right-3 flex gap-2">
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleEditClick(amenity); }}
-                                    className="p-2 bg-white/90 dark:bg-zinc-800/90 text-slate-600 dark:text-slate-300 hover:text-brand-600 rounded-lg shadow-sm backdrop-blur-md transition-all hover:scale-110"
-                                >
-                                    <PencilIcon className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); setConfirmDelete({ isOpen: true, id: amenity.id }); }}
-                                    className="p-2 bg-white/90 dark:bg-zinc-800/90 text-slate-600 dark:text-slate-300 hover:text-rose-600 rounded-lg shadow-sm backdrop-blur-md transition-all hover:scale-110"
-                                >
-                                    <TrashIcon className="w-4 h-4" />
-                                </button>
+                <Card key={amenity.id} className="p-0 flex flex-col overflow-hidden rounded-3xl bg-white dark:bg-zinc-900/40 border border-slate-100 dark:border-white/5 group shadow-sm">
+                    <div className="h-48 relative overflow-hidden">
+                        {amenity.imageUrl ? (
+                            <img src={amenity.imageUrl} alt={amenity.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                        ) : (
+                            <div className="w-full h-full bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+                                <PlusIcon className="w-8 h-8 text-slate-300" />
                             </div>
                         )}
+                        <span className="absolute top-4 left-4 bg-brand-600 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg shadow-lg">
+                            {amenity.status || 'Active'}
+                        </span>
                     </div>
-                    <div className="p-5 flex flex-col flex-grow">
-                        <div className="flex justify-between items-start mb-1.5">
+                    <div className="p-6 flex flex-col flex-grow">
+                        <div className="flex justify-between items-start mb-2">
                             <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50">{amenity.name}</h3>
-                            {amenity.maxDuration && (
-                                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 dark:bg-white/5 px-2 py-1 rounded-md">
-                                    <ClockIcon className="w-3 h-3" /> {amenity.maxDuration}h limit
-                                </div>
+                            <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 dark:bg-white/5 px-2 py-1 rounded-md">
+                                {amenity.maxDuration || 0}h Limit
+                            </div>
+                        </div>
+                        <p className="text-slate-500 dark:text-zinc-400 text-sm leading-relaxed mb-6 line-clamp-2 font-medium">
+                            {amenity.description}
+                        </p>
+                        <div className="mt-auto flex gap-2">
+                            <Button onClick={() => { setSelectedAmenity(amenity); setBookingError(null); setIsBookingModalOpen(true); }} className="flex-1 text-[10px] uppercase tracking-widest font-black" size="md">Reserve</Button>
+                            {isAdmin && (
+                                <button onClick={() => {
+                                    setEditingId(amenity.id);
+                                    setName(amenity.name);
+                                    setDescription(amenity.description);
+                                    setImageUrl(amenity.imageUrl);
+                                    setCapacity(amenity.capacity.toString());
+                                    setMaxDuration((amenity.maxDuration || 4).toString());
+                                    setIsCreateModalOpen(true);
+                                }} className="p-2.5 bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-brand-600 rounded-xl transition-all border border-slate-100 dark:border-white/5">
+                                    <PencilIcon className="w-5 h-5" />
+                                </button>
                             )}
                         </div>
-                        <p className="text-slate-500 dark:text-zinc-400 text-xs leading-relaxed mb-5 line-clamp-2 font-medium">{amenity.description}</p>
-                        <Button 
-                            onClick={() => { setSelectedAmenity(amenity); setBookingError(null); setIsBookingModalOpen(true); }}
-                            className="w-full text-[10px] uppercase tracking-widest font-black"
-                            size="sm"
-                        >
-                            Reserve
-                        </Button>
                     </div>
                 </Card>
             ))
         )}
       </div>
 
-      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title={editingId ? "Update Amenity" : "New Amenity"} subtitle="ASSET REGISTRATION">
-          <form className="space-y-4" onSubmit={handleSaveAmenity}>
-              <div>
-                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Amenity Name</label>
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Community Clubhouse" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/>
-              </div>
-              
-              <div>
-                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Gallery Image</label>
-                  <div className="space-y-3">
-                      {imageUrl && (
-                          <div className="w-full h-40 rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-black/20">
-                              <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                          </div>
-                      )}
-                      <div className="relative">
-                          <input 
-                              type="file" 
-                              accept="image/*" 
-                              onChange={handleImageUpload} 
-                              required={!imageUrl}
-                              className="block w-full text-[11px] text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 cursor-pointer"
-                          />
-                      </div>
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Guest Capacity</label>
-                      <input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} required min="1" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/>
-                  </div>
-                  <div>
-                      <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Max Duration (Hours)</label>
-                      <input type="number" value={maxDuration} onChange={e => setMaxDuration(e.target.value)} required min="1" className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-bold"/>
-                  </div>
-              </div>
-              <div>
-                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Description</label>
-                  <textarea value={description} onChange={e => setDescription(e.target.value)} required rows={3} placeholder="Describe rules and features..." className="block w-full px-4 py-2.5 rounded-xl input-field text-sm font-medium leading-relaxed"></textarea>
-              </div>
-              <div className="flex justify-end pt-2">
-                  <Button type="submit" disabled={isSubmitting} size="lg" className="w-full sm:w-auto">
-                    {isSubmitting ? 'Syncing...' : (editingId ? 'Update Amenity' : 'Add Amenity')}
-                  </Button>
-              </div>
-          </form>
-      </Modal>
-
-      <Modal isOpen={isBookingModalOpen} onClose={() => { setIsBookingModalOpen(false); setBookingError(null); }} title="Reserve" subtitle={selectedAmenity?.name.toUpperCase()} size="md">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <form className="space-y-5" onSubmit={handleBooking}>
-                  {bookingError && (
-                      <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 rounded-2xl flex items-start gap-3 text-rose-600 dark:text-rose-400">
-                          <AlertTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                          <p className="text-xs font-bold leading-relaxed">{bookingError}</p>
-                      </div>
-                  )}
-                  
-                  {selectedAmenity?.maxDuration && !bookingError && (
-                    <div className="p-4 bg-brand-50 dark:bg-brand-500/10 rounded-2xl border border-brand-100 dark:border-brand-500/20 text-center">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600 dark:text-brand-400">Duration Constraint</p>
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-1">Maximum limit: <span className="text-brand-600">{selectedAmenity.maxDuration} hours</span></p>
+      {/* Reservation Modal */}
+      <Modal isOpen={isBookingModalOpen} onClose={resetBookingForm} title="Facility Reservation" subtitle={selectedAmenity?.name.toUpperCase()} size="lg">
+        <div className="space-y-8">
+            <div className="p-4 bg-brand-50/60 dark:bg-brand-900/10 rounded-[1.5rem] border border-brand-100/50 dark:border-brand-900/20 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-brand-500/10 shadow-sm flex items-center justify-center shrink-0">
+                    <ClockIcon className="w-7 h-7 text-brand-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-brand-600">Policy Check</span>
+                        <div className="h-[1px] flex-1 bg-brand-600/10" />
                     </div>
-                  )}
-                  
-                  <div className="space-y-4">
-                      <div>
-                          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Start Time</label>
-                          <input type="datetime-local" value={startTime} onChange={e => { setStartTime(e.target.value); setBookingError(null); }} required className="block w-full px-4 py-2 rounded-xl input-field text-xs font-bold"/>
-                      </div>
-                      <div>
-                          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">End Time</label>
-                          <input type="datetime-local" value={endTime} onChange={e => { setEndTime(e.target.value); setBookingError(null); }} required className="block w-full px-4 py-2 rounded-xl input-field text-xs font-bold"/>
-                      </div>
-                  </div>
-                  <Button type="submit" disabled={isSubmitting} className="w-full shadow-lg shadow-brand-500/10" size="lg">Confirm Slot</Button>
-              </form>
+                    <p className="text-[13px] text-brand-700 dark:text-brand-300 font-bold leading-tight">
+                        Maximum duration for this facility is {selectedAmenity?.maxDuration} hours per session.
+                    </p>
+                </div>
+            </div>
 
-              <div className="bg-slate-50 dark:bg-zinc-900/40 p-5 rounded-3xl border border-slate-100 dark:border-white/5 h-fit max-h-[400px] overflow-y-auto no-scrollbar">
-                  <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                          <CalendarIcon className="w-4 h-4 text-brand-600" />
-                          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                             {getDayHeader()}
-                          </h4>
-                      </div>
-                  </div>
-                  
-                  {activeAmenityBookings.length === 0 ? (
-                      <div className="py-8 text-center">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                             No bookings on this day
-                          </p>
-                      </div>
-                  ) : (
-                      <div className="space-y-3">
-                          {activeAmenityBookings.map(b => {
-                              return (
-                                  <div key={b.id} className="p-3 bg-white dark:bg-white/5 rounded-xl border border-slate-200/50 dark:border-white/5 shadow-sm">
-                                      <div className="flex justify-between items-start mb-1">
-                                          <p className="text-[8px] font-black text-brand-600 uppercase">Reserved</p>
-                                          <p className="text-[8px] font-bold text-slate-400 uppercase">{b.flatNumber}</p>
-                                      </div>
-                                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{formatTimeRange(b.startTime, b.endTime)}</p>
-                                      <p className="text-[9px] text-slate-400 mt-1 truncate">{b.residentName}</p>
-                                  </div>
-                              );
-                          })}
-                      </div>
-                  )}
-              </div>
-          </div>
+            <form onSubmit={handleBooking} className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Start Time</label>
+                        <div className="relative">
+                            <input type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none"/>
+                            <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">End Time</label>
+                        <div className="relative">
+                            <input type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none"/>
+                            <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        </div>
+                    </div>
+                </div>
+
+                {bookingError && (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 rounded-xl text-[10px] font-bold flex items-center gap-2">
+                        <AlertTriangleIcon className="w-4 h-4" /> {bookingError}
+                    </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-4">
+                    <Button variant="ghost" type="button" onClick={resetBookingForm}>Cancel</Button>
+                    <Button type="submit" disabled={isSubmitting} leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                        {isSubmitting ? 'Securing...' : 'Confirm Booking'}
+                    </Button>
+                </div>
+            </form>
+
+            <div className="space-y-4 pt-6 border-t border-slate-50 dark:border-white/5">
+                <div className="flex items-center gap-3">
+                    <div className="w-1.5 h-6 bg-brand-500 rounded-full" />
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Upcoming Reservations</h2>
+                </div>
+                
+                <div className="space-y-2 max-h-[240px] overflow-y-auto pr-2 no-scrollbar">
+                    {filteredBookings.length === 0 ? (
+                        <div className="py-10 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-3xl opacity-30">
+                            <CalendarIcon className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-[9px] font-black uppercase tracking-widest">No scheduled bookings</p>
+                        </div>
+                    ) : (
+                        filteredBookings.map(booking => (
+                            <div key={booking.id} className="p-4 bg-slate-50/50 dark:bg-white/[0.02] border border-slate-100/50 dark:border-white/5 rounded-2xl flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-9 h-9 rounded-xl bg-brand-50/50 dark:bg-brand-900/20 text-brand-600 flex items-center justify-center">
+                                        <ClockIcon className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs font-bold text-slate-900 dark:text-slate-50">
+                                                {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                            <span className="w-1 h-1 bg-slate-200 rounded-full" />
+                                            <p className="text-[9px] font-black uppercase text-slate-400">
+                                                {new Date(booking.startTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            <p className="text-[9px] font-black uppercase text-brand-600 flex items-center gap-1">
+                                                <HomeIcon className="w-3 h-3" /> Unit: {booking.flatNumber}
+                                            </p>
+                                            <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                                            <p className="text-[9px] font-black uppercase text-slate-400">
+                                                {booking.residentName}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
       </Modal>
 
-      <ConfirmationModal
-          isOpen={confirmDelete.isOpen}
-          onClose={() => setConfirmDelete({ isOpen: false, id: null })}
-          onConfirm={handleDelete}
-          title="Delete Amenity"
-          message="Are you sure you want to permanently remove this amenity? All existing bookings and logs related to this asset will be lost."
-          isDestructive
-          isLoading={isSubmitting}
-          confirmLabel="Yes, Remove"
+      <Modal isOpen={isCreateModalOpen} onClose={() => { setIsCreateModalOpen(false); resetForm(); }} title={editingId ? "Edit Facility" : "Add Facility"} subtitle="ASSET MANAGEMENT">
+        <form onSubmit={handleSaveAmenity} className="space-y-5">
+            <div>
+                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Facility Name</label>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Swimming Pool" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Capacity</label>
+                    <input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
+                </div>
+                <div>
+                    <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Max Session (Hrs)</label>
+                    <input type="number" value={maxDuration} onChange={e => setMaxDuration(e.target.value)} required className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Facility Image (Max 1MB)</label>
+                <div className="mt-1 flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-2xl bg-slate-50 dark:bg-black/20 border-2 border-dashed border-slate-200 dark:border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                        {imageUrl ? <img src={imageUrl} className="w-full h-full object-cover" alt="Preview" /> : <PlusIcon className="w-6 h-6 text-slate-300" />}
+                    </div>
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="block w-full text-[10px] text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:bg-brand-50 file:text-brand-600 cursor-pointer"/>
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Description</label>
+                <textarea value={description} onChange={e => setDescription(e.target.value)} required rows={3} placeholder="Briefly describe the facility..." className="block w-full px-4 py-3 rounded-xl input-field text-sm font-medium leading-relaxed"/>
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-slate-50 dark:border-white/5">
+                {editingId && (
+                    <button type="button" onClick={() => {
+                        setIsCreateModalOpen(false);
+                        setConfirmDelete({ isOpen: true, id: editingId });
+                    }} className="text-[10px] font-black uppercase text-rose-500 hover:underline">Decommission Facility</button>
+                )}
+                <div className="flex gap-3 ml-auto">
+                    <Button variant="ghost" type="button" onClick={() => setIsCreateModalOpen(false)}>Discard</Button>
+                    <Button type="submit" disabled={isSubmitting} leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>{isSubmitting ? 'Syncing...' : (editingId ? 'Update Facility' : 'Register Facility')}</Button>
+                </div>
+            </div>
+        </form>
+      </Modal>
+
+      <ConfirmationModal 
+        isOpen={confirmDelete.isOpen} 
+        onClose={() => setConfirmDelete({ isOpen: false, id: null })} 
+        onConfirm={async () => {
+            if (confirmDelete.id) {
+                await deleteAmenity(confirmDelete.id);
+                setConfirmDelete({ isOpen: false, id: null });
+                await fetchData();
+                setFeedback({ isOpen: true, type: 'success', title: 'Removed', message: 'Facility has been decommissioned.' });
+            }
+        }}
+        title="Remove Facility"
+        message="Are you sure you want to permanently remove this facility? This will cancel all existing reservations."
+        isDestructive
       />
 
-      <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType={['Amenity', 'Booking']} title="Booking Log" />
-      
-      <FeedbackModal 
-        isOpen={feedback.isOpen} 
-        onClose={() => setFeedback({ ...feedback, isOpen: false })} 
-        title={feedback.title} 
-        message={feedback.message} 
-        type={feedback.type} 
-      />
+      <AuditLogModal isOpen={isAuditOpen} onClose={() => setIsAuditOpen(false)} entityType={['Amenity', 'Booking']} title="Facilities Audit" />
+      <FeedbackModal isOpen={feedback.isOpen} onClose={() => setFeedback({ ...feedback, isOpen: false })} title={feedback.title} message={feedback.message} type={feedback.type} />
     </div>
   );
 };

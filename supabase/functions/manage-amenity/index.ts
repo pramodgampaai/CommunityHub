@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -6,6 +7,7 @@ declare const Deno: any;
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 serve(async (req: any) => {
@@ -23,24 +25,36 @@ serve(async (req: any) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) throw new Error('Missing Authorization header')
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Invalid token')
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+    if (authError || !user) throw new Error('Invalid or expired session token')
 
     // Fetch Profile for Role Check
-    const { data: profile } = await supabaseClient.from('users').select('role, community_id').eq('id', user.id).single()
-    const allowedRoles = ['Admin', 'SuperAdmin'];
-    if (!profile || !allowedRoles.includes(profile.role)) {
-        throw new Error('Unauthorized: Insufficient permissions to manage amenities')
+    const { data: profile, error: profileErr } = await supabaseClient
+        .from('users')
+        .select('role, community_id')
+        .eq('id', user.id)
+        .single()
+
+    if (profileErr || !profile) {
+        throw new Error('User registry verification failed. Please re-login.');
     }
 
-    const { action, id, data } = await req.json()
-    if (!action) throw new Error('Missing action')
+    const allowedRoles = ['Admin', 'SuperAdmin'];
+    if (!allowedRoles.includes(profile.role)) {
+        throw new Error('Unauthorized: Administrative privileges required.');
+    }
+
+    const body = await req.json()
+    const { action, id, data } = body
+    if (!action) throw new Error('Action identifier missing')
 
     let resultData = null;
     let auditDesc = "";
 
     // Strictly whitelist columns to avoid PostgREST cache errors (PGRST204)
     const mapToSnakeCase = (input: any) => {
+        if (!input) return {};
         const mapped: any = {};
         if (input.name !== undefined) mapped.name = input.name;
         if (input.description !== undefined) mapped.description = input.description;
@@ -49,12 +63,15 @@ serve(async (req: any) => {
         const img = input.image_url || input.imageUrl;
         if (img !== undefined) mapped.image_url = img;
         
-        if (input.capacity !== undefined) mapped.capacity = input.capacity;
+        const cap = input.capacity !== undefined ? input.capacity : input.capacity;
+        if (cap !== undefined) mapped.capacity = Number(cap);
         
-        const dur = input.max_duration || input.maxDuration;
-        if (dur !== undefined) mapped.max_duration = dur;
+        const dur = input.max_duration !== undefined ? input.max_duration : input.maxDuration;
+        if (dur !== undefined) mapped.max_duration = Number(dur);
         
         if (input.community_id !== undefined) mapped.community_id = input.community_id;
+        else if (input.communityId !== undefined) mapped.community_id = input.communityId;
+        
         if (input.status !== undefined) mapped.status = input.status;
         
         return mapped;
@@ -72,10 +89,10 @@ serve(async (req: any) => {
 
         if (createError) throw createError;
         resultData = amenity;
-        auditDesc = `Amenity created: ${payload.name}`;
+        auditDesc = `Facility Registered: ${payload.name}`;
 
     } else if (action === 'UPDATE') {
-        if (!id) throw new Error('Missing ID for update');
+        if (!id) throw new Error('Target identifier (ID) missing for update');
         
         const updates = mapToSnakeCase(data);
         
@@ -88,10 +105,10 @@ serve(async (req: any) => {
 
         if (updateError) throw updateError;
         resultData = updated;
-        auditDesc = `Amenity updated: ${updated.name}`;
+        auditDesc = `Facility Configuration Modified: ${updated.name}`;
 
     } else if (action === 'DELETE') {
-        if (!id) throw new Error('Missing ID for delete');
+        if (!id) throw new Error('Target identifier (ID) missing for deletion');
         
         const { data: old } = await supabaseClient.from('amenities').select('name').eq('id', id).single();
 
@@ -101,7 +118,7 @@ serve(async (req: any) => {
             .eq('id', id);
 
         if (deleteError) throw deleteError;
-        auditDesc = `Amenity deleted: ${old?.name || id}`;
+        auditDesc = `Facility Decommissioned: ${old?.name || id}`;
     }
 
     // Server-side Audit Logging
@@ -109,16 +126,16 @@ serve(async (req: any) => {
         await supabaseClient.from('audit_logs').insert({
             community_id: profile.community_id,
             actor_id: user.id,
-            action,
+            action: action === 'CREATE' ? 'CREATE' : (action === 'DELETE' ? 'DELETE' : 'UPDATE'),
             entity: 'Amenity',
-            entity_id: id || resultData?.id || 'unknown',
+            entity_id: id || resultData?.id || 'event',
             details: { 
                 description: auditDesc,
                 data: action === 'DELETE' ? null : data 
             }
         });
     } catch (e) {
-        console.warn("Audit logging failed during amenity management", e);
+        console.warn("Audit registry sync failed (non-fatal):", e.message);
     }
 
     return new Response(
@@ -127,9 +144,9 @@ serve(async (req: any) => {
     )
 
   } catch (error: any) {
-    console.error("Manage Amenity Error:", error.message);
+    console.error("CRITICAL AMENITY FAILURE:", error.message);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || 'Internal processing error' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { XIcon } from '../icons';
 
@@ -78,41 +77,41 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScan, onClose }) => {
 
     if (error) {
         return (
-            <div className="bg-black text-white p-6 rounded-lg text-center flex flex-col items-center justify-center min-h-[300px]">
-                <p className="text-red-400 mb-4">{error}</p>
-                <button onClick={onClose} className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600">Close</button>
+            <div className="bg-slate-900 text-white p-6 rounded-[2rem] text-center flex flex-col items-center justify-center min-h-[300px] border border-white/10">
+                <p className="text-rose-400 font-bold mb-4">{error}</p>
+                <button onClick={onClose} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest">Close Registry</button>
             </div>
         );
     }
 
     return (
-        <div className="relative bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[350px]">
+        <div className="relative bg-slate-900 rounded-[2.5rem] overflow-hidden flex items-center justify-center min-h-[350px] shadow-2xl border border-slate-200 dark:border-white/5">
             <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" muted />
             <canvas ref={canvasRef} className="hidden" />
             
-            {/* Overlay UI */}
+            {/* Overlay UI - Responsive Masks */}
             <div className="absolute inset-0 pointer-events-none">
-                {/* Darkened borders */}
-                <div className="absolute top-0 left-0 right-0 h-16 bg-black/50 backdrop-blur-sm"></div>
-                <div className="absolute bottom-0 left-0 right-0 h-16 bg-black/50 backdrop-blur-sm"></div>
-                <div className="absolute top-16 bottom-16 left-0 w-8 bg-black/50 backdrop-blur-sm"></div>
-                <div className="absolute top-16 bottom-16 right-0 w-8 bg-black/50 backdrop-blur-sm"></div>
+                {/* Responsive darkened borders */}
+                <div className="absolute top-0 left-0 right-0 h-16 bg-slate-900/40 dark:bg-black/70 backdrop-blur-[2px]"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-slate-900/40 dark:bg-black/70 backdrop-blur-[2px]"></div>
+                <div className="absolute top-16 bottom-16 left-0 w-8 bg-slate-900/40 dark:bg-black/70 backdrop-blur-[2px]"></div>
+                <div className="absolute top-16 bottom-16 right-0 w-8 bg-slate-900/40 dark:bg-black/70 backdrop-blur-[2px]"></div>
                 
                 {/* Scan Frame */}
-                <div className="absolute top-16 bottom-16 left-8 right-8 border-2 border-[var(--accent)] rounded-lg opacity-70">
+                <div className="absolute top-16 bottom-16 left-8 right-8 border-2 border-brand-500 rounded-2xl opacity-90 shadow-[0_0_20px_rgba(20,184,166,0.3)]">
                     <div className="qr-scanner-line"></div>
                 </div>
             </div>
 
-            <div className="absolute bottom-4 left-0 right-0 text-center text-white text-sm font-medium drop-shadow-md">
-                Align QR Code within the frame
+            <div className="absolute bottom-6 left-0 right-0 text-center text-white dark:text-brand-50 text-[10px] font-black uppercase tracking-widest drop-shadow-lg z-10">
+                Align Digital QR inside the perimeter
             </div>
 
             <button 
                 onClick={onClose} 
-                className="absolute top-4 right-4 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors backdrop-blur-md z-10"
+                className="absolute top-4 right-4 p-2.5 bg-black/40 hover:bg-black/60 text-white rounded-xl transition-all backdrop-blur-md z-20 border border-white/10 group"
             >
-                <XIcon className="w-5 h-5" />
+                <XIcon className="w-5 h-5 group-hover:rotate-90 transition-transform" />
             </button>
         </div>
     );

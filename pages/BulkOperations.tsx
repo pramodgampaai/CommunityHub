@@ -255,7 +255,7 @@ const BulkOperations: React.FC = () => {
         </div>
     );
 
-    const steps = [
+    const wizardSteps = [
         { id: 1, label: 'Template', done: !!community },
         { id: 2, label: 'Upload', done: previewData.length > 0 },
         { id: 3, label: 'Verify', done: isSubmitting }
@@ -326,7 +326,7 @@ const BulkOperations: React.FC = () => {
                                 <div className="p-6 space-y-8">
                                     {/* Global Flow Indicator */}
                                     <div className="bg-slate-50 dark:bg-black/20 p-4 rounded-3xl flex items-center justify-between overflow-x-auto no-scrollbar">
-                                        {steps.map((s, idx) => (
+                                        {wizardSteps.map((s, idx) => (
                                             <React.Fragment key={s.id}>
                                                 <div className="flex items-center gap-3 px-4 py-2">
                                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
@@ -336,7 +336,7 @@ const BulkOperations: React.FC = () => {
                                                     </div>
                                                     <span className={`text-[10px] font-black uppercase tracking-widest whitespace-nowrap ${s.done ? 'text-emerald-600' : 'text-slate-400'}`}>{s.label}</span>
                                                 </div>
-                                                {idx < steps.length - 1 && <ArrowRightIcon className="w-4 h-4 text-slate-200 shrink-0" />}
+                                                {idx < wizardSteps.length - 1 && <ArrowRightIcon className="w-4 h-4 text-slate-200 shrink-0" />}
                                             </React.Fragment>
                                         ))}
                                     </div>
@@ -451,8 +451,8 @@ const BulkOperations: React.FC = () => {
                                                                 <h4 className="text-lg font-brand font-extrabold text-brand-800 dark:text-brand-300">Ready for Execution</h4>
                                                                 <p className="text-[10px] text-brand-600 dark:text-brand-400 font-bold mt-1 uppercase tracking-widest">Processing {previewData.length} entities</p>
                                                             </div>
-                                                            <Button onClick={processBulkCreate} disabled={isSubmitting} size="lg" className="w-full sm:w-auto h-12 px-8 shadow-xl shadow-brand-500/20" leftIcon={<CheckCircleIcon />}>
-                                                                {isSubmitting ? 'Processing...' : 'Run Onboarding'}
+                                                            <Button onClick={processBulkCreate} disabled={isSubmitting} size="lg" className="w-full sm:w-auto h-12 px-8 shadow-xl shadow-brand-500/20" leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                                                                {isSubmitting ? 'Syncing Residents...' : 'Run Onboarding'}
                                                             </Button>
                                                         </div>
                                                     </div>

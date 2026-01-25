@@ -60,7 +60,8 @@
 
       html {
         background-color: var(--bg-light);
-        overscroll-behavior-y: none; /* Prevents pull-to-refresh flicker */
+        overscroll-behavior-y: none;
+        scrollbar-gutter: stable; /* CRITICAL: Prevents layout shift when scrollbar appears */
       }
       
       html.dark { background-color: var(--bg-dark); }
@@ -127,7 +128,6 @@
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-      /* Eliminate flickering during animations */
       .gpu-accelerated {
         transform: translateZ(0);
         backface-visibility: hidden;
@@ -146,7 +146,6 @@
         animation: scan 2s linear infinite;
       }
 
-      /* Navigation Progress Bar */
       @keyframes progress {
         0% { transform: translateX(-100%); }
         50% { transform: translateX(-20%); }
@@ -177,7 +176,8 @@
     "framer-motion": "https://esm.sh/framer-motion@11.15.0?external=react,react-dom",
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
     "xlsx": "https://esm.sh/xlsx@^0.18.5",
-    "exceljs": "https://esm.sh/exceljs@^4.4.0"
+    "exceljs": "https://esm.sh/exceljs@^4.4.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
   }
 }
 </script>

@@ -2,7 +2,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-// Declare Deno to fix 'Cannot find name Deno'
 declare const Deno: any;
 
 const corsHeaders = {
@@ -11,7 +10,6 @@ const corsHeaders = {
 }
 
 serve(async (req: any) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -20,90 +18,81 @@ serve(async (req: any) => {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
+      { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
+    // 1. Authenticate & Authorize Requester
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) throw new Error('Missing Authorization')
+    const { data: { user: requesterAuth } } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (!requesterAuth) throw new Error('Security context invalid')
+
+    const { data: requesterProfile } = await supabaseClient.from('users').select('role').eq('id', requesterAuth.id).single();
+    if (requesterProfile?.role !== 'SuperAdmin') {
+        throw new Error('Unauthorized: SuperAdmin privileges required.');
+    }
+
     const { name, email, password, community_id } = await req.json()
-
     if (!email || !password || !name || !community_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: name, email, password, community_id' }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200, // Return 200 so client can read error message
-        }
-      )
+      throw new Error('Missing identity parameters.');
+    }
+    
+    // Normalize email to prevent case-sensitivity collisions
+    const cleanEmail = email.toLowerCase().trim();
+
+    // 2. DEEP SCRUB IDENTITY (THE FIX)
+    // Clear Public table first
+    await supabaseClient.from('users').delete().eq('email', cleanEmail);
+
+    // Clear Auth system
+    const { data: { users: allUsers } } = await supabaseClient.auth.admin.listUsers();
+    const existingInAuth = allUsers.find(u => u.email?.toLowerCase() === cleanEmail);
+    if (existingInAuth) {
+        await supabaseClient.auth.admin.deleteUser(existingInAuth.id);
     }
 
-    // 1. Check if user already exists in Auth
-    let userId;
-    const { data: existingUsers } = await supabaseClient.auth.admin.listUsers();
-    // Simple filter (in prod, use pagination or search)
-    const existingUser = existingUsers?.users.find(u => u.email === email);
+    // 3. PROVISION NEW IDENTITY (AUTO CONFIRM)
+    const { data: newUser, error: createError } = await supabaseClient.auth.admin.createUser({
+        email: cleanEmail,
+        password,
+        email_confirm: true, // AUTO CONFIRM OPTION: TRUE
+        user_metadata: { name, community_id, role: 'Admin' }
+    });
 
-    if (existingUser) {
-        userId = existingUser.id;
-        // Check if public profile exists
-        const { data: profile } = await supabaseClient.from('users').select('id').eq('id', userId).single();
-        if (profile) {
-             return new Response(
-                JSON.stringify({ error: 'User with this email already exists in the system.' }),
-                { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-            );
-        }
-        // If no profile, we can proceed to "recover" the account by creating the profile
-    } else {
-        // 2. Create new Auth User
-        const { data: { user }, error: createError } = await supabaseClient.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true, 
-            user_metadata: { name, community_id, role: 'Admin' }
-        })
-
-        if (createError) throw createError;
-        if (!user) throw new Error('User creation failed');
-        userId = user.id;
+    if (createError) {
+        throw new Error(`Auth Engine Rejection: ${createError.message}`);
     }
 
-    // 3. Create/Upsert Profile
+    const targetUserId = newUser.user.id;
+
+    // 4. SYNC PUBLIC PROFILE
     const { error: profileError } = await supabaseClient
       .from('users')
       .upsert({
-        id: userId,
-        email: email,
+        id: targetUserId,
+        email: cleanEmail,
         name: name,
         role: 'Admin',
         community_id: community_id,
         status: 'active',
-        flat_number: null,
-        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
-      })
+        avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0d9488&color=fff`
+      }, { onConflict: 'id' });
 
     if (profileError) {
-      throw profileError
+        await supabaseClient.auth.admin.deleteUser(targetUserId);
+        throw new Error(`Database profile sync failed: ${profileError.message}`);
     }
 
     return new Response(
-      JSON.stringify({ message: 'Admin user created successfully' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify({ success: true, message: 'Manager provisioned successfully', userId: targetUserId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
   } catch (error: any) {
+    console.error("FATAL PROVISIONING EXCEPTION:", error.message);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal Server Error' }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200, // Return 200 to allow client SDK to parse JSON body
-      }
+      JSON.stringify({ error: error.message || 'Internal Provisioning Error' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
 })

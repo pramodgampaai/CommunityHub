@@ -1,6 +1,7 @@
 import React from 'react';
 import Modal from './Modal';
 import Button from './Button';
+import Spinner from './Spinner';
 import { AlertTriangleIcon, CheckCircleIcon, XIcon } from '../icons';
 
 interface ConfirmationModalProps {
@@ -47,7 +48,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             onClick={onConfirm}
             disabled={isLoading}
             size="md"
-            leftIcon={<CheckCircleIcon />}
+            leftIcon={isLoading ? <Spinner /> : <CheckCircleIcon />}
             className={`${isDestructive ? 'bg-rose-600 hover:bg-rose-700 text-white' : ''}`}
           >
             {isLoading ? 'Processing...' : confirmLabel}

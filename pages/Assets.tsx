@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { getAssets, createAsset, updateAsset, deleteAsset } from '../services/api';
+import { getAssets, createAsset, updateAsset, deleteAsset, getCachedData } from '../services/api';
 import type { Asset } from '../types';
 import { AssetStatus, UserRole } from '../types';
 import Card from '../components/ui/Card';
@@ -9,25 +9,39 @@ import Spinner from '../components/ui/Spinner';
 import Modal from '../components/ui/Modal';
 import FeedbackModal from '../components/ui/FeedbackModal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
+import AuditLogModal from '../components/AuditLogModal';
 import { useAuth } from '../hooks/useAuth';
-import { PlusIcon, MagnifyingGlassIcon, TrashIcon, PencilIcon, CheckCircleIcon, AlertTriangleIcon, ClockIcon, ClipboardDocumentCheckIcon, ChevronDownIcon, CalendarIcon } from '../components/icons';
+import { 
+    PlusIcon, 
+    MagnifyingGlassIcon, 
+    TrashIcon, 
+    PencilIcon, 
+    CheckCircleIcon, 
+    AlertTriangleIcon, 
+    ClockIcon, 
+    ClipboardDocumentCheckIcon, 
+    ChevronDownIcon, 
+    CalendarIcon,
+    HistoryIcon
+} from '../components/icons';
 
 const Assets: React.FC = () => {
     const { user } = useAuth();
-    const [assets, setAssets] = useState<Asset[]>([]);
-    const [loading, setLoading] = useState(true);
+    const cacheKey = `assets:${user?.communityId}`;
+    const [assets, setAssets] = useState<Asset[]>(() => getCachedData(cacheKey) || []);
+    const [loading, setLoading] = useState(!getCachedData(cacheKey));
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'all' | 'maintenance'>('all');
     
-    // Modal States
     const [isFormOpen, setIsFormOpen] = useState(false);
+    const [isAuditOpen, setIsAuditOpen] = useState(false);
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<{ isOpen: boolean; id: string | null }>({ isOpen: false, id: null });
     
-    // Form States
+    // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [category, setCategory] = useState('Furniture');
+    const [category, setCategory] = useState('General');
     const [quantity, setQuantity] = useState(1);
     const [status, setStatus] = useState<AssetStatus>(AssetStatus.Active);
     const [purchaseDate, setPurchaseDate] = useState('');
@@ -44,11 +58,10 @@ const Assets: React.FC = () => {
     const fetchAssetsData = async () => {
         if (!user?.communityId) return;
         try {
-            setLoading(true);
             const data = await getAssets(user.communityId);
             setAssets(data);
         } catch (e) {
-            console.error("Asset fetch failed", e);
+            console.error(e);
         } finally {
             setLoading(false);
         }
@@ -59,7 +72,7 @@ const Assets: React.FC = () => {
     const resetForm = () => {
         setName('');
         setDescription('');
-        setCategory('Furniture');
+        setCategory('General');
         setQuantity(1);
         setStatus(AssetStatus.Active);
         setPurchaseDate('');
@@ -75,9 +88,9 @@ const Assets: React.FC = () => {
         setCategory(asset.category);
         setQuantity(asset.quantity);
         setStatus(asset.status);
-        setPurchaseDate(asset.purchaseDate || '');
-        setWarrantyExpiry(asset.warrantyExpiry || '');
-        setNextServiceDate(asset.nextServiceDate || '');
+        setPurchaseDate(asset.purchaseDate ? new Date(asset.purchaseDate).toISOString().split('T')[0] : '');
+        setWarrantyExpiry(asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toISOString().split('T')[0] : '');
+        setNextServiceDate(asset.nextServiceDate ? new Date(asset.nextServiceDate).toISOString().split('T')[0] : '');
         setIsFormOpen(true);
     };
 
@@ -85,36 +98,27 @@ const Assets: React.FC = () => {
         e.preventDefault();
         if (!user?.communityId) return;
         setIsSubmitting(true);
-        
         try {
-            const payload = { name, description, category, quantity, status, purchaseDate, warrantyExpiry, nextServiceDate };
+            const payload = {
+                name, description, category, quantity, status,
+                purchaseDate: purchaseDate || undefined,
+                warrantyExpiry: warrantyExpiry || undefined,
+                nextServiceDate: nextServiceDate || undefined,
+                communityId: user.communityId
+            };
+
             if (editingAsset) {
                 await updateAsset(editingAsset.id, payload);
-                setFeedback({ isOpen: true, type: 'success', title: 'Asset Updated', message: 'The asset configuration has been successfully modified.' });
+                setFeedback({ isOpen: true, type: 'success', title: 'Asset Updated', message: `Details for "${name}" have been saved.` });
             } else {
                 await createAsset(payload, user.communityId);
-                setFeedback({ isOpen: true, type: 'success', title: 'Asset Registered', message: 'A new entity has been added to the community registry.' });
+                setFeedback({ isOpen: true, type: 'success', title: 'Asset Registered', message: `"${name}" has been added to the registry.` });
             }
             setIsFormOpen(false);
             resetForm();
             await fetchAssetsData();
         } catch (err: any) {
-            setFeedback({ isOpen: true, type: 'error', title: 'Action Failed', message: err.message || 'Error syncing with database.' });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDelete = async () => {
-        if (!confirmDelete.id) return;
-        setIsSubmitting(true);
-        try {
-            await deleteAsset(confirmDelete.id);
-            setConfirmDelete({ isOpen: false, id: null });
-            await fetchAssetsData();
-            setFeedback({ isOpen: true, type: 'success', title: 'Asset Excised', message: 'The item has been permanently removed from the community manifest.' });
-        } catch (err: any) {
-            setFeedback({ isOpen: true, type: 'error', title: 'Deletion Error', message: err.message });
+            setFeedback({ isOpen: true, type: 'error', title: 'System Error', message: err.message });
         } finally {
             setIsSubmitting(false);
         }
@@ -125,40 +129,37 @@ const Assets: React.FC = () => {
             a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
             a.category.toLowerCase().includes(searchQuery.toLowerCase())
         );
-
+        
         if (activeTab === 'maintenance') {
             const now = new Date();
+            const horizon = new Date();
+            horizon.setDate(now.getDate() + 30); // 30 day window
+
             result = result.filter(a => {
                 const nextS = a.nextServiceDate ? new Date(a.nextServiceDate) : null;
-                const warnDate = new Date(); warnDate.setMonth(warnDate.getMonth() + 1);
-                return (nextS && nextS <= warnDate) || a.status === AssetStatus.UnderRepair;
+                const isNear = nextS && nextS <= horizon && nextS >= now;
+                return isNear || a.status === AssetStatus.UnderRepair;
             });
         }
         return result;
     }, [assets, searchQuery, activeTab]);
 
-    const getStatusColor = (s: AssetStatus) => {
-        switch(s) {
-            case AssetStatus.Active: return 'bg-emerald-500';
-            case AssetStatus.UnderRepair: return 'bg-amber-500';
-            case AssetStatus.Scrapped: return 'bg-rose-500';
-            default: return 'bg-slate-300';
-        }
-    };
+    const categories = ['Furniture', 'Electrical', 'Plumbing', 'Security', 'Gym', 'Pool', 'Landscaping', 'General'];
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+        <div className="space-y-6 pb-10">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 min-h-[5rem]">
                 <div className="flex items-start gap-2.5">
                     <div className="w-1 h-10 bg-brand-500 rounded-full mt-1" />
                     <div>
-                        <span className="text-[8px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Inventory Registry</span>
-                        <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 tracking-tight">Community Assets</h1>
+                        <span className="text-[9px] font-mono font-black uppercase tracking-[0.3em] text-brand-600 dark:text-brand-400 mb-0.5 block">Inventory Registry</span>
+                        <h1 className="text-2xl sm:text-3xl font-brand font-extrabold text-brand-600 dark:text-brand-400 tracking-tight leading-tight">Assets</h1>
                     </div>
                 </div>
-                {isAdmin && (
-                    <Button onClick={() => { resetForm(); setIsFormOpen(true); }} size="md" leftIcon={<PlusIcon />}>Register Asset</Button>
-                )}
+                <div className="flex gap-2">
+                    <Button onClick={() => setIsAuditOpen(true)} variant="outlined" size="md" leftIcon={<HistoryIcon />}>Audit Log</Button>
+                    {isAdmin && <Button onClick={() => { resetForm(); setIsFormOpen(true); }} size="md" leftIcon={<PlusIcon />}>Register Asset</Button>}
+                </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white dark:bg-zinc-900/40 p-4 rounded-[2rem] border border-slate-50 dark:border-white/5 shadow-sm">
@@ -166,154 +167,223 @@ const Assets: React.FC = () => {
                     <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
                         type="text" 
-                        placeholder="Search registry..." 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl input-field text-sm font-bold shadow-sm"
+                        placeholder="Search registry by name or category..." 
+                        value={searchQuery} 
+                        onChange={e => setSearchQuery(e.target.value)} 
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl input-field text-sm font-bold shadow-sm" 
                     />
                 </div>
                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-black/20 p-1.5 rounded-2xl w-full sm:w-auto">
-                    <button onClick={() => setActiveTab('all')} className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'all' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}>Full Log</button>
-                    <button onClick={() => setActiveTab('maintenance')} className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'maintenance' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}>Service Queue</button>
+                    <button 
+                        onClick={() => setActiveTab('all')} 
+                        className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'all' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
+                    >
+                        Full Log
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('maintenance')} 
+                        className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'maintenance' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400'}`}
+                    >
+                        Service Queue
+                    </button>
                 </div>
             </div>
 
-            {loading ? (
-                <div className="py-20 flex justify-center"><Spinner /></div>
+            {loading && assets.length === 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-48 bg-slate-100 dark:bg-white/5 rounded-3xl animate-pulse" />)}
+                </div>
             ) : filteredAssets.length === 0 ? (
-                <div className="p-20 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-[3rem] opacity-40">
-                    <ClipboardDocumentCheckIcon className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-                    <p className="text-sm font-black uppercase tracking-widest text-slate-400">Registry is empty</p>
+                <div className="py-24 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-[3rem] opacity-30">
+                    <ClipboardDocumentCheckIcon className="w-16 h-16 mx-auto mb-4" />
+                    <p className="font-brand font-extrabold text-xl">Registry Clear</p>
+                    <p className="text-xs font-bold uppercase tracking-widest mt-1">No matching assets found</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {filteredAssets.map(asset => {
-                        const nextS = asset.nextServiceDate ? new Date(asset.nextServiceDate) : null;
-                        const isOverdue = nextS && nextS < new Date();
-                        const isNearing = nextS && !isOverdue && (nextS.getTime() - new Date().getTime() < 14 * 24 * 60 * 60 * 1000);
-
-                        return (
-                            <Card key={asset.id} className="p-0 overflow-hidden bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 group shadow-sm flex flex-col">
-                                <div className="p-5 flex-1">
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full ${getStatusColor(asset.status)}`} />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{asset.category}</span>
-                                        </div>
-                                        <div className="px-2 py-1 bg-brand-50 dark:bg-brand-900/30 text-brand-600 rounded-lg text-[9px] font-black uppercase">Qty: {asset.quantity}</div>
+                    {filteredAssets.map(asset => (
+                        <Card key={asset.id} className="p-0 overflow-hidden bg-white dark:bg-zinc-900/40 border border-slate-50 dark:border-white/5 group shadow-sm flex flex-col rounded-[2rem]">
+                            <div className="p-6 flex flex-col flex-1">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-2 py-0.5 bg-slate-50 dark:bg-white/5 rounded-md w-fit">
+                                            {asset.category}
+                                        </span>
+                                        <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50 leading-tight group-hover:text-brand-600 transition-colors">
+                                            {asset.name}
+                                        </h3>
                                     </div>
-                                    <h3 className="text-xl font-brand font-extrabold text-slate-900 dark:text-slate-50 mb-1 leading-tight group-hover:text-brand-600 transition-colors">{asset.name}</h3>
-                                    <p className="text-xs text-slate-500 font-medium line-clamp-2 leading-relaxed">{asset.description}</p>
-                                    
-                                    <div className="mt-5 space-y-2.5">
-                                        {asset.nextServiceDate && (
-                                            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${isOverdue ? 'bg-rose-50 border-rose-100 text-rose-700 dark:bg-rose-900/10 dark:border-rose-900/30' : isNearing ? 'bg-amber-50 border-amber-100 text-amber-700 dark:bg-amber-900/10 dark:border-amber-900/30' : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-500'}`}>
-                                                <div className="flex items-center gap-2">
-                                                    <ClockIcon className="w-3.5 h-3.5" />
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">Next Service</span>
-                                                </div>
-                                                <span className="text-[10px] font-bold">{new Date(asset.nextServiceDate).toLocaleDateString()}</span>
-                                            </div>
-                                        )}
-                                        {asset.warrantyExpiry && (
-                                            <div className="flex items-center justify-between px-2.5 py-1 text-slate-400">
-                                                <div className="flex items-center gap-2">
-                                                    <CalendarIcon className="w-3 h-3" />
-                                                    <span className="text-[8px] font-black uppercase tracking-widest">Warranty Ends</span>
-                                                </div>
-                                                <span className="text-[9px] font-bold">{new Date(asset.warrantyExpiry).toLocaleDateString()}</span>
-                                            </div>
-                                        )}
+                                    <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase shadow-sm ${
+                                        asset.status === AssetStatus.Active ? 'bg-emerald-50 text-emerald-600' : 
+                                        asset.status === AssetStatus.UnderRepair ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
+                                    }`}>
+                                        {asset.status}
                                     </div>
                                 </div>
                                 
-                                {isAdmin && (
-                                    <div className="flex border-t border-slate-50 dark:border-white/5 bg-slate-50/50 dark:bg-black/10">
-                                        <button onClick={() => handleEdit(asset)} className="flex-1 py-3.5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-brand-600 hover:bg-white dark:hover:bg-zinc-800 transition-all border-r border-slate-100 dark:border-white/5">
-                                            <PencilIcon className="w-3.5 h-3.5" /> Configure
-                                        </button>
-                                        <button onClick={() => setConfirmDelete({ isOpen: true, id: asset.id })} className="flex-1 py-3.5 flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-600 hover:bg-white dark:hover:bg-zinc-800 transition-all">
-                                            <TrashIcon className="w-3.5 h-3.5" /> Excise
-                                        </button>
+                                <p className="text-sm text-slate-500 dark:text-zinc-400 font-medium line-clamp-2 leading-relaxed mb-6">
+                                    {asset.description}
+                                </p>
+
+                                <div className="mt-auto space-y-3">
+                                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />
+                                            Qty: <span className="text-slate-900 dark:text-slate-100 font-black">{asset.quantity}</span>
+                                        </div>
+                                        {asset.nextServiceDate && (
+                                            <div className="flex items-center gap-1.5">
+                                                <ClockIcon className="w-3.5 h-3.5" />
+                                                Next Service: <span className="text-brand-600">{new Date(asset.nextServiceDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </Card>
-                        );
-                    })}
+
+                                    {isAdmin && (
+                                        <div className="pt-4 border-t border-slate-50 dark:border-white/5 flex gap-2">
+                                            <button 
+                                                onClick={() => handleEdit(asset)}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-brand-600 rounded-xl transition-all font-black text-[9px] uppercase tracking-widest"
+                                            >
+                                                <PencilIcon className="w-4 h-4" /> Edit Details
+                                            </button>
+                                            <button 
+                                                onClick={() => setConfirmDelete({ isOpen: true, id: asset.id })}
+                                                className="p-2.5 bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-rose-500 rounded-xl transition-all"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+                    ))}
                 </div>
             )}
 
-            <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingAsset ? "Update Registry" : "Asset Registration"} subtitle="LOGISTICS & LIFECYCLE" size="lg">
+            {/* Registration/Edit Modal */}
+            <Modal 
+                isOpen={isFormOpen} 
+                onClose={() => { setIsFormOpen(false); resetForm(); }} 
+                title={editingAsset ? "Modify Asset" : "Register Asset"} 
+                subtitle="INVENTORY MANAGEMENT"
+                size="lg"
+            >
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         <div className="sm:col-span-2">
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Asset Identity</label>
-                            <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Cummins 500kVA Generator" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Asset Name</label>
+                            <input 
+                                type="text" 
+                                value={name} 
+                                onChange={e => setName(e.target.value)} 
+                                required 
+                                placeholder="e.g. Lobby Air Conditioner" 
+                                className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"
+                            />
                         </div>
                         <div>
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Quantity Profile</label>
-                            <input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value) || 1)} required min="1" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
-                        </div>
-                        <div>
-                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Functional Category</label>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Category</label>
                             <div className="relative">
-                                <select value={category} onChange={e => setCategory(e.target.value)} className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900">
-                                    <option value="Furniture">Furniture & Fittings</option>
-                                    <option value="Machinery">Machinery & Plants</option>
-                                    <option value="Electrical">Electrical / Lighting</option>
-                                    <option value="Safety">Safety & Fire Systems</option>
-                                    <option value="Elevators">Vertical Transit (Lifts)</option>
-                                    <option value="Other">Miscellaneous</option>
-                                </select>
-                                <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-50 dark:bg-black/20 p-5 rounded-3xl border border-slate-100 dark:border-white/5 space-y-4">
-                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 ml-1">Lifecycle Tracking</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Purchase Date</label>
-                                <input type="date" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} className="block w-full px-3 py-2.5 rounded-lg input-field text-xs font-bold"/>
-                            </div>
-                            <div>
-                                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Warranty Maturity</label>
-                                <input type="date" value={warrantyExpiry} onChange={e => setWarrantyExpiry(e.target.value)} className="block w-full px-3 py-2.5 rounded-lg input-field text-xs font-bold"/>
-                            </div>
-                            <div className="sm:col-span-2">
-                                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1 ml-1">Next Periodic Service / Checkup</label>
-                                <input type="date" value={nextServiceDate} onChange={e => setNextServiceDate(e.target.value)} className="block w-full px-3 py-2.5 rounded-lg input-field text-xs font-bold ring-2 ring-brand-500/20"/>
-                                <p className="text-[8px] text-slate-400 mt-2 ml-1 italic">Authorized: Set a yearly or quarterly follow-up date for maintenance.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Operational State</label>
-                        <div className="grid grid-cols-3 gap-3">
-                            {Object.values(AssetStatus).map(s => (
-                                <button 
-                                    key={s} 
-                                    type="button"
-                                    onClick={() => setStatus(s)}
-                                    className={`py-3 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${status === s ? 'border-brand-600 bg-brand-50 text-brand-600 dark:bg-brand-900/20' : 'border-slate-50 dark:border-white/5 text-slate-400'}`}
+                                <select 
+                                    value={category} 
+                                    onChange={e => setCategory(e.target.value)} 
+                                    className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900"
                                 >
-                                    {s}
-                                </button>
-                            ))}
+                                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                </select>
+                                <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Quantity</label>
+                            <input 
+                                type="number" 
+                                value={quantity} 
+                                onChange={e => setQuantity(parseInt(e.target.value) || 1)} 
+                                required 
+                                min="1"
+                                className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Current Status</label>
+                            <div className="relative">
+                                <select 
+                                    value={status} 
+                                    onChange={e => setStatus(e.target.value as AssetStatus)} 
+                                    className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold appearance-none bg-white dark:bg-zinc-900"
+                                >
+                                    {Object.values(AssetStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Next Service Date</label>
+                            <div className="relative">
+                                <input 
+                                    type="date" 
+                                    value={nextServiceDate} 
+                                    onChange={e => setNextServiceDate(e.target.value)} 
+                                    className="block w-full px-4 py-3 rounded-xl input-field text-xs font-bold"
+                                />
+                                <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                            </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Description / Location Details</label>
+                            <textarea 
+                                value={description} 
+                                onChange={e => setDescription(e.target.value)} 
+                                rows={3} 
+                                placeholder="Describe where it is located or specific model details..." 
+                                className="block w-full px-4 py-3 rounded-xl input-field text-sm font-medium leading-relaxed"
+                            />
                         </div>
                     </div>
 
-                    <div className="pt-2 flex justify-end gap-3">
-                        <Button type="button" variant="outlined" size="lg" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting} size="lg" className="px-10" leftIcon={<CheckCircleIcon />}>{isSubmitting ? 'Syncing...' : (editingAsset ? 'Update Asset' : 'Commit to Registry')}</Button>
+                    <div className="pt-6 border-t border-slate-50 dark:border-white/5 flex justify-end gap-3">
+                        <Button type="button" variant="ghost" onClick={() => setIsFormOpen(false)}>Discard</Button>
+                        <Button type="submit" disabled={isSubmitting} leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                            {isSubmitting ? 'Saving...' : (editingAsset ? 'Update Asset' : 'Complete Registration')}
+                        </Button>
                     </div>
                 </form>
             </Modal>
 
-            <ConfirmationModal isOpen={confirmDelete.isOpen} onClose={() => setConfirmDelete({ isOpen: false, id: null })} onConfirm={handleDelete} title="Excise Asset" message="Are you sure you want to permanently remove this asset from the community manifest?" isDestructive isLoading={isSubmitting} confirmLabel="Yes, Excise Item" />
-            <FeedbackModal isOpen={feedback.isOpen} onClose={() => setFeedback({ ...feedback, isOpen: false })} title={feedback.title} message={feedback.message} type={feedback.type} />
+            <ConfirmationModal 
+                isOpen={confirmDelete.isOpen} 
+                onClose={() => setConfirmDelete({ isOpen: false, id: null })} 
+                onConfirm={async () => {
+                    if (confirmDelete.id) {
+                        await deleteAsset(confirmDelete.id);
+                        setConfirmDelete({ isOpen: false, id: null });
+                        await fetchAssetsData();
+                        setFeedback({ isOpen: true, type: 'success', title: 'Asset Decommissioned', message: 'The item has been removed from the community registry.' });
+                    }
+                }}
+                title="Decommission Asset"
+                message="Are you sure you want to remove this item? This action is irreversible and will be logged in the audit trail."
+                isDestructive
+                confirmLabel="Remove Asset"
+            />
+
+            <AuditLogModal 
+                isOpen={isAuditOpen} 
+                onClose={() => setIsAuditOpen(false)} 
+                entityType="Asset" 
+                title="Inventory Audit" 
+            />
+            
+            <FeedbackModal 
+                isOpen={feedback.isOpen} 
+                onClose={() => setFeedback({ ...feedback, isOpen: false })} 
+                title={feedback.title} 
+                message={feedback.message} 
+                type={feedback.type} 
+            />
         </div>
     );
 };

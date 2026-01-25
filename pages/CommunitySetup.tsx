@@ -230,7 +230,6 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
     const isVillaType = community?.communityType === 'Gated Community Villa';
     const isHighRise = !isStandaloneType && !isVillaType;
 
-    // Fix: Changed 'isStandalone' to 'isStandaloneType' to match correctly scoped variable
     const getFloorOptions = () => {
         if (!community?.blocks) return [];
         if (isStandaloneType) {
@@ -258,7 +257,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
         );
     }
 
-    const steps = [
+    const navSteps = [
         { id: 'landscape', label: 'Landscape', icon: Squares2X2Icon },
         { id: 'opening_balance', label: 'Financials', icon: CurrencyRupeeIcon },
         { id: 'residence', label: 'My Unit', icon: HomeIcon },
@@ -277,9 +276,9 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
             </div>
 
             <div className="flex items-center justify-between bg-white dark:bg-zinc-900/40 p-4 rounded-[2rem] border border-slate-100 dark:border-white/5 shadow-sm overflow-x-auto no-scrollbar">
-                {steps.map((s, i) => {
+                {navSteps.map((s, i) => {
                     const isActive = step === s.id;
-                    const isCompleted = i < steps.findIndex(x => x.id === step) || (s.id === 'landscape' && isEditMode) || (s.id === 'opening_balance' && community?.openingBalanceLocked);
+                    const isCompleted = i < navSteps.findIndex(x => x.id === step) || (s.id === 'landscape' && isEditMode) || (s.id === 'opening_balance' && community?.openingBalanceLocked);
                     const canNavigate = isEditMode || i === 0;
 
                     return (
@@ -302,7 +301,7 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 </div>
                                 <span className="text-[10px] font-black uppercase tracking-widest">{s.label}</span>
                             </button>
-                            {i < steps.length - 1 && (
+                            {i < navSteps.length - 1 && (
                                 <div className="flex-1 mx-4 min-w-[20px] h-0.5 bg-slate-100 dark:bg-white/5" />
                             )}
                         </React.Fragment>
@@ -360,7 +359,9 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                             </div>
                         </div>
                         <div className="pt-6 flex justify-end">
-                            <Button type="submit" disabled={isSubmitting} size="lg" className="px-10">Confirm Structure</Button>
+                            <Button type="submit" disabled={isSubmitting} size="lg" className="px-10" leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                                {isSubmitting ? 'Configuring...' : 'Confirm Structure'}
+                            </Button>
                         </div>
                     </form>
                 )}
@@ -410,8 +411,8 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     <div className="flex gap-3 pt-2">
                                         {community.pendingBalanceUpdate.requesterId !== user?.id ? (
                                             <>
-                                                <Button size="sm" onClick={handleApprove} className="bg-emerald-600 flex-1">Authorize Correction</Button>
-                                                <Button size="sm" variant="outlined" onClick={handleReject} className="text-rose-600 flex-1 border-rose-200">Decline</Button>
+                                                <Button size="sm" onClick={handleApprove} disabled={isSubmitting} className="bg-emerald-600 flex-1" leftIcon={isSubmitting ? <Spinner /> : undefined}>Authorize Correction</Button>
+                                                <Button size="sm" variant="outlined" onClick={handleReject} disabled={isSubmitting} className="text-rose-600 flex-1 border-rose-200" leftIcon={isSubmitting ? <Spinner /> : undefined}>Decline</Button>
                                             </>
                                         ) : (
                                             <div className="w-full text-center py-2 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
@@ -426,7 +427,9 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 <Button variant="outlined" onClick={() => setStep('landscape')} size="lg" className="px-8">Back</Button>
                                 <div className="flex gap-3">
                                     {!community?.openingBalanceLocked ? (
-                                        <Button onClick={handleSaveOpeningBalance} size="lg" className="px-10 shadow-xl" leftIcon={<CheckCircleIcon />}>Lock Foundation</Button>
+                                        <Button onClick={handleSaveOpeningBalance} disabled={isSubmitting} size="lg" className="px-10 shadow-xl" leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                                            {isSubmitting ? 'Syncing...' : 'Lock Foundation'}
+                                        </Button>
                                     ) : (
                                         <>
                                             {!community.pendingBalanceUpdate && (
@@ -448,7 +451,6 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                 <HomeIcon className="w-5 h-5 text-brand-600" /> Final Step: Assign Your Admin Unit
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                {/* Block / Road Selection */}
                                 {!isStandaloneType && (
                                     <div className="sm:col-span-2">
                                         <label className="block text-[9px] font-black uppercase text-slate-400 mb-1.5 ml-1">{isVillaType ? 'Road / Street' : 'Block / Tower'}</label>
@@ -462,7 +464,6 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     </div>
                                 )}
 
-                                {/* Floor Selection (Restored) */}
                                 {!isVillaType && (
                                     <div className={isStandaloneType ? "sm:col-span-2" : ""}>
                                         <label className="block text-[9px] font-black uppercase text-slate-400 mb-1.5 ml-1">Floor Level</label>
@@ -482,19 +483,16 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                                     </div>
                                 )}
 
-                                {/* Flat / Villa Number */}
                                 <div className={(isVillaType || !isHighRise) ? "sm:col-span-2" : ""}>
                                     <label className="block text-[9px] font-black uppercase text-slate-400 mb-1.5 ml-1">{isVillaType ? 'Villa Number' : 'Flat Number'}</label>
                                     <input type="text" value={flatNumber} onChange={e => setFlatNumber(e.target.value)} required placeholder="e.g. 101" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
                                 </div>
 
-                                {/* Carpet Area */}
                                 <div>
                                     <label className="block text-[9px] font-black uppercase text-slate-400 mb-1.5 ml-1">Carpet Area (Sq. Ft)</label>
                                     <input type="number" value={flatSize} onChange={e => setFlatSize(e.target.value)} required min="1" className="block w-full px-4 py-3 rounded-xl input-field text-sm font-bold"/>
                                 </div>
 
-                                {/* Start Date */}
                                 <div className="sm:col-span-2">
                                     <label className="block text-[9px] font-black uppercase text-slate-400 mb-1.5 ml-1">Maintenance Billing Start Date</label>
                                     <div className="relative">
@@ -507,7 +505,9 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                         </div>
                         <div className="pt-4 flex justify-between">
                              <Button variant="outlined" onClick={() => setStep('opening_balance')} size="lg" className="px-8">Back</Button>
-                             <Button type="submit" disabled={isSubmitting} size="lg" className="px-10 shadow-xl" leftIcon={<CheckCircleIcon />}>Complete Setup</Button>
+                             <Button type="submit" disabled={isSubmitting} size="lg" className="px-10 shadow-xl" leftIcon={isSubmitting ? <Spinner /> : <CheckCircleIcon />}>
+                                {isSubmitting ? 'Finalizing...' : 'Complete Setup'}
+                             </Button>
                         </div>
                     </form>
                 )}
@@ -525,7 +525,9 @@ const CommunitySetup: React.FC<CommunitySetupProps> = ({ onComplete }) => {
                     </div>
                     <div className="flex justify-end pt-2 gap-3">
                          <Button variant="ghost" type="button" onClick={() => setIsRequestModalOpen(false)}>Cancel</Button>
-                         <Button type="submit" disabled={isSubmitting}>Send Request</Button>
+                         <Button type="submit" disabled={isSubmitting} leftIcon={isSubmitting ? <Spinner /> : undefined}>
+                            {isSubmitting ? 'Sending...' : 'Send Request'}
+                         </Button>
                     </div>
                 </form>
             </Modal>

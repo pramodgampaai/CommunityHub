@@ -64,12 +64,22 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
           }
 
           const efData = await getUserProfile(session.access_token);
+          
           if (efData && !efData.error) {
               return transformProfile(efData, session.user.email || '');
           }
+          
+          const errorMsg = efData?.error || "";
+          if (errorMsg.includes("sub claim") || errorMsg.includes("not found")) {
+              await internalLogout();
+          }
+          
           return null;
       } catch (e: any) {
-          console.warn("Profile fetch failed:", e.message);
+          const msg = e.message || "";
+          if (msg.includes("sub claim") || msg.includes("does not exist")) {
+              await internalLogout();
+          }
           return null;
       } finally {
           isFetchingRef.current = false;
@@ -88,8 +98,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             lastTokenRef.current = null;
             updateIfChanged(null);
             setLoading(false);
-        } else if (event === 'PASSWORD_RECOVERY') {
-            setLoading(false);
         } else if (session && (isNewToken || event === 'SIGNED_IN')) {
             lastTokenRef.current = currentToken;
             const profile = await fetchProfile(session);
@@ -99,6 +107,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             }
         } else if (!session) {
             lastTokenRef.current = null;
+            updateIfChanged(null);
             setLoading(false);
         }
     });
@@ -110,10 +119,8 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   }, []);
 
   const login = async (email: string, pass: string) => {
-    // SECURITY FIX: Do not set global loading true here.
-    // Setting global loading causes the root App component to show a Spinner
-    // and unmount the LoginPage. If login fails, the LoginPage is remounted
-    // but its local error state is lost, looking like a "page reload".
+    // Clear legacy memory cache before signing in to prevent data leakage
+    localStorage.removeItem('supabase.auth.token'); 
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
   };
@@ -130,12 +137,18 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       setUserState(prev => prev ? { ...prev, ...data } : null);
   };
 
-  const logout = async () => {
+  const internalLogout = async () => {
     lastTokenRef.current = null;
     setUserState(null);
+    setLoading(false);
     await supabase.auth.signOut();
     localStorage.clear();
-    window.location.href = '/'; 
+    // Force reload to clear all in-memory API caches
+    window.location.reload(); 
+  };
+
+  const logout = async () => {
+    await internalLogout();
   };
 
   return (

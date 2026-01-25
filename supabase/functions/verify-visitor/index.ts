@@ -23,8 +23,8 @@ serve(async (req: any) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) throw new Error('Missing Authorization header');
     
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
-    if (userError || !user) throw new Error('Unauthorized session');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (authError || !user) throw new Error('Unauthorized session');
 
     const { data: profile } = await supabaseClient
         .from('users')
@@ -35,13 +35,13 @@ serve(async (req: any) => {
     if (!profile) throw new Error('Security profile not found');
 
     const currentRole = (profile.role || '').toLowerCase();
-    // Restriction: Remove 'admin' from verification permissions
+    // Verification restricted to security personnel and admins
     const allowedRoles = ['security', 'securityadmin', 'superadmin'];
     if (!allowedRoles.includes(currentRole)) {
         return new Response(JSON.stringify({ error: 'Access Denied: Verification restricted to security personnel' }), { status: 403, headers: corsHeaders });
     }
 
-    const { visitor_id, entry_token } = await req.json();
+    const { visitor_id, entry_token, photo_data } = await req.json();
     if (!visitor_id || !entry_token) throw new Error('ID and Token required');
 
     const { data: visitor, error: fetchError } = await supabaseClient
@@ -50,33 +50,53 @@ serve(async (req: any) => {
         .eq('id', visitor_id)
         .single();
 
-    if (fetchError || !visitor) throw new Error('Visitor not found');
+    if (fetchError || !visitor) throw new Error('Visitor pass not found in registry');
 
+    // Community Isolation
     if (currentRole !== 'superadmin' && visitor.community_id !== profile.community_id) {
-        throw new Error('Community mismatch');
+        throw new Error('Security Alert: Community registry mismatch');
     }
 
+    // 1. Single Use Enforcement
+    if (visitor.status === 'Checked In') {
+        throw new Error('Access Denied: This pass has already been used.');
+    }
+    
+    if (visitor.status !== 'Expected') {
+        throw new Error(`Access Denied: Invalid pass status (${visitor.status})`);
+    }
+
+    // 2. Token Matching
     const submitted = String(entry_token).trim().toLowerCase();
     const dbToken = String(visitor.entry_token || '').trim().toLowerCase();
     const dbId = String(visitor.id).trim().toLowerCase();
 
     if (submitted !== dbToken && submitted !== dbId) {
-        throw new Error('Invalid Pass Code');
+        throw new Error('Invalid Credentials: The provided code does not match the registry.');
     }
 
-    if (visitor.status === 'Checked In') {
-        throw new Error('Visitor already checked in');
+    // 3. Today-Only Validation (Strict)
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const expectedDate = new Date(visitor.expected_at).toISOString().split('T')[0];
+
+    if (expectedDate !== today) {
+        throw new Error(`Access Denied: This pass was valid for ${expectedDate}. It cannot be used on ${today}.`);
     }
 
-    // Only update status as entry_time column does not exist
+    // Mark as Checked In and save photo evidence
     const { data: updatedVisitor, error: updateError } = await supabaseClient
         .from('visitors')
-        .update({ status: 'Checked In' })
+        .update({ 
+            status: 'Checked In',
+            photo_url: photo_data || null,
+            entry_time: now.toISOString()
+        })
         .eq('id', visitor_id)
         .select()
         .single();
 
-    if (updateError) throw new Error('Database update failed');
+    if (updateError) throw new Error('Auth system failed to finalize check-in. Column "photo_url" may be missing.');
 
     // Audit Logging
     try {
@@ -86,12 +106,15 @@ serve(async (req: any) => {
             action: 'UPDATE',
             entity: 'Visitor',
             entity_id: visitor_id,
-            details: { description: `Gate Verified: ${visitor.name} checked in.` }
+            details: { 
+                description: `Gate Authorized: ${visitor.name} checked in. Identity photo recorded.`,
+                timestamp: now.toISOString()
+            }
         });
-    } catch (e) { console.warn("Audit failed", e); }
+    } catch (e) { console.warn("Audit log non-fatal failure", e); }
 
     return new Response(
-      JSON.stringify({ data: updatedVisitor, message: 'Check-in Confirmed' }),
+      JSON.stringify({ data: updatedVisitor, message: 'Authorization Granted: Welcome' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
 
